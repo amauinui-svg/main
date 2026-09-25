@@ -1,63 +1,88 @@
-# Build a Swarm: Pixel Reskin (Draft 1)
+# Build a Swarm: Pixel Reskin (Draft 2)
 
-This draft changes the game's visuals only (ground, bees, enemies, projectiles, hive, effects) to match the pixel style of the reference game. The UI is not included yet.
+This draft changes the arena's visuals only (floor, bees, enemies, projectiles, pickups, hive, weapon). The UI is not included. Draft 2 is redone to match BACKLOG.md: the shape book, the 2D GUI arena and the 860k client ceiling.
 
 ![mockup](art/preview/mockup.png)
 
-## What's here
+## Bees follow the shape book
+
+![bee elements](art/preview/bee_elements.png)
+
+| Shape book rule | How the pixel version keeps it |
+|---|---|
+| **SHAPE = behaviour**, one silhouette each | 6 silhouettes plus the Worker, each still readable at 24px |
+| **COLOUR = element** | Each bee is drawn once in two layers. The body layer is white and grey, so `ImageColor3` turns it into any element colour. The outline, band, wings and eyes stay untinted. Every palette in BeeShapes works without any new art. |
+| **PAINT = rarity** | Rare gets a shine overlay, Epic an aura ring, Legendary a gold aura plus a crown |
+| **Wings at head level, rectangles** | Yes, on every shape |
+| **Five parts** (wings, block, band, stinger) | Every bee is exactly these, plus at most one part for its role |
+| **LOD: no face below ~30px** | Fight sprites only have 2 pixel eyes. The full faces belong to the icons, in the UI pass |
+
+My guess at which bee type gets which shape (please correct):
+
+| Silhouette | Role part | Probably |
+|---|---|---|
+| `orbiter` | none | Gunner |
+| `interceptor` | needle body, swept wings | Stinger |
+| `sentry` | barrel out front | Sniper |
+| `guardian` | metal shield plate | Warden |
+| `charger` | lance horn | Lancer |
+| `escort` | glowing antenna bulbs | Signal |
+| `worker` | pollen baskets | Worker (replaces the Looter ship, item 19b) |
+
+## Everything else
+
+- **Enemies:** `enemy_ant`, `enemy_beetle`, `enemy_spider`, `enemy_wasp`, `enemy_slime`, `enemy_ironback` (the Carapace siege enemy, with a mortar on its back), `boss_beetle`. Each has 2 walk frames. **These names are placeholders.** I need the 14 species and 5 bosses from GameConfig to draw the rest and name them properly.
+- **Shots:** `shot_bee` (tinted to the bee's element), `shot_cannon` (your weapon), `shot_boss`, `shot_siege` (the Ironback shell the Warden blocks), `shot_acid`
+- **Pickups:** `pollen_s`, `pollen_m`, `pollen_l` (so merged orbs visibly grow), `pickup_honey`
+- **Effects:** `fx_spark` (hit), `fx_poof` (death), 2 frames each
+- **Hive:** `hive`, `weapon_cannon` (Gunner's single cannon, pivots from its centre so `Rotation` aims it), `ring` (the damage ring)
+- **Arena:** `arena_bg.png` is the whole floor baked into **one** image: grass border, stepped dirt clearing, trees, bushes, rocks and flowers. Separate ground tiles are included in case you'd rather build it from tiles.
+
+## Files
 
 | Path | What it is |
 |---|---|
-| `art/preview/mockup.png` | A full 1080p frame of the reskinned game |
-| `art/preview/sprite_sheet.png` | Every sprite enlarged and labeled |
-| `art/upload/atlas.png` | **Upload this.** Every bee, enemy, projectile, pickup and decoration in one 256x38 image |
-| `art/upload/tile_grass.png`, `tile_dirt.png`, `tile_meadow.png` | Ground tiles, 32x32 (for a 2D ScreenGui playfield) |
-| `art/upload/*_x8.png` | The same tiles plus the hive and ring, scaled up 8x (for 3D parts, see below) |
-| `src/PixelArt/` | Luau module: draws any sprite by name, animates it, and builds the ground |
-| `tools/generate_sprites.py` | Where every sprite is drawn. Change a color or pixel, rerun it, and everything above regenerates |
-
-## Sprite list
-
-- **Bees:** `bee_yellow`, `bee_red`, `bee_purple`, `bee_green`, `bee_pink`, `bee_teal` (2 frames of wing flap each)
-- **Enemies:** `enemy_ant`, `enemy_beetle`, `enemy_spider`, `enemy_wasp`, `enemy_slime` (the pink cube, redone in pixels), `boss_beetle` (2 walk frames each)
-- **Projectiles and effects:** `proj_stinger`, `proj_pollen`, `proj_acid`, `fx_spark` (2 frames), `pickup_honey`
-- **World:** `hive`, `ring` (the damage ring), `deco_tree`, `deco_bush`, `deco_rock`, `deco_flower_white/pink/blue`, ground tiles `grass`, `dirt`, `meadow`
-
-I named these from what I could see in your screenshots. Once I see the game's code, I'll rename them to match your real bee and enemy types.
+| `art/upload/atlas.png` | **Upload.** Every unit, shot, pickup and effect in one 256x102 image |
+| `art/upload/arena_bg.png` | **Upload.** The arena floor (480x270) |
+| `art/preview/` | Mockup, sprite sheet, and every bee shape in every element |
+| `src/PixelArt/` | Luau module (ModuleScript + generated `Atlas`) |
+| `tools/generate_sprites.py` | Where every sprite is drawn. Edit, run `python3 tools/generate_sprites.py`, and all the art and the Luau atlas table regenerate |
 
 ## Hooking it up
 
-1. Copy `src/PixelArt` into your Rojo project (for example `src/ReplicatedStorage/PixelArt`). Rojo syncs it as a ModuleScript with an `Atlas` child.
-2. Upload `art/upload/atlas.png` and paste the asset id into `PixelArt.ATLAS_ID` in `init.luau`.
-3. Swap the art at the spots where the game creates each visual:
+1. Copy `src/PixelArt` to `src/ReplicatedStorage/PixelArt` in the Rojo project and **restart Rojo** (new `$path` entries don't sync on a live session, LESSONS #13). Do it in the **DEV place**.
+2. Upload `atlas.png` and `arena_bg.png` **under the same owner as the experience** and paste the ids into `PixelArt.ATLAS_ID` and `PixelArt.ARENA_ID`. An asset the experience can't access never renders.
+3. Swap the art at these points:
 
 ```lua
-local PixelArt = require(ReplicatedStorage.PixelArt)
+local PixelArt = (function() return require(ReplicatedStorage.PixelArt) end)()
 
--- 2D playfield (ScreenGui):
-local bee = PixelArt.new("bee_purple", playfield)
-PixelArt.animate(bee, "bee_purple", 10)
-bee.Rotation = PixelArt.snapRotation(angle)
+-- Arena floor, replacing the brown lanes (ZIndex 1):
+PixelArt.arena(arenaFrame)
 
--- 3D parts with a top down camera:
-PixelArt.attach(enemy.PrimaryPart, "enemy_beetle")
-PixelArt.floorTexture(workspace.Arena.Floor, "rbxassetid://<tile_dirt_x8 id>")
+-- Bees. This is BACKLOG step 3: the server sends only the type name and the
+-- client builds the bee, instead of mirroring kit sprite sheet templates.
+local bee = PixelArt.newBee("sentry", palette.Body, "Epic", arenaFrame, zBand)
+bee.Position = UDim2.fromOffset(x, y)
+bee.Rotation = PixelArt.snapRotation(heading)
+
+-- Enemies, shots, pickups (1 ImageLabel each):
+local bug = PixelArt.new("enemy_beetle", arenaFrame)
+PixelArt.animate(bug, "enemy_beetle", 6)
+local shot = PixelArt.newShot(palette.Body, arenaFrame)
 ```
-
-**Why it matters whether the game is 2D or 3D:** a GUI image can use `ResamplerMode.Pixelated`, which keeps each pixel perfectly square. A 3D `Texture` or `Decal` can't use that setting, so Roblox would blur the pixels. That's why the `_x8` versions exist: when the image is already 8x bigger, the blur is too small to notice.
 
 ## Performance
 
-Pixel art by itself doesn't make a game faster. How it gets drawn is what makes the difference, and this setup is built for that:
+- **Fewer instances per unit.** An enemy is 1 ImageLabel. A bee is 3 (a Frame plus 2 layers), against up to 9 Frames for a primitive built bee. Twelve bees go from about 100 instances to about 36.
+- **One texture.** Every unit shares `atlas.png`, and the whole floor is one image instead of lanes plus decorations.
+- **Animation costs almost nothing.** A frame change only moves `ImageRectOffset`, and one Heartbeat drives every sprite.
+- **Zero client characters.** PixelArt is its own ModuleScript and the atlas table is generated, so new sprites never touch the 860k ceiling.
+- **It won't fix item 19a on its own** (enemies stepping at 2x/3x). That needs draw pass interpolation. Don't snap sprite positions to the pixel grid, or the stepping will look worse.
 
-- **One texture for everything.** Every unit shares `atlas.png`, so the client downloads one tiny image instead of dozens of meshes, decals or high resolution images.
-- **Animation is free.** Changing frames only moves a crop rectangle on the same image. Nothing gets created or destroyed.
-- **One update loop.** A single `Heartbeat` connection animates every sprite, instead of one loop or tween per bee.
-- **Flat sprites instead of meshes and particles.** If the bees and bugs are currently meshes, or use glow and particle effects, swapping them for flat sprites is where most of the speedup will come from.
+## Open questions for Kash
 
-## Next steps
-
-- Look through the real game code and map each bee and enemy type to its sprite.
-- Adjust `PixelArt.SCALE` or `STUDS_PER_PIXEL` so the sprites fit the arena at the right size.
-- Add death frames, a hit flash and boss variants as needed.
-- Reskin the UI to match (a separate pass).
+1. The 14 enemy species and 5 bosses: names and a one line look for each (or paste the GameConfig enemy table).
+2. The 8 palettes in BeeShapes, so the previews use the real element colours.
+3. Is the bee to shape mapping above right?
+4. Weapons for the other classes (Prism railgun, Queen Scepter honey dipper, Freezer, ULTRA's all-sides cannon) can be pixel sprites the same way. Should I do them next?
