@@ -61,10 +61,11 @@ function T.TripSeconds(a, b, era, fast)
 	if fast then s *= T.FastPassSpeed end
 	return math.max(30, math.floor(s + 0.5))
 end
--- Balance (1 Oct 2026 fact-check, scratchpad sim): one convoy on its best route earns about 40% of what laws earn per
--- minute, short hops about 20%. Six convoys roughly double a player's income, Express Logistics doubles the convoy share.
+-- Balance (1 Oct 2026 fact-check, scratchpad sim + Studio offline test): one convoy on its best route earns about 30%
+-- of what laws earn per minute, short hops about 15%. Six free convoys ~ +150% income; with Express Logistics and
+-- +2 Convoys it is ~ +400%, and Auto Dispatch keeps that going offline (capped at 12 h).
 -- Later eras travel faster; pay is scaled by sqrt(era speed) so a faster era earns ~1.5x per minute, not 2.2x.
-local K = { land = 0.09, coast = 0.1, sea = 0.12 }
+local K = { land = 0.06, coast = 0.07, sea = 0.08 }
 
 -- the money yardstick: a minute of law regen, plus a quarter of property income, so trade grows with the country
 function T.TradeValue(lv, incHr) return Rules.MinuteValue(lv) + 0.25 * (incHr or 0) / 60 end
@@ -99,7 +100,7 @@ function T.Loads(a, b, ctx)
 		local tons = math.floor(T.Vehicles[era].cap * (0.6 + 0.4 * (g[4] - 0.9) / 0.5) + 0.5)
 		table.insert(list, {
 			good = key, name = g[1], icon = g[2], cost = cost, pay = pay, tax = tax, net = pay - tax - cost,
-			xp = math.max(1, math.floor(Rules.MinuteXp(ctx.lv) * base * 0.1 + 0.5)),
+			xp = math.max(1, math.floor(Rules.MinuteXp(ctx.lv) * base * 0.04 + 0.5)),
 			demand = demand, hot = key == hot, tons = tons,
 		})
 	end
