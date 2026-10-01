@@ -71,6 +71,7 @@ function S.MapUpdate(name, key, fn)
 			if ok then return r end
 			task.wait(0.2 * i)
 		end
+		return nil -- never fall back to a local copy while the shared one exists (it would fork the world)
 	end
 	localMaps[name] = localMaps[name] or {}
 	local new = fn(localMaps[name][key])

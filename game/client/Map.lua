@@ -395,7 +395,7 @@ function Map.build(host, App)
 		text(card, string.format("<font color='#8fd07a'><b>PROFIT %s</b></font>   +%s XP   %s   %s km", R.Money(L.net), R.Short(L.xp), R.Duration(secs), R.Commas(W.Km[c.at][b])), { size = 13, rich = true, pos = UDim2.fromOffset(10, 66), sz = UDim2.new(1, -20, 0, 18), z = 28 })
 		local canPay = st.cash >= L.cost
 		UI.button(card, canPay and "green" or "locked", "SEND", function(btn)
-			local res = App.req("send", { c = ci, b = b, good = L.good }, btn)
+			local res = App.req("send", { c = ci, b = b, good = L.good, cost = L.cost, tax = L.tax }, btn)
 			if res.ok then App.toast("CONVOY " .. ci .. " DISPATCHED", L.name .. " to " .. W.Cities[b].name .. " · arrives in " .. R.Duration(secs), "good") end
 		end, { sz = UDim2.fromOffset(92, 36), pos = UDim2.new(1, -100, 0, 8), z = 29, textSize = 15 })
 	end
@@ -558,8 +558,10 @@ function Map.build(host, App)
 		if b ~= st.home then
 			local mv = row(40, nx())
 			local prod = Config.Products.MoveCapital
-			UI.button(mv, prod.id ~= 0 and "slate" or "locked", prod.id ~= 0 and ("MAKE THIS MY CAPITAL · R$" .. prod.robux) or "MOVE CAPITAL · COMING SOON", function(btn)
-				App.req("moveCapital", { city = b }, btn)
+			local credit = (st.capitalCredit or 0) > 0
+			UI.button(mv, (credit or prod.id ~= 0) and "slate" or "locked", credit and "MAKE THIS MY CAPITAL · FREE MOVE" or (prod.id ~= 0 and ("MAKE THIS MY CAPITAL · R$" .. prod.robux) or "MOVE CAPITAL · COMING SOON"), function(btn)
+				local r = App.req("moveCapital", { city = b }, btn)
+				if r.ok and r.moved then App.toast("CAPITAL MOVED TO " .. string.upper(city.name), nil, "good") end
 			end, { sz = UDim2.fromScale(1, 1), z = 29, textSize = 14, icon = "icon_capitol" })
 		end
 	end

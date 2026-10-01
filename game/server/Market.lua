@@ -36,7 +36,8 @@ function MK.PromptProduct(plr, key, intent)
 	if not prod then return { ok = false, msg = "Unknown product" } end
 	if prod.id == 0 then return { ok = false, msg = "Coming soon" } end
 	local p = PS.Profiles[plr]
-	if p then p.pending[key] = intent end
+	-- intents are saved with the profile so a receipt processed in a later session still knows what to do
+	if p then p.data.pending = p.data.pending or {}; p.data.pending[key] = intent end
 	MarketplaceService:PromptProductPurchase(plr, prod.id)
 	return { ok = true }
 end
@@ -73,18 +74,27 @@ for key, prod in pairs(Config.Products) do if prod.id ~= 0 then byId[prod.id] = 
 function MK.ProcessReceipt(info)
 	local plr = Players:GetPlayerByUserId(info.PlayerId)
 	local p = plr and PS.Profiles[plr]
-	if not p then return Enum.ProductPurchaseDecision.NotProcessedYet end
+	if not p or not p.canSave then return Enum.ProductPurchaseDecision.NotProcessedYet end
 	local d = p.data
 	d.receipts = d.receipts or {}
-	if table.find(d.receipts, info.PurchaseId) then return Enum.ProductPurchaseDecision.PurchaseGranted end
-	local key = byId[info.ProductId]
-	if not key or not grant[key] then return Enum.ProductPurchaseDecision.NotProcessedYet end
-	local intent = p.pending[key]
-	if not grant[key](p, intent) then return Enum.ProductPurchaseDecision.NotProcessedYet end
-	p.pending[key] = nil
-	table.insert(d.receipts, info.PurchaseId)
-	while #d.receipts > 50 do table.remove(d.receipts, 1) end
-	PS.Save(plr) -- save before telling Roblox the purchase is granted
+	d.pending = d.pending or {}
+	if not table.find(d.receipts, info.PurchaseId) then
+		local key = byId[info.ProductId]
+		if not key or not grant[key] then return Enum.ProductPurchaseDecision.NotProcessedYet end
+		local intent = d.pending[key]
+		if key == "MoveCapital" and type(intent) ~= "number" then
+			-- the target city was lost (very rare): keep a free move to use from the map
+			d.capitalCredit = (d.capitalCredit or 0) + 1
+			PS.Note(p, { kind = "toast", text = "Capital move ready: open any city and press MAKE THIS MY CAPITAL.", tone = "good" })
+		elseif not grant[key](p, intent) then
+			return Enum.ProductPurchaseDecision.NotProcessedYet
+		end
+		d.pending[key] = nil
+		table.insert(d.receipts, info.PurchaseId)
+		while #d.receipts > 50 do table.remove(d.receipts, 1) end
+	end
+	-- only tell Roblox it is granted once the profile (with the receipt id) is safely saved
+	if not PS.Save(plr) then return Enum.ProductPurchaseDecision.NotProcessedYet end
 	PS.Sync(plr)
 	return Enum.ProductPurchaseDecision.PurchaseGranted
 end

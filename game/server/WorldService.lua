@@ -125,11 +125,13 @@ end
 local function summary(a)
 	return { name = a.name, tag = a.tag, color = a.color, members = a.count or 0, level = a.level or 1, open = a.open ~= false, leader = a.leaderName }
 end
+-- returns record, readOk (readOk=false means the DataStore could not be reached: do not act on a missing record)
 function WS.LoadAlliance(id)
-	if not id then return nil end
+	if not id then return nil, true end
 	local ok, a = Store.Get(Store.DS(ALLY_DS), "a_" .. id)
 	if ok and a then WS.Alliances[id] = a; WS.Index[id] = summary(a) end
-	return WS.Alliances[id]
+	if ok and not a then WS.Alliances[id] = nil end
+	return WS.Alliances[id], ok
 end
 function WS.RefreshIndex()
 	local ok, idx = Store.Get(Store.DS(ALLY_DS), "index")
@@ -166,8 +168,25 @@ function WS.MutateAlliance(id, fn)
 	if a then
 		a.count = 0; for _ in pairs(a.members) do a.count += 1 end
 		WS.Alliances[id] = a
-		WS.Index[id] = summary(a)
-		writeIndex(id, WS.Index[id])
+		if a.disbanded then
+			-- nobody left: drop it from the list and free its cities
+			WS.Index[id] = nil
+			writeIndex(id, nil)
+			for i, c in pairs(WS.Cities) do
+				if c.owner == id then
+					Store.MapUpdate(CITY_MAP, "c" .. i, function(old)
+						if not old or old.owner ~= id then return nil end
+						local g = WS.CityGarrison(i)
+						return { owner = nil, tax = 0, hp = g, maxHp = g, prot = 0, taxSet = 0 }
+					end)
+					WS.RefreshCity(i)
+					publish("c", i)
+				end
+			end
+		else
+			WS.Index[id] = summary(a)
+			writeIndex(id, WS.Index[id])
+		end
 		publish("a", id)
 	end
 	return a, result
@@ -221,6 +240,7 @@ WS.AddLog = addLog
 function WS.Join(plr, id, who)
 	return WS.MutateAlliance(id, function(a)
 		local n = 0; for _ in pairs(a.members) do n += 1 end
+		if a.disbanded then return nil, "That alliance has disbanded" end
 		if n >= AC.MaxMembers then return nil, "That alliance is full" end
 		if a.open == false then return nil, "That alliance is invite only" end
 		a.members[tostring(plr.UserId)] = { name = who or plr.Name, role = "member", joined = now(), active = now() }
@@ -248,6 +268,7 @@ function WS.Leave(plr, id, who)
 				addLog(a, a.leaderName .. " now leads the alliance")
 			else
 				a.disbanded = true
+				a.open = false
 			end
 		end
 		return a, true
@@ -259,14 +280,14 @@ function WS.Role(a, userId) local m = a and a.members[tostring(userId)]; return 
 ---------------------------------------------------------------- treasury (batched per server)
 local pendingTreasury = {} -- [aid] = amount
 function WS.Credit(aid, amount)
-	if not aid or amount <= 0 then return end
+	if not aid or amount ~= amount or amount <= 0 or amount == math.huge then return end
 	pendingTreasury[aid] = (pendingTreasury[aid] or 0) + amount
 end
 function WS.FlushTreasury()
 	for aid, amt in pairs(pendingTreasury) do
 		pendingTreasury[aid] = nil
-		local _, err = WS.MutateAlliance(aid, function(a) a.treasury = (a.treasury or 0) + amt; return a, true end)
-		if err then pendingTreasury[aid] = (pendingTreasury[aid] or 0) + amt end
+		local rec, err = WS.MutateAlliance(aid, function(a) a.treasury = (a.treasury or 0) + amt; return a, true end)
+		if not rec and err ~= "Alliance not found" then pendingTreasury[aid] = (pendingTreasury[aid] or 0) + amt end
 	end
 end
 
@@ -278,7 +299,7 @@ function WS.Attack(i, aid, dmg, plrName)
 	local held = 0
 	for _, c in pairs(WS.Cities) do if c.owner == aid then held += 1 end end
 	local result
-	Store.MapUpdate(CITY_MAP, "c" .. i, function(c)
+	local saved = Store.MapUpdate(CITY_MAP, "c" .. i, function(c)
 		c = c or defaultCity(i)
 		if c.owner == aid then result = { err = "Your alliance already holds this city" }; return nil end
 		if (c.prot or 0) > now() then result = { err = "This city is protected for " .. math.ceil((c.prot - now()) / 60) .. " more minutes" }; return nil end
@@ -306,6 +327,7 @@ function WS.Attack(i, aid, dmg, plrName)
 	end)
 	if not result then return nil, "The city could not be reached. Try again." end
 	if result.err then return nil, result.err end
+	if saved == nil then return nil, "The city could not be reached. Try again." end
 	WS.RefreshCity(i)
 	publish("c", i)
 	if result.captured then
@@ -319,7 +341,7 @@ end
 
 function WS.Reinforce(i, aid, amount)
 	local result
-	Store.MapUpdate(CITY_MAP, "c" .. i, function(c)
+	local saved = Store.MapUpdate(CITY_MAP, "c" .. i, function(c)
 		if not c or c.owner ~= aid then result = { err = "Your alliance does not hold this city" }; return nil end
 		local cap = WS.CityGarrison(i) * Military.GarrisonCapMult
 		if c.hp >= cap then result = { err = "The garrison is already at full strength" }; return nil end
@@ -329,15 +351,18 @@ function WS.Reinforce(i, aid, amount)
 	end)
 	if not result then return nil, "The city could not be reached. Try again." end
 	if result.err then return nil, result.err end
+	if saved == nil then return nil, "The city could not be reached. Try again." end
 	WS.RefreshCity(i)
 	publish("c", i)
 	return result
 end
 
 function WS.SetTax(i, aid, pct)
-	pct = math.clamp(math.floor(tonumber(pct) or 0), 0, AC.TaxMax)
+	pct = tonumber(pct) or 0
+	if pct ~= pct then pct = 0 end
+	pct = math.clamp(math.floor(pct), 0, AC.TaxMax)
 	local result
-	Store.MapUpdate(CITY_MAP, "c" .. i, function(c)
+	local saved = Store.MapUpdate(CITY_MAP, "c" .. i, function(c)
 		if not c or c.owner ~= aid then result = { err = "Your alliance does not hold this city" }; return nil end
 		if (c.taxSet or 0) + AC.TaxChangeCooldown > now() then
 			result = { err = "Tax can change once a day. Next change in " .. math.ceil(((c.taxSet or 0) + AC.TaxChangeCooldown - now()) / 3600) .. "h" }
@@ -349,6 +374,7 @@ function WS.SetTax(i, aid, pct)
 	end)
 	if not result then return nil, "The city could not be reached. Try again." end
 	if result.err then return nil, result.err end
+	if saved == nil then return nil, "The city could not be reached. Try again." end
 	WS.RefreshCity(i)
 	publish("c", i)
 	return result

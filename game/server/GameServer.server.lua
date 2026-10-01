@@ -34,7 +34,14 @@ Request.OnServerInvoke = function(plr, action, args)
 	if not fn then return { ok = false, msg = "Unknown action" } end
 	if not p.data.onboarded and not A.PreOnboard[action] then return { ok = false, msg = "Finish setting up your country first" } end
 	if type(args) ~= "table" then args = {} end
+	-- one request at a time per player: actions that wait on DataStores/MemoryStores must not interleave
+	-- (two parallel donates or sieges would both pass the balance check)
+	local waited = 0
+	while p.busy and waited < 8 do waited += task.wait() end
+	if p.busy then return { ok = false, msg = "Busy, try again" } end
+	p.busy = true
 	local okCall, res = pcall(fn, plr, p, args)
+	p.busy = false
 	if not okCall then
 		warn("[Idle Country] action " .. action .. " failed: " .. tostring(res))
 		res = { ok = false, msg = "Something went wrong. Try again." }
@@ -78,6 +85,7 @@ end)
 WS.Start()
 MK.Start()
 PS.Start()
+game:BindToClose(function() pcall(WS.FlushTreasury) end)
 print("[Idle Country] server ready", WS.PublicState and "" or "")
 
 -- Studio-only test hook (LESSONS: never test destructive actions on a real profile; use IC_TestProfile).

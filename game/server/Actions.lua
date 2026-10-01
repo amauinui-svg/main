@@ -259,7 +259,7 @@ end
 
 ---------------------------------------------------------------- convoys
 local function getConvoy(p, a)
-	local i = int(a.c, 1, #p.data.convoys)
+	local i = int(a.c, 1, math.min(#p.data.convoys, PS.Slots(p)))
 	return i and p.data.convoys[i], i
 end
 
@@ -274,6 +274,11 @@ function act.send(plr, p, a)
 	local L
 	for _, x in ipairs(loads) do if x.good == a.good then L = x end end
 	if not L then return no("That load is gone. Pick another.") end
+	-- the map showed a price; if tax or the day's hot good changed since, ask the player to look again
+	local shown = tonumber(a.cost)
+	if shown and shown == shown and math.abs(shown - L.cost) > math.max(1, L.cost * 0.01) then return no("Prices just changed. Check the new numbers and send again.") end
+	local shownTax = tonumber(a.tax)
+	if shownTax and shownTax == shownTax and L.tax > shownTax + math.max(1, L.pay * 0.005) then return no("The city's tax just went up. Check the new numbers and send again.") end
 	if d.cash < L.cost then return no("Not enough cash for this load") end
 	local taxPct, owner = PS.TaxFor(p, b)
 	d.cash -= L.cost
@@ -379,6 +384,11 @@ function act.moveCapital(plr, p, a)
 	local b = int(a.city, 1, #World.Cities)
 	if not b then return no("Pick a city") end
 	if b == p.data.home then return no("That is already your capital") end
+	if (p.data.capitalCredit or 0) > 0 then
+		p.data.capitalCredit -= 1
+		p.data.home = b
+		return ok({ moved = true })
+	end
 	return MK.PromptProduct(plr, "MoveCapital", b)
 end
 
@@ -426,7 +436,8 @@ function act.allyLeave(plr, p)
 	local d = p.data
 	local _, id = myAlliance(p)
 	if not id then return no("You are not in an alliance") end
-	WS.Leave(plr, id, d.name)
+	local rec2, err = WS.Leave(plr, id, d.name)
+	if not rec2 and err ~= "Alliance not found" then return no(err) end
 	d.alliance = nil
 	return ok()
 end
@@ -457,6 +468,8 @@ function act.allyUpgrade(plr, p, a)
 	for _, u in ipairs(WS.Upgrades) do if u.key == a.key then up = u end end
 	if not up then return no("Unknown upgrade") end
 	local rec2, err = WS.MutateAlliance(id, function(x)
+		local r = WS.Role(x, plr.UserId)
+		if r ~= "leader" and r ~= "officer" then return nil, "Only the leader and officers can upgrade" end
 		local lvl = x.up[up.key] or 0
 		if lvl >= up.max then return nil, "Already at max level" end
 		local cost = WS.UpgradeCost(lvl)
@@ -480,6 +493,8 @@ function act.allyRole(plr, p, a)
 	local rec2, err = WS.MutateAlliance(id, function(x)
 		local m = x.members[target]
 		if not m then return nil, "Not a member" end
+		local mine = x.members[tostring(plr.UserId)]
+		if not mine or mine.role ~= "leader" then return nil, "Only the leader can change roles" end
 		if role == "leader" then
 			x.members[tostring(plr.UserId)].role = "officer"
 			x.leader = tonumber(target); x.leaderName = m.name
@@ -494,9 +509,9 @@ end
 function act.allyKick(plr, p, a)
 	local rec, id = myAlliance(p)
 	if not id then return no("You are not in an alliance") end
-	local myRole = WS.Role(rec, plr.UserId)
 	local target = tostring(a.uid or "")
 	local rec2, err = WS.MutateAlliance(id, function(x)
+		local myRole = WS.Role(x, plr.UserId)
 		local m = x.members[target]
 		if not m then return nil, "Not a member" end
 		if m.role == "leader" or (m.role == "officer" and myRole ~= "leader") or (myRole ~= "leader" and myRole ~= "officer") then
@@ -512,7 +527,11 @@ end
 function act.allyOpen(plr, p, a)
 	local rec, id = myAlliance(p)
 	if not id or WS.Role(rec, plr.UserId) ~= "leader" then return no("Only the leader can change this") end
-	local rec2, err = WS.MutateAlliance(id, function(x) x.open = a.open and true or false; return x, true end)
+	local rec2, err = WS.MutateAlliance(id, function(x)
+		if WS.Role(x, plr.UserId) ~= "leader" then return nil, "Only the leader can change this" end
+		x.open = a.open and true or false
+		return x, true
+	end)
 	if not rec2 then return no(err) end
 	return ok()
 end

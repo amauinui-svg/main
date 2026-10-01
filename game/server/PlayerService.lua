@@ -94,7 +94,7 @@ function PS.SkillFree(d) return R.SkillEarned(d.lv, PS.GoldLaws(d)) - R.SkillSpe
 ---------------------------------------------------------------- money in (loan auto-repay takes 20%)
 function PS.Earn(p, amount, src)
 	local d = p.data
-	if amount <= 0 then return amount end
+	if amount ~= amount or amount <= 0 or amount == math.huge then return 0 end
 	if d.loan and d.loan.owed > 0 then
 		local cut = math.min(d.loan.owed, amount * 0.2)
 		d.loan.owed -= cut; amount -= cut
@@ -138,6 +138,10 @@ function PS.EnsureConvoys(p)
 	local d = p.data
 	local slots = PS.Slots(p)
 	while #d.convoys < slots do table.insert(d.convoys, { at = d.home }) end
+	-- a lost pass (or a Studio test grant) leaves extra convoys: drop them once they are parked
+	for i = #d.convoys, slots + 1, -1 do
+		if not d.convoys[i].to then table.remove(d.convoys, i) end
+	end
 end
 
 function PS.TradeCtx(p, mods)
@@ -219,18 +223,20 @@ end
 function PS.AdvanceConvoys(p, t, quiet)
 	local n = 0
 	local mods = PS.Mods(p)
-	for _, c in ipairs(p.data.convoys) do
+	local slots = PS.Slots(p)
+	for i, c in ipairs(p.data.convoys) do
 		local guard = 0
-		while c.to and c.t1 <= t and guard < 400 do
+		while c.to and c.t1 <= t and guard < 1500 do
 			guard += 1
 			local when = c.t1
 			local loaded = c.load ~= nil
 			PS.Arrive(p, c, when, quiet)
 			if loaded then n += 1 end
-			PS.AutoDispatch(p, c, when, mods)
+			if i <= slots then PS.AutoDispatch(p, c, when, mods) end
 		end
-		if not c.to then PS.AutoDispatch(p, c, t, mods) end
+		if not c.to and i <= slots then PS.AutoDispatch(p, c, t, mods) end
 	end
+	PS.EnsureConvoys(p)
 	return n
 end
 
@@ -319,7 +325,7 @@ function PS.Snapshot(p)
 		convoys = d.convoys, slots = PS.Slots(p), boss = boss, tasks = tasks, taskReward = PS.TaskReward(p), loan = d.loan,
 		loanMax = PS.LoanMax(p, mods), alliance = d.alliance, alliance_rec = a, stats = d.stats, rivals = d.rivals,
 		gp = p.gp, mods = mods, incHr = PS.IncHr(p, mods), serverTime = now(), autoOff = d.autoOff, studio = Store.IsStudio,
-		online = Store.Online,
+		online = Store.Online, capitalCredit = d.capitalCredit or 0,
 	}
 end
 function PS.LoanMax(p, mods)
@@ -352,13 +358,22 @@ function PS.Save(plr, release)
 	p.data.last = now()
 	p.data.lock = (not release) and { job = Store.JobId, t = now() } or nil
 	local data = p.data
+	local wrote = false
 	local ok = Store.Update(Store.DS(STORE), key(plr), function(old)
 		if old and old.lock and old.lock.job ~= Store.JobId and now() - (old.lock.t or 0) < 90 then
+			wrote = false
 			return nil -- another server took over this profile; never overwrite it
 		end
+		wrote = true
 		return data
 	end)
-	if not ok then warn("[Idle Country] save failed for " .. plr.Name) end
+	if not ok then warn("[Idle Country] save failed for " .. plr.Name)
+	elseif not wrote then
+		warn("[Idle Country] save skipped for " .. plr.Name .. ": another server holds the profile. This session will not save.")
+		p.canSave = false
+		PS.Note(p, { kind = "toast", text = "You joined from another server. Progress here is no longer saved; please rejoin.", tone = "bad" })
+	end
+	return ok and wrote
 end
 
 function PS.Load(plr)
@@ -390,12 +405,17 @@ function PS.Load(plr)
 		end
 		data = old and migrate(old) or PS.Fresh()
 	end
+	if not plr.Parent then
+		-- left while loading: release the lock we just took
+		if store and canSave then Store.Update(store, key(plr), function(old) if old and old.lock and old.lock.job == Store.JobId then old.lock = nil; return old end; return nil end) end
+		return
+	end
 	data = sanitize(data)
 	local p = { data = data, canSave = canSave and Store.Online, gp = {}, notes = {}, lastAct = 0, userId = plr.UserId, player = plr, pending = {} }
 	PS.Profiles[plr] = p
 	if data.alliance then
-		local a = WS.LoadAlliance(data.alliance)
-		if not a or not a.members[tostring(plr.UserId)] then data.alliance = nil end
+		local a, readOk = WS.LoadAlliance(data.alliance)
+		if readOk and (not a or a.disbanded or not a.members[tostring(plr.UserId)]) then data.alliance = nil end
 	end
 	PS.Market.CheckPasses(plr, p)
 	PS.EnsureConvoys(p)
@@ -412,6 +432,11 @@ function PS.CatchUp(p)
 	if away < 30 then return end
 	local mods = PS.Mods(p)
 	local cash0, lv0 = d.cash, d.lv
+	-- convoys only count the capped window: a trip that ended before it is moved up to its start
+	local cut = now() - away
+	for _, c in ipairs(d.convoys) do
+		if c.to and c.t1 < cut then local dur = c.t1 - c.t0; c.t1 = cut; c.t0 = cut - dur end
+	end
 	local inc = PS.IncHr(p, mods) / 3600 * away * R.OfflinePropShare
 	PS.Earn(p, inc, "props")
 	local regen = PS.RegenSec(mods)
