@@ -37,7 +37,9 @@ function App.emit(ev, ...) for _, fn in ipairs(App.listeners[ev] or {}) do task.
 local function fit()
 	local cam = workspace.CurrentCamera
 	local vp = cam and cam.ViewportSize or Vector2.new(1280, 720)
-	local s = math.clamp(math.min(vp.X / 1280, vp.Y / 720), 0.45, 1.6)
+	-- phones (short screens) use a 560-tall design so text stays readable; everything else 720
+	local refH = vp.Y < 600 and 560 or 720
+	local s = math.clamp(math.min(vp.X / (refH * 16 / 9), vp.Y / refH), 0.45, 1.6)
 	uiScale.Scale = s
 	root.Size = UDim2.fromOffset(math.floor(vp.X / s), math.floor(vp.Y / s))
 	App.emit("resize", root.Size.X.Offset, root.Size.Y.Offset)
@@ -156,16 +158,27 @@ do
 	UI.icon(plus, "icon_plus", 18, C.manilaInk, UDim2.new(0.5, 0, 0.5, -1), { z = 23, anchor = Vector2.new(0.5, 0.5) })
 	plus.Activated:Connect(function() App.open("shop") end)
 end
+local topScales = {}
+local function scaleOf(f) topScales[f] = topScales[f] or mk("UIScale", {}, f); return topScales[f] end
 local function layoutTop()
 	local w = App.W()
 	local x0 = robloxButtonsEnd()
 	top.id.Position = UDim2.fromOffset(x0, 0)
-	local midX = x0 + 340
-	local rightW = 470
-	local room = w - 10 - rightW - midX
-	top.mid.Visible = room >= 290
-	top.mid.Position = UDim2.fromOffset(midX + math.max(0, math.floor((room - 300) / 2)), 0)
-	top.id.Size = UDim2.fromOffset(room >= 290 and 330 or math.max(200, w - rightW - x0 - 20), TOP)
+	-- shrink the three groups together until cash fits between identity and the bars (phones)
+	local k = 1
+	for _, try in ipairs({ 1, 0.9, 0.8, 0.72, 0.65 }) do
+		k = try
+		local room = w - 10 - 470 * k - (x0 + 340 * k)
+		if room >= 300 * k then break end
+	end
+	scaleOf(top.id).Scale = k; scaleOf(top.right).Scale = k; scaleOf(top.mid).Scale = k
+	top.id.Size = UDim2.fromOffset(330, TOP / k)
+	top.right.Size = UDim2.fromOffset(470, TOP / k)
+	top.mid.Size = UDim2.fromOffset(300, TOP / k)
+	local midX = x0 + 340 * k
+	local room = w - 10 - 470 * k - midX
+	top.mid.Visible = room >= 290 * k
+	top.mid.Position = UDim2.fromOffset(midX + math.max(0, math.floor((room - 300 * k) / 2)), 0)
 end
 App.on("resize", layoutTop)
 pcall(function() GuiService:GetPropertyChangedSignal("TopbarInset"):Connect(layoutTop) end)

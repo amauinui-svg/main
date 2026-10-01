@@ -406,7 +406,7 @@ function act.allyCreate(plr, p, a)
 	if d.alliance then return no("Leave your alliance first") end
 	if d.lv < AC.MinLevel then return no("Founding an alliance needs level " .. AC.MinLevel) end
 	if d.cash < AC.CreateCost then return no("Founding costs " .. R.Money(AC.CreateCost)) end
-	local rec, err = WS.CreateAlliance(plr, a.name, a.tag, a.color)
+	local rec, err = WS.CreateAlliance(plr, a.name, a.tag, a.color, d.name)
 	if not rec then return no(err) end
 	d.cash -= AC.CreateCost
 	d.alliance = rec.id
@@ -417,7 +417,7 @@ function act.allyJoin(plr, p, a)
 	if d.alliance then return no("Leave your alliance first") end
 	if type(a.id) ~= "string" or not WS.Index[a.id] then return no("Alliance not found") end
 	if not WS.Alliances[a.id] then WS.LoadAlliance(a.id) end
-	local rec, err = WS.Join(plr, a.id)
+	local rec, err = WS.Join(plr, a.id, d.name)
 	if not rec then return no(err) end
 	d.alliance = a.id
 	return ok()
@@ -426,7 +426,7 @@ function act.allyLeave(plr, p)
 	local d = p.data
 	local _, id = myAlliance(p)
 	if not id then return no("You are not in an alliance") end
-	WS.Leave(plr, id)
+	WS.Leave(plr, id, d.name)
 	d.alliance = nil
 	return ok()
 end
@@ -456,7 +456,7 @@ function act.allyUpgrade(plr, p, a)
 	local up
 	for _, u in ipairs(WS.Upgrades) do if u.key == a.key then up = u end end
 	if not up then return no("Unknown upgrade") end
-	local _, err = WS.MutateAlliance(id, function(x)
+	local rec2, err = WS.MutateAlliance(id, function(x)
 		local lvl = x.up[up.key] or 0
 		if lvl >= up.max then return nil, "Already at max level" end
 		local cost = WS.UpgradeCost(lvl)
@@ -466,7 +466,7 @@ function act.allyUpgrade(plr, p, a)
 		WS.AddLog(x, up.name .. " raised to level " .. (lvl + 1))
 		return x, true
 	end)
-	if err then return no(err) end
+	if not rec2 then return no(err) end
 	return ok()
 end
 function act.allyRole(plr, p, a)
@@ -477,7 +477,7 @@ function act.allyRole(plr, p, a)
 	local role = a.role
 	if role ~= "officer" and role ~= "member" and role ~= "leader" then return no("Bad role") end
 	if target == tostring(plr.UserId) then return no("Pick another member") end
-	local _, err = WS.MutateAlliance(id, function(x)
+	local rec2, err = WS.MutateAlliance(id, function(x)
 		local m = x.members[target]
 		if not m then return nil, "Not a member" end
 		if role == "leader" then
@@ -488,7 +488,7 @@ function act.allyRole(plr, p, a)
 		WS.AddLog(x, m.name .. " is now " .. role)
 		return x, true
 	end)
-	if err then return no(err) end
+	if not rec2 then return no(err) end
 	return ok()
 end
 function act.allyKick(plr, p, a)
@@ -496,7 +496,7 @@ function act.allyKick(plr, p, a)
 	if not id then return no("You are not in an alliance") end
 	local myRole = WS.Role(rec, plr.UserId)
 	local target = tostring(a.uid or "")
-	local _, err = WS.MutateAlliance(id, function(x)
+	local rec2, err = WS.MutateAlliance(id, function(x)
 		local m = x.members[target]
 		if not m then return nil, "Not a member" end
 		if m.role == "leader" or (m.role == "officer" and myRole ~= "leader") or (myRole ~= "leader" and myRole ~= "officer") then
@@ -506,14 +506,14 @@ function act.allyKick(plr, p, a)
 		WS.AddLog(x, m.name .. " was removed")
 		return x, true
 	end)
-	if err then return no(err) end
+	if not rec2 then return no(err) end
 	return ok()
 end
 function act.allyOpen(plr, p, a)
 	local rec, id = myAlliance(p)
 	if not id or WS.Role(rec, plr.UserId) ~= "leader" then return no("Only the leader can change this") end
-	local _, err = WS.MutateAlliance(id, function(x) x.open = a.open and true or false; return x, true end)
-	if err then return no(err) end
+	local rec2, err = WS.MutateAlliance(id, function(x) x.open = a.open and true or false; return x, true end)
+	if not rec2 then return no(err) end
 	return ok()
 end
 

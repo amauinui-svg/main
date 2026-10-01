@@ -105,6 +105,14 @@ if game:GetService("RunService"):IsStudio() then
 		elseif cmd == "reset" then
 			if not workspace:GetAttribute("IC_TestProfile") then return "refused: not a test profile" end
 			p.data = PS.Fresh(); PS.EnsureConvoys(p); PS.Sync(plr); return "ok"
+		elseif cmd == "offline" then
+			if not workspace:GetAttribute("IC_TestProfile") then return "refused: not a test profile" end
+			local d = p.data
+			local before = { cash = d.cash, lv = d.lv, trips = d.stats.trips }
+			d.last = os.time() - a
+			for _, c in ipairs(d.convoys) do if c.to then c.t0 -= a; c.t1 -= a end end
+			PS.CatchUp(p); PS.Sync(plr)
+			return HttpService:JSONEncode({ before = before, after = { cash = d.cash, lv = d.lv, trips = d.stats.trips } })
 		elseif cmd == "time" then
 			-- pretend `a` seconds passed for convoys (test profile only)
 			if not workspace:GetAttribute("IC_TestProfile") then return "refused: not a test profile" end

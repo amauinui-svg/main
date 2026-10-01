@@ -182,7 +182,7 @@ function WS.Filter(text, userId)
 	return r
 end
 
-function WS.CreateAlliance(plr, name, tag, color)
+function WS.CreateAlliance(plr, name, tag, color, who)
 	name = tostring(name or ""):gsub("^%s+", ""):gsub("%s+$", "")
 	tag = tostring(tag or ""):upper():gsub("[^A-Z0-9]", "")
 	if #name < 3 or #name > 24 then return nil, "Name must be 3 to 24 letters" end
@@ -197,11 +197,11 @@ function WS.CreateAlliance(plr, name, tag, color)
 	local id = HttpService:GenerateGUID(false):sub(1, 8)
 	local a = {
 		id = id, name = name, tag = tag, color = color, created = now(), open = true,
-		leader = plr.UserId, leaderName = plr.Name,
-		members = { [tostring(plr.UserId)] = { name = plr.Name, role = "leader", joined = now(), active = now() } },
+		leader = plr.UserId, leaderName = who or plr.Name,
+		members = { [tostring(plr.UserId)] = { name = who or plr.Name, role = "leader", joined = now(), active = now() } },
 		treasury = 0, up = { stipend = 0, trade = 0, war = 0, fort = 0 }, log = {}, count = 1,
 	}
-	table.insert(a.log, { t = now(), m = plr.Name .. " founded the alliance" })
+	table.insert(a.log, { t = now(), m = (who or plr.Name) .. " founded the alliance" })
 	local ok = Store.Update(Store.DS(ALLY_DS), "a_" .. id, function() return a end)
 	if not ok then return nil, "Could not save the alliance. Try again." end
 	WS.Alliances[id] = a
@@ -218,24 +218,24 @@ local function addLog(a, m)
 end
 WS.AddLog = addLog
 
-function WS.Join(plr, id)
+function WS.Join(plr, id, who)
 	return WS.MutateAlliance(id, function(a)
 		local n = 0; for _ in pairs(a.members) do n += 1 end
 		if n >= AC.MaxMembers then return nil, "That alliance is full" end
 		if a.open == false then return nil, "That alliance is invite only" end
-		a.members[tostring(plr.UserId)] = { name = plr.Name, role = "member", joined = now(), active = now() }
-		addLog(a, plr.Name .. " joined")
+		a.members[tostring(plr.UserId)] = { name = who or plr.Name, role = "member", joined = now(), active = now() }
+		addLog(a, (who or plr.Name) .. " joined")
 		return a, true
 	end)
 end
 
-function WS.Leave(plr, id)
+function WS.Leave(plr, id, who)
 	return WS.MutateAlliance(id, function(a)
 		local key = tostring(plr.UserId)
 		local me = a.members[key]
 		if not me then return a, true end
 		a.members[key] = nil
-		addLog(a, plr.Name .. " left")
+		addLog(a, (who or plr.Name) .. " left")
 		if me.role == "leader" then
 			-- hand leadership to the longest-serving officer, else the longest-serving member
 			local best, bestKey
