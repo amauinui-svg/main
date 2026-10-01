@@ -79,3 +79,35 @@ WS.Start()
 MK.Start()
 PS.Start()
 print("[Idle Country] server ready", WS.PublicState and "" or "")
+
+-- Studio-only test hook (LESSONS: never test destructive actions on a real profile; use IC_TestProfile).
+-- ServerStorage.IC_Debug:Invoke("dump") / ("set", key, value) / ("act", action, args) / ("world")
+if game:GetService("RunService"):IsStudio() then
+	local HttpService = game:GetService("HttpService")
+	local dbg = game.ServerStorage:FindFirstChild("IC_Debug") or Instance.new("BindableFunction")
+	dbg.Name = "IC_Debug"; dbg.Parent = game.ServerStorage
+	dbg.OnInvoke = function(cmd, a, b)
+		local plr, p = next(PS.Profiles)
+		if cmd == "world" then return HttpService:JSONEncode(WS.PublicState()) end
+		if not p then return "no profile" end
+		if cmd == "dump" then
+			local d = p.data
+			return HttpService:JSONEncode({ key = workspace:GetAttribute("IC_TestProfile") and "test" or "LIVE", cash = d.cash, gold = d.gold, lv = d.lv, xp = d.xp, inf = d.inf, sup = d.sup, home = d.home, name = d.name,
+				onboarded = d.onboarded, lots = d.lots, convoys = d.convoys, sk = d.sk, units = d.units, alliance = d.alliance, gp = p.gp, canSave = p.canSave, tasks = d.tasks, boss = d.boss, loan = d.loan })
+		elseif cmd == "set" then
+			if not workspace:GetAttribute("IC_TestProfile") then return "refused: not a test profile" end
+			p.data[a] = b; PS.Sync(plr); return "ok"
+		elseif cmd == "act" then
+			local fn = A.list[a]
+			local res = fn(plr, p, b or {})
+			PS.Sync(plr)
+			return HttpService:JSONEncode(res)
+		elseif cmd == "time" then
+			-- pretend `a` seconds passed for convoys (test profile only)
+			if not workspace:GetAttribute("IC_TestProfile") then return "refused: not a test profile" end
+			for _, c in ipairs(p.data.convoys) do if c.to then c.t0 -= a; c.t1 -= a end end
+			if p.data.boss and p.data.boss.next then p.data.boss.next -= a end
+			return "ok"
+		end
+	end
+end
