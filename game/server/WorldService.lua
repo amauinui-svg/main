@@ -11,9 +11,12 @@ local Military = require(RS.Shared.Military)
 local Store = require(script.Parent.Store)
 
 local WS = {}
-local CITY_MAP = "IC_Cities_v1"
-local ALLY_DS = "IC_Alliances_v1"
-local WORLD_DS = "IC_World_v1"
+-- Studio test mode (workspace attribute IC_TestProfile) uses separate stores so tests never touch the live world.
+local SUFFIX = (Store.IsStudio and workspace:GetAttribute("IC_TestProfile")) and "_test" or ""
+local CITY_MAP = "IC_Cities_v1" .. SUFFIX
+local ALLY_DS = "IC_Alliances_v1" .. SUFFIX
+local WORLD_DS = "IC_World_v1" .. SUFFIX
+WS.TestMode = SUFFIX ~= ""
 local AC = Config.Alliance
 
 WS.Cities = {} -- [i] = { owner, tax, hp, maxHp, prot, taxSet }
@@ -88,10 +91,16 @@ function WS.RefreshCity(i)
 end
 
 function WS.RefreshAllCities()
+	local left = #World.Cities
 	for i = 1, #World.Cities do
-		local ok = pcall(WS.RefreshCity, i)
-		if not ok then WS.Cities[i] = WS.Cities[i] or defaultCity(i) end
+		task.spawn(function()
+			local ok = pcall(WS.RefreshCity, i)
+			if not ok then WS.Cities[i] = WS.Cities[i] or defaultCity(i) end
+			left -= 1
+		end)
 	end
+	local t = os.clock()
+	while left > 0 and os.clock() - t < 10 do task.wait() end
 end
 
 -- restore city state from the DataStore backup if MemoryStore has lost it
@@ -137,7 +146,7 @@ local function writeIndex(id, s)
 	end)
 end
 local function publish(kind, id)
-	if Store.Online then pcall(function() MessagingService:PublishAsync("IC_World", { k = kind, id = id }) end) end
+	if Store.Online then pcall(function() MessagingService:PublishAsync("IC_World" .. SUFFIX, { k = kind, id = id }) end) end
 	WS.Changed:Fire(kind, id)
 end
 
@@ -359,12 +368,16 @@ end
 
 ---------------------------------------------------------------- start
 function WS.Start()
-	restoreCities()
-	WS.RefreshAllCities()
-	WS.RefreshIndex()
+	for i = 1, #World.Cities do WS.Cities[i] = defaultCity(i) end
+	task.spawn(function()
+		restoreCities()
+		WS.RefreshAllCities()
+		WS.RefreshIndex()
+		WS.Changed:Fire("all")
+	end)
 	if Store.Online then
 		pcall(function()
-			MessagingService:SubscribeAsync("IC_World", function(msg)
+			MessagingService:SubscribeAsync("IC_World" .. SUFFIX, function(msg)
 				local d = msg.Data
 				if type(d) ~= "table" then return end
 				if d.k == "c" and tonumber(d.id) then pcall(WS.RefreshCity, tonumber(d.id)); WS.Changed:Fire("c", d.id)

@@ -133,5 +133,7 @@ function O.show(App)
 		end
 	end)
 	draw()
+	-- finished elsewhere (another server, or a retry): close the cover
+	App.on("full", function(st) if st.onboarded and cover.Parent then cover:Destroy(); App.open("map") end end)
 end
 return O

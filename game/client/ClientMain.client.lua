@@ -292,7 +292,7 @@ local function badges()
 	for _, c in ipairs(st.convoys or {}) do if not c.to then idle += 1 end end
 	App.navBadge("map", (idle > 0 and not (st.gp and st.gp.AutoDispatch and not st.autoOff)) and idle or nil)
 	local boss = st.boss
-	App.navBadge("bosses", boss and (boss.next or 0) <= App.now() and st.sup > 0 and true or nil)
+	App.navBadge("bosses", boss and (boss.next or 0) <= App.now() and st.sup >= st.supMax and true or nil)
 end
 
 ---------------------------------------------------------------- notes from the server

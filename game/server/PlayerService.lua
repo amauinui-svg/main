@@ -284,10 +284,12 @@ function PS.MakeRivals(p, mods)
 	local atk = PS.Power(p, mods)
 	local list = {}
 	local rng = Random.new(now() + (p.userId or 0))
+	local names = table.clone(RIVAL_A)
+	for i = #names, 2, -1 do local j = rng:NextInteger(1, i); names[i], names[j] = names[j], names[i] end
 	for i = 1, 5 do
 		local strength = ({ 0.55, 0.75, 0.95, 1.15, 1.4 })[i] * rng:NextNumber(0.9, 1.1)
 		table.insert(list, {
-			name = RIVAL_B[rng:NextInteger(1, #RIVAL_B)] .. " " .. RIVAL_A[rng:NextInteger(1, #RIVAL_A)],
+			name = RIVAL_B[(i + rng:NextInteger(0, 7)) % #RIVAL_B + 1] .. " " .. names[i],
 			lv = math.max(1, d.lv + rng:NextInteger(-3, 3)), def = math.max(5, math.floor(atk * strength)),
 			flag = { l = R.FlagLayouts[rng:NextInteger(1, #R.FlagLayouts)], c = { R.FlagColors[rng:NextInteger(1, 12)], R.FlagColors[rng:NextInteger(1, 12)], R.FlagColors[rng:NextInteger(1, 12)] } },
 			reward = math.floor(R.MinuteValue(d.lv) * 1.5 * (0.7 + strength * 0.5)),
