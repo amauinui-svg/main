@@ -61,7 +61,10 @@ function T.TripSeconds(a, b, era, fast)
 	if fast then s *= T.FastPassSpeed end
 	return math.max(30, math.floor(s + 0.5))
 end
-local K = { land = 0.45, coast = 0.5, sea = 0.6 }
+-- Balance (1 Oct 2026 fact-check, scratchpad sim): one convoy on its best route earns about 40% of what laws earn per
+-- minute, short hops about 20%. Six convoys roughly double a player's income, Express Logistics doubles the convoy share.
+-- Later eras travel faster; pay is scaled by sqrt(era speed) so a faster era earns ~1.5x per minute, not 2.2x.
+local K = { land = 0.09, coast = 0.1, sea = 0.12 }
 
 -- the money yardstick: a minute of law regen, plus a quarter of property income, so trade grows with the country
 function T.TradeValue(lv, incHr) return Rules.MinuteValue(lv) + 0.25 * (incHr or 0) / 60 end
@@ -89,14 +92,14 @@ function T.Loads(a, b, ctx)
 		seen[key] = true
 		local demand = table.find(B.demand, key) ~= nil
 		local mult = g[4] * (demand and 1.3 or 1) * (key == hot and 1.25 or 1) * (ctx.convoyMult or 1)
-		local profit = value * K[kind] * base ^ 1.1 * mult
+		local profit = value * K[kind] * base ^ 1.1 * mult * math.sqrt(T.EraSpeed[era])
 		local cost = math.floor(profit * 0.6 + 0.5)
 		local pay = math.floor(cost + profit + 0.5)
 		local tax = ctx.taxFree and 0 or math.floor(pay * (ctx.taxPct or 0) / 100 + 0.5)
 		local tons = math.floor(T.Vehicles[era].cap * (0.6 + 0.4 * (g[4] - 0.9) / 0.5) + 0.5)
 		table.insert(list, {
 			good = key, name = g[1], icon = g[2], cost = cost, pay = pay, tax = tax, net = pay - tax - cost,
-			xp = math.max(1, math.floor(Rules.MinuteXp(ctx.lv) * base * 0.15 + 0.5)),
+			xp = math.max(1, math.floor(Rules.MinuteXp(ctx.lv) * base * 0.1 + 0.5)),
 			demand = demand, hot = key == hot, tons = tons,
 		})
 	end

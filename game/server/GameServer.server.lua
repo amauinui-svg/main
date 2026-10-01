@@ -102,6 +102,9 @@ if game:GetService("RunService"):IsStudio() then
 			local res = fn(plr, p, b or {})
 			PS.Sync(plr)
 			return HttpService:JSONEncode(res)
+		elseif cmd == "reset" then
+			if not workspace:GetAttribute("IC_TestProfile") then return "refused: not a test profile" end
+			p.data = PS.Fresh(); PS.EnsureConvoys(p); PS.Sync(plr); return "ok"
 		elseif cmd == "time" then
 			-- pretend `a` seconds passed for convoys (test profile only)
 			if not workspace:GetAttribute("IC_TestProfile") then return "refused: not a test profile" end

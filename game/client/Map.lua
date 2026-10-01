@@ -141,7 +141,7 @@ function Map.build(host, App)
 			num.Size = UDim2.fromOffset(15, 15)
 			num:FindFirstChildOfClass("TextLabel").TextSize = 10
 			convoyIcons[i] = b
-			b.Activated:Connect(function() selConvoy = i; obj.select(c.to or c.at) end)
+			b.Activated:Connect(function() selConvoy = i; obj.select(c.to or c.at, true) end)
 			if c.to then
 				-- dotted route from origin to destination
 				local dots = {}
@@ -320,7 +320,7 @@ function Map.build(host, App)
 				local target = c.to or c.at
 				local cc = W.Cities[target]
 				cx, cy = cc.px, cc.py; place()
-				obj.select(target)
+				obj.select(target, true)
 			end)
 		end
 		-- locked slots: show the next level gate (and the pass) so players know what is coming
@@ -366,7 +366,7 @@ function Map.build(host, App)
 		local f = row(28, order)
 		text(f, label, { font = "bold", size = 14, color = C.muted, sz = UDim2.fromOffset(70, 28), z = 28 })
 		local hold = mk("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(70, 0), Size = UDim2.new(1, -70, 1, 0), ZIndex = 28 }, f)
-		mk("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 4), VerticalAlignment = Enum.VerticalAlignment.Center }, hold)
+		mk("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 4), VerticalAlignment = Enum.VerticalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder }, hold)
 		for _, k in ipairs(keys) do
 			UI.chip(hold, T.GoodName(k), { icon = T.GoodIcon(k), z = 28, h = 24, size = 12, manila = k == hot })
 		end
@@ -478,7 +478,7 @@ function Map.build(host, App)
 		-- convoys
 		section("YOUR CONVOYS", nx())
 		local chips = row(30, nx())
-		mk("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 4) }, chips)
+		mk("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder }, chips)
 		selConvoy = math.clamp(selConvoy, 1, math.max(1, #st.convoys))
 		for i, c in ipairs(st.convoys) do
 			local chip = UI.img(chips, selConvoy == i and "chip_manila" or "chip", { button = true, sz = UDim2.fromOffset(52, 28), z = 28, order = i })
@@ -571,7 +571,7 @@ function Map.build(host, App)
 		end
 	end
 
-	function obj.select(i)
+	function obj.select(i, keepConvoy)
 		if selected ~= i then obj.taxPick = nil end
 		selected = i
 		ring.Visible = i ~= nil
@@ -581,7 +581,7 @@ function Map.build(host, App)
 			-- if the chosen convoy is parked here, prefer an idle convoy parked elsewhere so loads show at once
 			local st = App.state
 			local sc = st and st.convoys[selConvoy]
-			if st and sc and not sc.to and sc.at == i then
+			if st and sc and not keepConvoy and (sc.to or sc.at == i) then
 				for k, c2 in ipairs(st.convoys) do if not c2.to and c2.at ~= i then selConvoy = k; break end end
 			end
 		end

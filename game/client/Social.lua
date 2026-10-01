@@ -77,11 +77,11 @@ S.alliance = { build = function(host, App)
 		nameBox:GetPropertyChangedSignal("Text"):Connect(function() obj.form.name = nameBox.Text end)
 		tagBox:GetPropertyChangedSignal("Text"):Connect(function() tagBox.Text = tagBox.Text:upper():gsub("[^A-Z0-9]", ""):sub(1, 4); obj.form.tag = tagBox.Text end)
 		local sw = UI.mk("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(16, 192), Size = UDim2.new(1, -32, 0, 70), ZIndex = 8 }, right)
-		UI.mk("UIGridLayout", { CellSize = UDim2.fromOffset(30, 30), CellPadding = UDim2.fromOffset(6, 6) }, sw)
+		UI.mk("UIGridLayout", { CellSize = UDim2.fromOffset(30, 30), CellPadding = UDim2.fromOffset(6, 6), SortOrder = Enum.SortOrder.LayoutOrder }, sw)
 		local swatches = {}
 		local function mark() for col, s in pairs(swatches) do s.BorderSizePixel = col == obj.form.color and 3 or 0 end end
-		for _, col in ipairs(AC.Colors) do
-			local s = UI.mk("TextButton", { Text = "", AutoButtonColor = false, BackgroundColor3 = Color3.fromHex(col), BorderColor3 = C.manila, BorderMode = Enum.BorderMode.Inset, ZIndex = 9 }, sw)
+		for k, col in ipairs(AC.Colors) do
+			local s = UI.mk("TextButton", { LayoutOrder = k, Text = "", AutoButtonColor = false, BackgroundColor3 = Color3.fromHex(col), BorderColor3 = C.manila, BorderMode = Enum.BorderMode.Inset, ZIndex = 9 }, sw)
 			swatches[col] = s
 			s.Activated:Connect(function() obj.form.color = col; mark() end)
 		end

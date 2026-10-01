@@ -205,8 +205,9 @@ function PS.BestRoute(p, a, budget, mods)
 end
 
 function PS.AutoDispatch(p, c, startAt, mods)
-	if not PS.Has(p, "AutoDispatch") or c.to or p.data.autoOff then return false end
-	local b, L = PS.BestRoute(p, c.at, p.data.cash, mods)
+	if not PS.Has(p, "AutoDispatch") or c.to or p.data.autoOff or not p.data.onboarded then return false end
+	-- never spends more than half of your cash on one load, so building and units are not starved
+	local b, L = PS.BestRoute(p, c.at, p.data.cash * 0.5, mods)
 	if not b then return false end
 	local tax, owner = PS.TaxFor(p, b)
 	p.data.cash -= L.cost

@@ -19,12 +19,12 @@ function O.show(App)
 	panel.Size = UDim2.new(1, -40, 1, -40)
 	local stepLbl = text(panel, "", { font = "bold", size = 15, color = C.muted, pos = UDim2.new(0, 18, 0, 16), sz = UDim2.new(1, -36, 0, 22), z = 63, align = Enum.TextXAlignment.Right })
 	local area = UI.mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, -60), ZIndex = 62 }, body)
-	local nav = UI.mk("Frame", { BackgroundTransparency = 1, Position = UDim2.new(0, 0, 1, -52), Size = UDim2.new(1, 0, 0, 52), ZIndex = 62 }, body)
+	local nav = UI.mk("Frame", { Name = "NavRow", BackgroundTransparency = 1, Position = UDim2.new(0, 0, 1, -52), Size = UDim2.new(1, 0, 0, 52), ZIndex = 62 }, body)
 	local step = 1
 	local draw
 
 	local back = UI.button(nav, "slate", "BACK", function() if step > 1 then step -= 1; draw() end end, { sz = UDim2.fromOffset(140, 46), z = 63 })
-	local nextB = UI.button(nav, "manila", "NEXT", nil, { sz = UDim2.fromOffset(220, 46), pos = UDim2.new(1, -220, 0, 0), z = 63 })
+	local nextB = UI.button(nav, "manila", "NEXT", nil, { name = "NextBtn", sz = UDim2.fromOffset(220, 46), pos = UDim2.new(1, -220, 0, 0), z = 63 })
 
 	local function preview(parent, pos)
 		local holder = UI.mk("Frame", { BackgroundTransparency = 1, Position = pos, Size = UDim2.fromOffset(200, 132), ZIndex = 63 }, parent)
@@ -58,20 +58,21 @@ function O.show(App)
 		local prev = preview(area, UDim2.new(1, -210, 0, 50))
 		local function redraw() prev:Destroy(); prev = preview(area, UDim2.new(1, -210, 0, 50)) end
 		local lay = UI.mk("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(4, 50), Size = UDim2.new(1, -230, 0, 46), ZIndex = 63 }, area)
-		UI.mk("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6) }, lay)
-		for _, l in ipairs(R.FlagLayouts) do
-			local b = UI.mk("TextButton", { Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.fromOffset(54, 40), ZIndex = 63 }, lay)
+		UI.mk("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }, lay)
+		for li, l in ipairs(R.FlagLayouts) do
+			local b = UI.mk("TextButton", { LayoutOrder = li, Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.fromOffset(54, 40), ZIndex = 63 }, lay)
 			UI.flag(b, { l = l, c = form.flag.c }, 52, { z = 64, pos = UDim2.fromOffset(1, 3) })
-			if form.flag.l == l then UI.mk("UIStroke", { Color = C.manila, Thickness = 3 }, b) end
+			if form.flag.l == l then UI.mk("Frame", { BackgroundColor3 = C.manila, BorderSizePixel = 0, Position = UDim2.new(0, 0, 1, 2), Size = UDim2.new(1, 0, 0, 4), ZIndex = 64 }, b) end
 			b.Activated:Connect(function() form.flag.l = l; draw() end)
 		end
 		for row = 1, 3 do
 			text(area, ({ "MAIN", "SECOND", "THIRD" })[row], { font = "heavy", size = 13, color = C.muted, pos = UDim2.fromOffset(4, 108 + (row - 1) * 52), sz = UDim2.fromOffset(70, 40), z = 63 })
 			local sw = UI.mk("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(76, 108 + (row - 1) * 52), Size = UDim2.new(1, -310, 0, 40), ZIndex = 63 }, area)
-			UI.mk("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 4) }, sw)
-			for _, col in ipairs(R.FlagColors) do
-				local s = UI.mk("TextButton", { Text = "", AutoButtonColor = false, BackgroundColor3 = Color3.fromHex(col), Size = UDim2.fromOffset(30, 36), ZIndex = 64, BorderSizePixel = 0 }, sw)
-				UI.mk("UIStroke", { Color = form.flag.c[row] == col and C.manila or C.black, Thickness = form.flag.c[row] == col and 3 or 1 }, s)
+			UI.mk("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder }, sw)
+			for ci, col in ipairs(R.FlagColors) do
+				local s = UI.mk("TextButton", { LayoutOrder = ci, Text = "", AutoButtonColor = false, BackgroundColor3 = Color3.fromHex(col), Size = UDim2.fromOffset(30, 36), ZIndex = 64, BorderSizePixel = 0 }, sw)
+				UI.mk("UIStroke", { Color = C.black, Thickness = 1 }, s)
+				if form.flag.c[row] == col then UI.icon(s, "icon_check", 22, (col == "ecf0f1" or col == "f1c40f") and C.black or C.white, UDim2.fromScale(0.5, 0.5), { anchor = Vector2.new(0.5, 0.5), z = 65 }) end
 				s.Activated:Connect(function() form.flag.c[row] = col; draw() end)
 			end
 		end
@@ -85,10 +86,10 @@ function O.show(App)
 	steps[3] = function()
 		text(area, "Choose your form of government", { font = "display", size = 24, pos = UDim2.fromOffset(4, 10), sz = UDim2.new(1, 0, 0, 30), z = 63 })
 		local grid = UI.mk("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(4, 54), Size = UDim2.new(1, -8, 1, -60), ZIndex = 63 }, area)
-		UI.mk("UIGridLayout", { CellSize = UDim2.new(0.5, -6, 0, 110), CellPadding = UDim2.fromOffset(12, 12) }, grid)
+		UI.mk("UIGridLayout", { CellSize = UDim2.new(0.5, -6, 0, 110), CellPadding = UDim2.fromOffset(12, 12), SortOrder = Enum.SortOrder.LayoutOrder }, grid)
 		local icons = { republic = "icon_landmark", monarchy = "icon_crown", federation = "icon_globe", junta = "icon_military" }
-		for _, d in ipairs(R.Ideologies) do
-			local card = UI.card(grid, { button = true, z = 64, hot = form.ideo == d.key })
+		for k, d in ipairs(R.Ideologies) do
+			local card = UI.card(grid, { button = true, z = 64, hot = form.ideo == d.key, order = k })
 			UI.icon(card, icons[d.key], 36, form.ideo == d.key and C.gold or C.manila, UDim2.fromOffset(16, 16), { z = 65 })
 			text(card, d.name, { font = "display", size = 22, pos = UDim2.fromOffset(64, 18), sz = UDim2.new(1, -72, 0, 28), z = 65 })
 			text(card, d.desc, { font = "heavy", size = 17, color = C.good, pos = UDim2.fromOffset(64, 54), sz = UDim2.new(1, -72, 0, 22), z = 65 })
@@ -107,7 +108,7 @@ function O.show(App)
 			local c = W.Cities[i]
 			local card = UI.card(grid, { button = true, z = 64, order = k, hot = form.home == i })
 			text(card, c.name, { font = "heavy", size = 16, pos = UDim2.fromOffset(10, 4), sz = UDim2.new(1, -16, 0, 22), z = 65, truncate = true })
-			text(card, c.country .. " · +" .. ({ 3, 5, 8 })[c.tier] .. "% " .. PERK_TEXT[c.perk], { size = 12, color = C.muted, pos = UDim2.fromOffset(10, 27), sz = UDim2.new(1, -16, 0, 18), z = 65, truncate = true })
+			text(card, c.country .. " · " .. ({ "City", "Capital", "Major capital" })[c.tier], { size = 12, color = C.muted, pos = UDim2.fromOffset(10, 27), sz = UDim2.new(1, -16, 0, 18), z = 65, truncate = true })
 			card.Activated:Connect(function() form.home = i; draw() end)
 		end
 		return function() return true end
