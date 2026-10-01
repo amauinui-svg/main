@@ -1,0 +1,380 @@
+-- ClientMain: the shell. Top bar, the left nav (flush with the screen's left edge, Kash 26 Sep), the screen host,
+-- toasts and level-up banners. The Capitol world map is the home screen (Kash, 1 Oct 2026, Q12).
+-- Everything is laid out in design pixels on a top-left anchored root scaled by ONE UIScale
+-- (LESSONS: a UIScale scales about the AnchorPoint; read TopbarInset lazily).
+local Players = game:GetService("Players")
+local RS = game:GetService("ReplicatedStorage")
+local GuiService = game:GetService("GuiService")
+local TweenService = game:GetService("TweenService")
+local ContentProvider = game:GetService("ContentProvider")
+local plr = Players.LocalPlayer
+local pgui = plr:WaitForChild("PlayerGui")
+
+local Shared = RS:WaitForChild("Shared")
+local ClientMods = RS:WaitForChild("Client")
+local R = require(Shared.Rules)
+local Assets = require(Shared.Assets)
+local UI = require(ClientMods.UI)
+local C = UI.C
+local mk, text = UI.mk, UI.text
+local Remotes = RS:WaitForChild("Remotes")
+
+local old = pgui:FindFirstChild("IdleCountryHUD"); if old then old:Destroy() end
+local sg = mk("ScreenGui", { Name = "IdleCountryHUD", ResetOnSpawn = false, IgnoreGuiInset = true, ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets, ZIndexBehavior = Enum.ZIndexBehavior.Sibling, DisplayOrder = 5 }, pgui)
+local root = mk("Frame", { Name = "Root", BackgroundTransparency = 1, Size = UDim2.fromOffset(1280, 720), ZIndex = 1 }, sg)
+local uiScale = mk("UIScale", { Name = "Fit" }, root)
+mk("Frame", { Name = "Backdrop", BackgroundColor3 = Color3.fromHex("14171b"), BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ZIndex = 0 }, root)
+
+local TOP, NAVW = 64, 176
+local App = { UI = UI, root = root, sg = sg, state = nil, world = nil, screens = {}, current = nil, listeners = {}, TOP = TOP, NAVW = NAVW }
+_G.IdleCountryApp = App -- for Studio debugging only
+
+function App.now() return workspace:GetServerTimeNow() end
+function App.on(ev, fn) App.listeners[ev] = App.listeners[ev] or {}; table.insert(App.listeners[ev], fn) end
+function App.emit(ev, ...) for _, fn in ipairs(App.listeners[ev] or {}) do task.spawn(fn, ...) end end
+
+---------------------------------------------------------------- fit to screen
+local function fit()
+	local cam = workspace.CurrentCamera
+	local vp = cam and cam.ViewportSize or Vector2.new(1280, 720)
+	local s = math.clamp(math.min(vp.X / 1280, vp.Y / 720), 0.45, 1.6)
+	uiScale.Scale = s
+	root.Size = UDim2.fromOffset(math.floor(vp.X / s), math.floor(vp.Y / s))
+	App.emit("resize", root.Size.X.Offset, root.Size.Y.Offset)
+end
+local function hookCamera()
+	local cam = workspace.CurrentCamera
+	if cam then cam:GetPropertyChangedSignal("ViewportSize"):Connect(fit) end
+	fit()
+end
+workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(hookCamera)
+hookCamera()
+function App.W() return root.Size.X.Offset end
+function App.H() return root.Size.Y.Offset end
+local function robloxButtonsEnd()
+	local ok, inset = pcall(function() return GuiService.TopbarInset end)
+	local x = (ok and inset and inset.Min.X > 0) and inset.Min.X or 140
+	return math.floor(x / uiScale.Scale) + 6
+end
+
+---------------------------------------------------------------- toasts, floats, shake
+local toastHost = mk("Frame", { Name = "Toasts", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, NAVW / 2, 0, TOP + 12), Size = UDim2.fromOffset(520, 0), BackgroundTransparency = 1, ZIndex = 80 }, root)
+mk("UIListLayout", { Padding = UDim.new(0, 6), HorizontalAlignment = Enum.HorizontalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder }, toastHost)
+local toastN, liveToasts = 0, {}
+local TONE = { good = C.good, bad = C.bad, gold = C.gold, info = C.blue }
+function App.toast(title, body, tone)
+	toastN += 1
+	local key = title .. "|" .. (body or "")
+	local live = liveToasts[key]
+	if live and live.card.Parent then live.until_ = os.clock() + 2.5; live.card.LayoutOrder = toastN; return end
+	local color = TONE[tone] or tone or C.manila
+	local t = UI.img(toastHost, "panel_plain", { name = "Toast", sz = UDim2.fromOffset(520, body and 66 or 42), z = 80, order = toastN })
+	local entry = { card = t, until_ = os.clock() + (body and 4 or 3) }
+	liveToasts[key] = entry
+	mk("Frame", { Size = UDim2.new(0, 5, 1, -12), Position = UDim2.fromOffset(6, 6), BackgroundColor3 = color, BorderSizePixel = 0, ZIndex = 81 }, t)
+	text(t, title, { font = "display", size = 19, pos = UDim2.fromOffset(20, body and 6 or 8), sz = UDim2.new(1, -30, 0, 26), z = 81, color = color, truncate = true })
+	if body then text(t, body, { size = 15, pos = UDim2.fromOffset(20, 34), sz = UDim2.new(1, -30, 0, 24), z = 81, truncate = true, color = C.ink }) end
+	task.spawn(function()
+		while os.clock() < entry.until_ do task.wait(0.2) end
+		if t.Parent then t:Destroy() end
+		if liveToasts[key] == entry then liveToasts[key] = nil end
+	end)
+end
+function App.shake(gui)
+	if not gui then return end
+	local p = gui.Position
+	task.spawn(function()
+		for _, dx in ipairs({ 7, -7, 4, -4, 0 }) do gui.Position = p + UDim2.fromOffset(dx, 0); task.wait(0.03) end
+		gui.Position = p
+	end)
+end
+function App.float(gui, str, color)
+	if not gui or not gui.Parent then return end
+	local s = uiScale.Scale
+	local p = (gui.AbsolutePosition - root.AbsolutePosition) / s
+	local w = gui.AbsoluteSize.X / s
+	local l = text(root, str, { name = "Float", font = "heavy", size = 20, color = color or C.good, align = Enum.TextXAlignment.Center, pos = UDim2.fromOffset(p.X - 40, p.Y - 26), sz = UDim2.fromOffset(w + 80, 26), z = 90, stroke = 1.6, rich = true })
+	TweenService:Create(l, TweenInfo.new(0.9, Enum.EasingStyle.Quad), { Position = UDim2.fromOffset(p.X - 40, p.Y - 80), TextTransparency = 1 }):Play()
+	local st = l:FindFirstChildOfClass("UIStroke"); if st then TweenService:Create(st, TweenInfo.new(0.9), { Transparency = 1 }):Play() end
+	task.delay(1, function() l:Destroy() end)
+end
+
+-- request: shakes the button and toasts the reason when the server says no
+function App.req(action, args, btn)
+	local ok, res = pcall(function() return Remotes.Request:InvokeServer(action, args or {}) end)
+	if not ok then res = { ok = false, msg = "Connection problem. Try again." } end
+	if not res.ok and res.msg then
+		App.toast(res.msg, nil, "bad")
+		if btn then App.shake(btn.Inst or btn) end
+	end
+	return res
+end
+
+-- confirm modal (used for anything that costs a lot or cannot be undone)
+local modalHost = mk("TextButton", { Name = "Modal", Text = "", AutoButtonColor = false, BackgroundColor3 = C.black, BackgroundTransparency = 0.45, Size = UDim2.fromScale(1, 1), ZIndex = 70, Visible = false }, root)
+function App.confirm(title, body, okLabel, kind, fn)
+	UI.clear(modalHost)
+	modalHost.Visible = true
+	local panel, b = UI.panel(modalHost, title, { sz = UDim2.fromOffset(460, 230), pos = UDim2.fromScale(0.5, 0.5), anchor = Vector2.new(0.5, 0.5), z = 71 })
+	text(b, body, { size = 17, wrap = true, sz = UDim2.new(1, 0, 1, -56), valign = Enum.TextYAlignment.Top, z = 73, rich = true })
+	UI.button(b, "slate", "CANCEL", function() modalHost.Visible = false end, { sz = UDim2.fromOffset(150, 44), pos = UDim2.new(0, 0, 1, -46), z = 73 })
+	UI.button(b, kind or "manila", okLabel or "CONFIRM", function(btn) modalHost.Visible = false; fn(btn) end, { sz = UDim2.fromOffset(200, 44), pos = UDim2.new(1, -200, 1, -46), z = 73 })
+	return panel
+end
+function App.closeModal() modalHost.Visible = false end
+App.modalHost = modalHost
+
+---------------------------------------------------------------- top bar
+local topBar = UI.img(root, "topbar", { name = "TopBar", sz = UDim2.new(1, 0, 0, TOP), z = 20 })
+local top = {}
+do
+	local id = mk("Frame", { Name = "Identity", BackgroundTransparency = 1, Size = UDim2.fromOffset(330, TOP), ZIndex = 21 }, topBar)
+	top.id = id
+	top.flagHost = mk("Frame", { Name = "FlagHost", BackgroundTransparency = 1, Position = UDim2.fromOffset(0, 12), Size = UDim2.fromOffset(60, 40), ZIndex = 21 }, id)
+	top.name = text(id, "", { font = "display", size = 19, pos = UDim2.fromOffset(68, 6), sz = UDim2.fromOffset(250, 24), truncate = true, z = 22 })
+	top.xp = UI.bar(id, C.xp, { pos = UDim2.fromOffset(68, 34), sz = UDim2.fromOffset(250, 22), z = 22, textSize = 13 })
+
+	local mid = mk("Frame", { Name = "Money", BackgroundTransparency = 1, Size = UDim2.fromOffset(300, TOP), ZIndex = 21 }, topBar)
+	top.mid = mid
+	UI.icon(mid, "icon_cash", 26, C.good, UDim2.fromOffset(0, 10), { z = 22 })
+	top.cash = text(mid, "$0", { font = "display", size = 28, color = C.good, pos = UDim2.fromOffset(32, 4), sz = UDim2.fromOffset(240, 34), z = 22, scaled = true })
+	top.income = text(mid, "", { font = "bold", size = 13, color = C.muted, pos = UDim2.fromOffset(32, 38), sz = UDim2.fromOffset(170, 18), z = 22 })
+	local goldBtn = UI.img(mid, "chip", { button = true, name = "Gold", pos = UDim2.fromOffset(206, 36), sz = UDim2.fromOffset(84, 22), z = 22 })
+	UI.icon(goldBtn, "icon_gold", 16, C.gold, UDim2.fromOffset(5, 3), { z = 23 })
+	top.gold = text(goldBtn, "0", { font = "heavy", size = 14, color = C.gold, pos = UDim2.fromOffset(25, 0), sz = UDim2.new(1, -28, 1, 0), z = 23 })
+	goldBtn.Activated:Connect(function() App.open("shop") end)
+
+	local right = mk("Frame", { Name = "Energy", BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -10, 0, 0), Size = UDim2.fromOffset(470, TOP), ZIndex = 21 }, topBar)
+	top.right = right
+	UI.icon(right, "icon_influence", 22, C.inf, UDim2.fromOffset(0, 8), { z = 22 })
+	top.inf = UI.bar(right, C.inf, { pos = UDim2.fromOffset(26, 6), sz = UDim2.fromOffset(200, 24), z = 22, textSize = 14 })
+	top.infT = text(right, "", { font = "bold", size = 12, color = C.muted, pos = UDim2.fromOffset(28, 32), sz = UDim2.fromOffset(196, 16), z = 22 })
+	UI.icon(right, "icon_supply", 22, C.sup, UDim2.fromOffset(238, 8), { z = 22 })
+	top.sup = UI.bar(right, C.sup, { pos = UDim2.fromOffset(264, 6), sz = UDim2.fromOffset(160, 24), z = 22, textSize = 14 })
+	top.supT = text(right, "", { font = "bold", size = 12, color = C.muted, pos = UDim2.fromOffset(266, 32), sz = UDim2.fromOffset(156, 16), z = 22 })
+	local plus = UI.img(right, "btn_gold", { button = true, name = "Refill", pos = UDim2.fromOffset(432, 8), sz = UDim2.fromOffset(36, 34), z = 22 })
+	UI.icon(plus, "icon_plus", 18, C.manilaInk, UDim2.new(0.5, 0, 0.5, -1), { z = 23, anchor = Vector2.new(0.5, 0.5) })
+	plus.Activated:Connect(function() App.open("shop") end)
+end
+local function layoutTop()
+	local w = App.W()
+	local x0 = robloxButtonsEnd()
+	top.id.Position = UDim2.fromOffset(x0, 0)
+	local midX = x0 + 340
+	local rightW = 470
+	local room = w - 10 - rightW - midX
+	top.mid.Visible = room >= 290
+	top.mid.Position = UDim2.fromOffset(midX + math.max(0, math.floor((room - 300) / 2)), 0)
+	top.id.Size = UDim2.fromOffset(room >= 290 and 330 or math.max(200, w - rightW - x0 - 20), TOP)
+end
+App.on("resize", layoutTop)
+pcall(function() GuiService:GetPropertyChangedSignal("TopbarInset"):Connect(layoutTop) end)
+layoutTop()
+
+---------------------------------------------------------------- nav (flush left)
+local NAV = {
+	{ key = "map", label = "CAPITOL", icon = "icon_map" },
+	{ key = "laws", label = "LAWS", icon = "icon_laws" },
+	{ key = "properties", label = "PROPERTIES", icon = "icon_properties" },
+	{ key = "military", label = "MILITARY", icon = "icon_military" },
+	{ key = "battle", label = "BATTLE", icon = "icon_battle" },
+	{ key = "bosses", label = "BOSSES", icon = "icon_bosses" },
+	{ key = "alliance", label = "ALLIANCE", icon = "icon_alliance" },
+	{ key = "tasks", label = "TASKS", icon = "icon_tasks" },
+	{ key = "skills", label = "SKILLS", icon = "icon_graduation" },
+	{ key = "bank", label = "BANK", icon = "icon_bank" },
+	{ key = "rankings", label = "RANKINGS", icon = "icon_rankings" },
+	{ key = "shop", label = "SHOP", icon = "icon_shop" },
+}
+local nav = UI.list(root, { name = "Nav", pos = UDim2.fromOffset(0, TOP + 4), sz = UDim2.new(0, NAVW, 1, -TOP - 4), gap = 3, z = 15 })
+nav.ScrollBarThickness = 0
+nav:FindFirstChildOfClass("UIPadding").PaddingRight = UDim.new(0, 0)
+nav:FindFirstChildOfClass("UIPadding").PaddingLeft = UDim.new(0, 0)
+local navButtons = {}
+for i, n in ipairs(NAV) do
+	local b = UI.img(nav, "nav_off", { button = true, name = n.key, sz = UDim2.fromOffset(NAVW, 44), z = 16, order = i })
+	local ic = UI.icon(b, n.icon, 22, C.ink, UDim2.new(0, 12, 0.5, 0), { z = 17, anchor = Vector2.new(0, 0.5) })
+	local l = text(b, n.label, { font = "heavy", size = 16, pos = UDim2.fromOffset(42, 0), sz = UDim2.new(1, -48, 1, 0), z = 17 })
+	navButtons[n.key] = { Inst = b, Icon = ic, Label = l }
+	b.Activated:Connect(function() App.open(n.key) end)
+end
+local navBadges = {}
+function App.navBadge(key, n)
+	local nb = navButtons[key]
+	if not nb then return end
+	if navBadges[key] then navBadges[key]:Destroy(); navBadges[key] = nil end
+	if n and n ~= 0 and n ~= false then navBadges[key] = UI.badge(nb.Inst, n == true and "!" or n, UDim2.new(1, -16, 0.5, 0), 18) end
+end
+
+---------------------------------------------------------------- screen host
+local content = mk("Frame", { Name = "Content", BackgroundTransparency = 1, Position = UDim2.fromOffset(NAVW, TOP), Size = UDim2.new(1, -NAVW, 1, -TOP), ZIndex = 2, ClipsDescendants = true }, root)
+App.content = content
+local defs = {}
+for _, modName in ipairs({ "Map", "Economy", "War", "Social" }) do
+	local okReq, mod = pcall(require, ClientMods:WaitForChild(modName))
+	if okReq then for k, def in pairs(mod) do defs[k] = def end else warn("[Idle Country] " .. modName .. ": " .. tostring(mod)) end
+end
+
+function App.open(key)
+	if not defs[key] then App.toast("Coming soon", nil, "info"); return end
+	if App.state and not App.state.onboarded then return end
+	for k, s in pairs(App.screens) do s.host.Visible = (k == key) or (k == "map" and key ~= "map" and false) end
+	local s = App.screens[key]
+	if not s then
+		local host = mk("Frame", { Name = "Screen_" .. key, BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 3 }, content)
+		local okB, obj = pcall(defs[key].build, host, App)
+		if not okB then warn("[Idle Country] screen " .. key .. ": " .. tostring(obj)); host:Destroy(); App.toast("That screen failed to open", tostring(obj):sub(1, 80), "bad"); return end
+		s = { host = host, obj = obj }
+		App.screens[key] = s
+	end
+	s.host.Visible = true
+	App.current = key
+	for k, nb in pairs(navButtons) do
+		nb.Inst.Image = Assets[k == key and "nav_on" or "nav_off"]
+		nb.Label.TextColor3 = k == key and C.manilaInk or C.ink
+		nb.Icon.ImageColor3 = k == key and C.manilaInk or C.ink
+	end
+	if App.state and s.obj and s.obj.Refresh then pcall(s.obj.Refresh, s.obj, App.state) end
+	if s.obj and s.obj.Opened then pcall(s.obj.Opened, s.obj) end
+end
+
+local function refreshCurrent()
+	local s = App.current and App.screens[App.current]
+	if s and s.obj and s.obj.Refresh then
+		local okR, err = pcall(s.obj.Refresh, s.obj, App.state)
+		if not okR then warn("[Idle Country] refresh " .. App.current .. ": " .. tostring(err)) end
+	end
+end
+
+---------------------------------------------------------------- top bar values (ticks locally between server ticks)
+local function ideoTitle(st)
+	local n = st.name ~= "" and st.name or plr.DisplayName
+	return string.upper(n)
+end
+local lastFlag
+local function drawTop()
+	local st = App.state
+	if not st then return end
+	top.name.Text = ideoTitle(st)
+	top.xp:Set(st.xp / math.max(1, st.xpReq), "LV " .. st.lv, R.Short(math.floor(st.xp)) .. " / " .. R.Short(st.xpReq) .. " XP")
+	top.cash.Text = R.Money(st.cash)
+	top.income.Text = "+" .. R.Money(st.incHr) .. "/hr"
+	top.gold.Text = R.Commas(st.gold)
+	top.inf:Set(st.inf / st.infMax, st.inf .. " / " .. st.infMax, "")
+	top.sup:Set(st.sup / st.supMax, st.sup .. " / " .. st.supMax, "")
+	local fk = st.flag and (st.flag.l .. table.concat(st.flag.c, ""))
+	if fk ~= lastFlag then
+		lastFlag = fk
+		UI.clear(top.flagHost)
+		UI.flag(top.flagHost, st.flag, 56, { z = 22 })
+	end
+end
+local function drawTimers()
+	local st = App.state
+	if not st then return end
+	local since = os.clock() - (App.tickClock or os.clock())
+	if st.inf < st.infMax then
+		top.infT.Text = "+1 in " .. R.Clock(math.max(0, st.regenSec - st.infT - since)) .. " · full in " .. R.Duration((st.infMax - st.inf) * st.regenSec - st.infT - since)
+	else top.infT.Text = "FULL" end
+	if st.sup < st.supMax then
+		top.supT.Text = "+1 in " .. R.Clock(math.max(0, 60 - st.supT - since))
+	else top.supT.Text = "FULL" end
+end
+
+local function badges()
+	local st = App.state
+	if not st then return end
+	App.navBadge("skills", st.skillFree > 0 and st.skillFree or nil)
+	local claim = 0
+	for _, t in ipairs(st.tasks and st.tasks.list or {}) do if t.have >= t.n and not t.done then claim += 1 end end
+	App.navBadge("tasks", claim > 0 and claim or nil)
+	local idle = 0
+	for _, c in ipairs(st.convoys or {}) do if not c.to then idle += 1 end end
+	App.navBadge("map", (idle > 0 and not (st.gp and st.gp.AutoDispatch and not st.autoOff)) and idle or nil)
+	local boss = st.boss
+	App.navBadge("bosses", boss and (boss.next or 0) <= App.now() and st.sup > 0 and true or nil)
+end
+
+---------------------------------------------------------------- notes from the server
+local function levelBanner(n)
+	local bits = {}
+	if n.era then table.insert(bits, "THE " .. string.upper(n.era) .. " ERA BEGINS") end
+	if #n.laws > 0 then table.insert(bits, #n.laws .. " new law" .. (#n.laws > 1 and "s" or "")) end
+	if #n.props > 0 then table.insert(bits, "new property: " .. n.props[1]) end
+	if #n.units > 0 then table.insert(bits, "new unit: " .. n.units[1]) end
+	if n.slot then table.insert(bits, "+1 convoy slot") end
+	table.insert(bits, "+" .. n.points .. " skill points")
+	App.toast("LEVEL " .. n.lv .. " · INFLUENCE REFILLED", table.concat(bits, " · "), "gold")
+end
+local function handleNotes(notes)
+	for _, n in ipairs(notes) do
+		if n.kind == "level" then levelBanner(n)
+		elseif n.kind == "mastery" then App.toast(R.MasteryName[n.tier + 1] .. " MASTERY", n.law .. ": +" .. n.pct .. "% cash and XP" .. (n.point and " · +1 skill point" or ""), "gold")
+		elseif n.kind == "arrive" then
+			local World = require(Shared.World)
+			local Trade = require(Shared.Trade)
+			App.toast("DELIVERED TO " .. string.upper(World.Cities[n.city].name), Trade.GoodName(n.good) .. " · +" .. R.Money(n.cash) .. (n.tax > 0 and (" (tax " .. R.Money(n.tax) .. ")") or "") .. " · +" .. R.Short(n.xp) .. " XP", "good")
+		elseif n.kind == "offline" then
+			local parts = { "+" .. R.Money(n.cash) }
+			if n.trips > 0 then table.insert(parts, n.trips .. " convoy deliveries") end
+			if n.levels > 0 then table.insert(parts, "+" .. n.levels .. " levels") end
+			App.toast("WHILE YOU WERE AWAY (" .. R.Duration(n.away) .. ")", table.concat(parts, " · "), "good")
+		elseif n.kind == "boss" then App.toast(string.upper(n.name) .. " DEFEATED", "+" .. n.gold .. " gold · +" .. R.Money(n.cash) .. " · +" .. R.Short(n.xp) .. " XP", "gold")
+		elseif n.kind == "toast" then App.toast(n.text, nil, n.tone)
+		end
+	end
+end
+
+---------------------------------------------------------------- sync
+local onboardShown = false
+Remotes.Sync.OnClientEvent:Connect(function(kind, data)
+	if kind == "full" then
+		App.state = data
+		App.tickClock = os.clock()
+		drawTop(); badges()
+		if not data.onboarded then
+			if not onboardShown then
+				onboardShown = true
+				local okO, Onboard = pcall(require, ClientMods:WaitForChild("Onboard"))
+				if okO then Onboard.show(App) else warn(Onboard) end
+			end
+		elseif not App.current then
+			App.open("map")
+		else
+			refreshCurrent()
+		end
+		App.emit("full", data)
+	elseif kind == "tick" then
+		local st = App.state
+		if not st then return end
+		for k, v in pairs(data) do st[k] = v end
+		App.tickClock = os.clock()
+		drawTop()
+		App.emit("tick", st)
+	elseif kind == "notes" then
+		handleNotes(data)
+	elseif kind == "world" then
+		App.world = data
+		App.emit("world", data)
+		if App.current and App.current ~= "map" then refreshCurrent() end
+	end
+end)
+
+task.spawn(function()
+	while true do
+		task.wait(0.25)
+		drawTimers()
+		local s = App.current and App.screens[App.current]
+		if s and s.obj and s.obj.Tick then pcall(s.obj.Tick, s.obj, App.state) end
+		if math.floor(os.clock() * 4) % 4 == 0 then badges() end
+	end
+end)
+
+-- preload the art so nothing pops in
+task.spawn(function()
+	local list = {}
+	for _, id in pairs(Assets) do table.insert(list, id) end
+	pcall(function() ContentProvider:PreloadAsync(list) end)
+end)
+
+App.req("sync")
