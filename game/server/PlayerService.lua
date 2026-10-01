@@ -195,12 +195,15 @@ function PS.BestRoute(p, a, budget, mods)
 	local era = R.EraOf(p.data.lv)
 	local fast = PS.Has(p, "FastConvoys")
 	local bestScore, bestB, bestLoad
+	-- spread the fleet: every other convoy already heading to a city makes it 20% less attractive
+	local heading = {}
+	for _, c in ipairs(p.data.convoys) do if c.to then heading[c.to] = (heading[c.to] or 0) + 1 end end
 	for b = 1, #World.Cities do
 		if b ~= a then
 			local loads = PS.LoadsFor(p, a, b, mods)
 			local L = loads[1]
 			if L and L.cost <= budget then
-				local score = L.net / T.TripSeconds(a, b, era, fast)
+				local score = L.net / T.TripSeconds(a, b, era, fast) * 0.8 ^ (heading[b] or 0)
 				if not bestScore or score > bestScore then bestScore, bestB, bestLoad = score, b, L end
 			end
 		end
