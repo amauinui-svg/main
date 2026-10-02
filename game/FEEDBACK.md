@@ -34,3 +34,4 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
   Planned: leader sets a base % and a style (Flat / Progressive: higher levels pay more / Regressive: lower levels
   pay more), each member's rate scaling from half to double the base by level within the alliance, never above 15%.
   Join fee is a flat amount shown on the alliance list. Both change at most once a day.
+- Q6 Daily login sheet: PAUSE, not reset. A missed day keeps your place; day 7 = big gold reward + free crate.
