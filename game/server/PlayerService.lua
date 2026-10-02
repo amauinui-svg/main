@@ -97,6 +97,7 @@ function PS.Mods(p)
 end
 function PS.RegenSec(mods) return R.RegenSec / (mods and mods.regen or 1) end
 function PS.Has(p, pass) return p.gp[pass] == true end
+function PS.AllianceTag(aid) local s = WS.Index[aid]; return s and s.tag or nil end
 function PS.VipTier(p)
 	if PS.Has(p, "MegaVIP") then return Config.VIP.MegaVIP end
 	if PS.Has(p, "VIP") then return Config.VIP.VIP end

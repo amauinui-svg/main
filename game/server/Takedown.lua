@@ -137,7 +137,16 @@ function TD.View(p)
 	if pending[d.alliance] and #pending[d.alliance].hits > 0 then apply(copy, pending[d.alliance].hits) end
 	local td = copy.td
 	if not td or td.week ~= week() then
-		v.stage, v.cleared, v.enemies, v.log, v.board = 1, 0, nil, {}, {}
+		-- nobody has hit yet this week: preview stage 1 at the size the first hit will create
+		local preview = { ref = math.max(10, (PS.Power(p))), td = nil }
+		local tdp = { ref = preview.ref }
+		newStage(tdp, 1, a.count or 1)
+		v.stage, v.cleared, v.log, v.board, v.myDmg = 1, 0, {}, {}, 0
+		v.enemies = {}
+		for i, e in ipairs(TD.Enemies[1]) do v.enemies[i] = { name = e[1], img = e[2], hp = tdp.hp[i], max = tdp.max[i] } end
+		v.stageHp, v.stageMax = 0, 0
+		for i in ipairs(tdp.max) do v.stageHp += tdp.hp[i]; v.stageMax += tdp.max[i] end
+		v.rewards = TD.StageRewards
 		return v
 	end
 	v.stage, v.cleared, v.log = td.stage, td.cleared, td.log
@@ -157,6 +166,7 @@ function TD.View(p)
 	end
 	table.sort(board, function(x, y) return x.dmg > y.dmg end)
 	v.board = board
+	v.rewards = TD.StageRewards
 	v.myDmg = math.floor(td.dmg[tostring(p.userId)] or 0)
 	for i, b in ipairs(board) do if b.uid == tostring(p.userId) then v.myRank = i end end
 	return v

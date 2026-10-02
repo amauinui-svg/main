@@ -3,7 +3,7 @@
 -- prices stay exactly as approved (charm prices ending in 9, bigger packs cheaper per item).
 local C = {}
 
-C.Version = "Alpha 0.2"
+C.Version = "Alpha 0.3"
 
 C.Passes = {
 	FastConvoys = { id = 2006396309, name = "Express Logistics", desc = "Every convoy travels 2x faster.", price = 249 },

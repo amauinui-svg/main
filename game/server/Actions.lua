@@ -552,6 +552,7 @@ function act.fire(plr, p, a)
 	local d = p.data
 	local o = type(a.id) == "string" and d.inv.officers[a.id]
 	if not o then return no("Unknown officer") end
+	if o.limited then return no("Limited officers can't be fired. Bench them instead.") end
 	-- their gear goes back to the inventory
 	o.weapon, o.armor = nil, nil
 	local i = officerSlotIndex(d, a.id)
@@ -618,7 +619,7 @@ function A.OpenCrates(p, kind, n)
 		-- a 10-pack guarantees at least one Epic or better
 		local force = (kind == "limited" and n >= 10 and k == n and not gotEpic)
 		local r = O.OpenCrate(rng, kind, luck, force)
-		if O.RarityByKey[r.item.rarity].index >= 3 then gotEpic = true end
+		if O.RarityByKey[r.item.rarity].index >= 4 then gotEpic = true end
 		if r.type == "officer" then r.where = PS.AddOfficer(p, r.item)
 		elseif not PS.AddGear(p, r.item) then r.lost = true end
 		table.insert(results, r)
@@ -631,6 +632,9 @@ function act.openCrate(plr, p, a)
 	local kind = a.kind == "basic" and "basic" or "limited"
 	local n = int(a.n or 1, 1, 10) or 1
 	if (d.crates[kind] or 0) < n then return no("You have no " .. (kind == "basic" and "Supply" or "Founder's") .. " crates to open") end
+	local have = 0
+	for _ in pairs(d.inv.gear) do have += 1 end
+	if have + n > Config.InventoryMax then return no("Inventory full (" .. have .. "/" .. Config.InventoryMax .. "). Discard some gear first.") end
 	d.crates[kind] -= n
 	return ok({ results = A.OpenCrates(p, kind, n), kind = kind })
 end

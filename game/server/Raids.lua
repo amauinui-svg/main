@@ -81,7 +81,7 @@ function RA.Targets(p)
 			table.insert(list, {
 				id = id, name = q.data.name, flag = q.data.flag, lv = q.data.lv, def = def,
 				cash = math.floor(q.data.cash), cooldown = math.max(0, (lastHit[id] or 0) + RC.Cooldown - t),
-				shield = math.max(0, (q.data.shield or 0) - t), tag = q.data.alliance,
+				shield = math.max(0, (q.data.shield or 0) - t), tag = q.data.alliance and PS.AllianceTag and PS.AllianceTag(q.data.alliance) or nil,
 			})
 		end
 	end
@@ -185,6 +185,7 @@ function RA.Attack(plr, p, id, guaranteed)
 		d.stats.wins += 1; d.stats.stolen += got
 		PS.TaskProgress(p, "raids", 1)
 		res.cash = got; res.xp = xp
+		if d.revenge and d.revenge.id == id then d.revenge = nil end -- revenge taken
 	end
 	-- the defender hears about it, with a REVENGE button
 	if q then

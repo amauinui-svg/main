@@ -186,15 +186,18 @@ layoutTop()
 
 ---------------------------------------------------------------- nav (flush left)
 local NAV = {
+	{ key = "country", label = "COUNTRY", icon = "icon_flag" },
 	{ key = "map", label = "CAPITOL", icon = "icon_map" },
 	{ key = "laws", label = "LAWS", icon = "icon_laws" },
 	{ key = "properties", label = "PROPERTIES", icon = "icon_properties" },
+	{ key = "officers", label = "OFFICERS", icon = "icon_users" },
+	{ key = "inventory", label = "INVENTORY", icon = "icon_boxes" },
 	{ key = "military", label = "MILITARY", icon = "icon_military" },
-	{ key = "battle", label = "BATTLE", icon = "icon_battle" },
+	{ key = "battle", label = "RAIDS", icon = "icon_battle" },
 	{ key = "bosses", label = "BOSSES", icon = "icon_bosses" },
 	{ key = "alliance", label = "ALLIANCE", icon = "icon_alliance" },
-	{ key = "tasks", label = "TASKS", icon = "icon_tasks" },
-	{ key = "skills", label = "SKILLS", icon = "icon_graduation" },
+	{ key = "takedown", label = "TAKEDOWN", icon = "icon_castle" },
+	{ key = "tasks", label = "ORDERS", icon = "icon_tasks" },
 	{ key = "bank", label = "BANK", icon = "icon_bank" },
 	{ key = "rankings", label = "RANKINGS", icon = "icon_rankings" },
 	{ key = "shop", label = "SHOP", icon = "icon_shop" },
@@ -223,10 +226,27 @@ end
 local content = mk("Frame", { Name = "Content", BackgroundTransparency = 1, Position = UDim2.fromOffset(NAVW, TOP), Size = UDim2.new(1, -NAVW, 1, -TOP), ZIndex = 2, ClipsDescendants = true }, root)
 App.content = content
 local defs = {}
-for _, modName in ipairs({ "Map", "Economy", "War", "Social" }) do
-	local okReq, mod = pcall(require, ClientMods:WaitForChild(modName))
-	if okReq then for k, def in pairs(mod) do defs[k] = def end else warn("[Idle Country] " .. modName .. ": " .. tostring(mod)) end
+local inits = {} -- modules can return entries without a build field: { init = function(App) end }
+-- later modules override earlier ones (Warfare's raids replace War's battle, Contracts replaces Economy's tasks)
+for _, modName in ipairs({ "Map", "Economy", "War", "Social", "Warfare", "Cabinet", "Country", "Contracts", "Settings" }) do
+	local okReq, mod = pcall(require, ClientMods:WaitForChild(modName, 5))
+	if okReq and type(mod) == "table" then
+		for k, def in pairs(mod) do
+			if type(def) == "table" and def.build then defs[k] = def
+			elseif type(def) == "table" and def.init then table.insert(inits, def.init) end
+		end
+	else warn("[Idle Country] " .. modName .. ": " .. tostring(mod)) end
 end
+local initsDone = false
+local function runInits()
+	if initsDone then return end
+	initsDone = true
+	for _, fn in ipairs(inits) do
+		local okI, err = pcall(fn, App)
+		if not okI then warn("[Idle Country] init: " .. tostring(err)) end
+	end
+end
+function App.big(reason) if App.bigMoment then pcall(App.bigMoment, reason) end end
 
 function App.open(key)
 	if not defs[key] then App.toast("Coming soon", nil, "info"); return end
@@ -297,7 +317,7 @@ end
 local function badges()
 	local st = App.state
 	if not st then return end
-	App.navBadge("skills", st.skillFree > 0 and st.skillFree or nil)
+	App.navBadge("country", ((st.skillFree > 0) and st.skillFree) or (st.loginReady and "!") or nil)
 	local claim = 0
 	for _, t in ipairs(st.tasks and st.tasks.list or {}) do if t.have >= t.n and not t.done then claim += 1 end end
 	App.navBadge("tasks", claim > 0 and claim or nil)
@@ -318,11 +338,14 @@ local function levelBanner(n)
 	if n.slot then table.insert(bits, "+1 convoy slot") end
 	table.insert(bits, "+" .. n.points .. " skill points")
 	App.toast("LEVEL " .. n.lv .. " · INFLUENCE REFILLED", table.concat(bits, " · "), "gold")
+	if n.era or n.lv % 5 == 0 then App.big("level") end
 end
 local function handleNotes(notes)
 	for _, n in ipairs(notes) do
 		if n.kind == "level" then levelBanner(n)
-		elseif n.kind == "mastery" then App.toast(R.MasteryName[n.tier + 1] .. " MASTERY", n.law .. ": +" .. n.pct .. "% cash and XP" .. (n.point and " · +1 skill point" or ""), "gold")
+		elseif n.kind == "mastery" then
+			App.toast(R.MasteryName[n.tier + 1] .. " MASTERY", n.law .. ": +" .. n.pct .. "% cash and XP" .. (n.tier >= 2 and " · 5% less Influence" or "") .. (n.point and " · +1 skill point" or ""), "gold")
+			if n.point then App.big("mastery") end
 		elseif n.kind == "arrive" then
 			local World = require(Shared.World)
 			local Trade = require(Shared.Trade)
@@ -332,7 +355,20 @@ local function handleNotes(notes)
 			if n.trips > 0 then table.insert(parts, n.trips .. " convoy deliveries") end
 			if n.levels > 0 then table.insert(parts, "+" .. n.levels .. " levels") end
 			App.toast("WHILE YOU WERE AWAY (" .. R.Duration(n.away) .. ")", table.concat(parts, " · "), "good")
-		elseif n.kind == "boss" then App.toast(string.upper(n.name) .. " DEFEATED", "+" .. n.gold .. " gold · +" .. R.Money(n.cash) .. " · +" .. R.Short(n.xp) .. " XP", "gold")
+		elseif n.kind == "boss" then App.toast(string.upper(n.name) .. " DEFEATED", "+" .. n.gold .. " gold · +" .. R.Money(n.cash) .. " · +" .. R.Short(n.xp) .. " XP", "gold"); App.big("boss")
+		elseif n.kind == "raided" then
+			if n.win then
+				App.toast(string.upper(n.by) .. " RAIDED YOU", "Stole " .. R.Money(n.cash) .. (n.lost and n.lost > 0 and (" · " .. n.lost .. " soldiers lost") or "") .. " · open RAIDS for REVENGE", "bad")
+			else
+				App.toast("YOU HELD OFF " .. string.upper(n.by), "Their raid failed" .. (n.lost and n.lost > 0 and (" · " .. n.lost .. " soldiers lost") or "") .. " · open RAIDS to hit back", "good")
+			end
+			App.navBadge("battle", "!")
+		elseif n.kind == "raidResult" then
+			App.emit("raidResult", n.res)
+			local r = n.res or {}
+			if r.ok then App.toast(r.win and "REVENGE STRIKE · VICTORY" or "REVENGE STRIKE", r.win and ("+" .. R.Money(r.cash or 0)) or nil, r.win and "gold" or "bad") end
+		elseif n.kind == "crates" then App.toast("+" .. n.n .. " FOUNDER'S CRATE" .. (n.n > 1 and "S" or ""), "Open them in your Inventory", "gold"); App.navBadge("inventory", "!")
+		elseif n.kind == "bundle" then App.toast("LIMITED BUNDLE UNLOCKED", "Empress Valeria Thorne and the Founder's Saber joined you", "gold"); App.big("bundle")
 		elseif n.kind == "toast" then App.toast(n.text, nil, n.tone)
 		end
 	end
@@ -353,6 +389,8 @@ Remotes.Sync.OnClientEvent:Connect(function(kind, data)
 			end
 		elseif not App.current then
 			App.open("map")
+			runInits()
+			if data.loginReady and App.showLogin then task.delay(1.5, function() pcall(App.showLogin) end) end
 		else
 			refreshCurrent()
 		end

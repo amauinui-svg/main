@@ -162,7 +162,7 @@ S.properties = { build = function(host, App)
 		local nextCost = R.SkillByKey.lot.cost(st.sk.lot or 0)
 		text(more, "MORE LOTS", { font = "display", size = 17, color = C.muted, align = Enum.TextXAlignment.Center, pos = UDim2.fromOffset(0, 42), sz = UDim2.new(1, 0, 0, 22), z = 8 })
 		text(more, "Next lot: " .. nextCost .. " skill points", { size = 13, color = C.muted, align = Enum.TextXAlignment.Center, pos = UDim2.fromOffset(0, 64), sz = UDim2.new(1, 0, 0, 18), z = 8 })
-		UI.button(more, "slate", "SKILLS", function() App.open("skills") end, { pos = UDim2.new(0, 10, 1, -46), sz = UDim2.new(1, -20, 0, 36), z = 9, textSize = 15 })
+		UI.button(more, "slate", "UPGRADES", function() App.open("country") end, { pos = UDim2.new(0, 10, 1, -46), sz = UDim2.new(1, -20, 0, 36), z = 9, textSize = 15 })
 		if not (st.gp and st.gp.ExtraLots) then
 			local pass = UI.card(grid, { z = 7, order = 1001, hot = true })
 			UI.icon(pass, "icon_plus", 26, C.gold, UDim2.new(0.5, 0, 0, 12), { z = 8, anchor = Vector2.new(0.5, 0) })
