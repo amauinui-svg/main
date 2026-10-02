@@ -32,8 +32,20 @@ S.military = { build = function(host, App)
 		end
 		local nextLocked
 		for i, u in ipairs(M.Units) do if u.lvl > st.lv then nextLocked = i; break end end
-		table.sort(shown, function(a, b) return a > b end)
-		if nextLocked then table.insert(shown, 1, nextLocked) end
+		if nextLocked then table.insert(shown, nextLocked) end
+		-- Kash 19:19: strongest first (ATK + DEF); every locked unit after all available ones, by unlock level
+		table.sort(shown, function(a, b)
+			local ua, ub = M.Units[a], M.Units[b]
+			local la, lb = ua.lvl > st.lv, ub.lvl > st.lv
+			if la ~= lb then return lb end
+			if la then
+				if ua.lvl ~= ub.lvl then return ua.lvl < ub.lvl end
+				return a < b
+			end
+			local pa, pb = (ua.atk or 0) + (ua.def or 0), (ub.atk or 0) + (ub.def or 0)
+			if pa ~= pb then return pa > pb end
+			return a > b -- equal strength: the newer unit first
+		end)
 		for order, i in ipairs(shown) do
 			local u = M.Units[i]
 			local owned = st.units[tostring(i)] or 0

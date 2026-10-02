@@ -191,7 +191,7 @@ end
 ---------------------------------------------------------------- shared raid state + helpers (used by the RAIDS screen, the
 -- raided popup and the revenge-strike result, so they live at module level)
 local OVERLAY = 0.45 -- ClientMain's modal backdrop transparency
-local DESIGN_W, DESIGN_H = 760, 560 -- the fight screen is laid out at this size and scaled to fit
+local DESIGN_W, DESIGN_H = 760, 620 -- the fight screen is laid out at this size and scaled to fit
 local raidState = { dismissed = nil, intel = {} } -- dismissed = revenge.t answered/closed; intel[id] = { v = intel, at = os.clock() }
 local INTEL_SECONDS = 15 * 60
 
@@ -230,8 +230,20 @@ local function rewardPill(UI, parent, icon, color, s, order, z)
 	return f, l
 end
 
+-- "gun" (aims and fires), "fist" (jabs) or "blade" (swords, sabers, spears, halberds: wind up and swing)
+local function weaponKind(weapon)
+	local ic = string.lower(tostring(weapon and weapon.icon or ""))
+	if ic:find("musket") or ic:find("rifle") or ic:find("pistol") or ic:find("gun") then return "gun" end
+	if ic == "" or ic:find("fist") then return "fist" end
+	return "blade"
+end
+local KIND_SFX = { gun = "hit_gun", blade = "hit_blade", fist = "hit_punch" }
+local function sfx(App, name, opts) if App.sfx then pcall(App.sfx, name, opts) end end
+local function music(App, name) if App.music then pcall(App.music, name) end end
+
 -- one side of the FIGHT screen. f = fight.a / fight.d, side = "a" (left, attacks right) or "d" (right)
 local CARD_W, CARD_H, PORT = 300, 290, 110
+local WEAPON_PX, ART_PX = 78, 512 -- weapon size on the card; source size of the gear_* art (used to mirror it)
 local function fighterCard(App, parent, f, side, cx, top, maxHp, range, z)
 	local UI = App.UI
 	local C = UI.C
@@ -253,20 +265,20 @@ local function fighterCard(App, parent, f, side, cx, top, maxHp, range, z)
 	o.pstroke = mk("UIStroke", { Color = side == "a" and C.gold or C.rule, Thickness = 2 }, portrait)
 	o.portrait, o.phome = portrait, portrait.Position
 	o.pcx, o.pcy = cx - CARD_W / 2 + pcx, top + 14 + PORT / 2 -- portrait centre in panel coordinates
+	-- the big flag is the fallback for everyone (computer nations, or a player whose thumbnail fails): no "AI" tag
+	-- anywhere (Kash 19:24), so a computer nation looks exactly like a player whose headshot did not load
+	local bigFlag = UI.flag(portrait, f.flag, PORT - 18, { pos = UDim2.fromScale(0.5, 0.5), anchor = Vector2.new(0.5, 0.5), z = z + 2 })
 	if f.userId and not f.ai then
-		local img = mk("ImageLabel", { Name = "Headshot", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = z + 2, ScaleType = Enum.ScaleType.Crop, Image = "" }, portrait)
+		local img = mk("ImageLabel", { Name = "Headshot", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = z + 3, ScaleType = Enum.ScaleType.Crop, Image = "", Visible = false }, portrait)
 		o.img = img
 		task.spawn(function()
 			local ok, url = pcall(function() return Players:GetUserThumbnailAsync(f.userId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size180x180) end)
-			if ok and url and img.Parent then img.Image = url end
+			if ok and type(url) == "string" and url ~= "" and img.Parent then
+				img.Image = url
+				img.Visible = true
+				if bigFlag and bigFlag.Parent then bigFlag.Visible = false end
+			end
 		end)
-	else
-		UI.flag(portrait, f.flag, PORT - 18, { pos = UDim2.fromScale(0.5, 0.5), anchor = Vector2.new(0.5, 0.5), z = z + 2 })
-		if f.ai then
-			local ai = mk("Frame", { BackgroundColor3 = C.black, BackgroundTransparency = 0.25, BorderSizePixel = 0, Position = UDim2.fromOffset(4, 4), Size = UDim2.fromOffset(26, 16), ZIndex = z + 3 }, portrait)
-			mk("UICorner", { CornerRadius = UDim.new(0, 3) }, ai)
-			text(ai, "AI", { font = "heavy", size = 12, color = C.blue, align = Enum.TextXAlignment.Center, sz = UDim2.fromScale(1, 1), z = z + 4 })
-		end
 	end
 	-- hit flash overlay
 	o.flash = mk("Frame", { Name = "Flash", BackgroundColor3 = Color3.fromRGB(255, 50, 40), BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ZIndex = z + 5 }, portrait)
@@ -279,13 +291,23 @@ local function fighterCard(App, parent, f, side, cx, top, maxHp, range, z)
 	local w = f.weapon or { icon = "gear_fists", name = "Fists", rarity = "common" }
 	local wkey = (w.icon and UI.asset(w.icon) ~= "") and w.icon or "gear_fists"
 	UI.img(card, "glow_soft", { name = "WeaponGlow", color = rarityColor(w.rarity), alpha = 0.55, slice = false, z = z + 1, anchor = Vector2.new(0.5, 0.5), pos = UDim2.fromOffset(wcx, 14 + PORT / 2), sz = UDim2.fromOffset(104, 104) })
-	local weapon = UI.img(card, wkey, { name = "Weapon", slice = false, fit = true, z = z + 2, anchor = Vector2.new(0.5, 0.5), pos = UDim2.fromOffset(wcx, 14 + PORT / 2), sz = UDim2.fromOffset(78, 78) })
-	weapon.Rotation = side == "a" and -12 or 12
-	o.weapon = weapon
+	local weapon = UI.img(card, wkey, { name = "Weapon", slice = false, fit = true, z = z + 2, anchor = Vector2.new(0.5, 0.5), pos = UDim2.fromOffset(wcx, 14 + PORT / 2), sz = UDim2.fromOffset(WEAPON_PX, WEAPON_PX) })
+	-- all weapon art points up-right; the defender's copy is mirrored so its weapon faces the attacker. Every pose is
+	-- written for the attacker and multiplied by dir, which mirrors it exactly for the defender.
+	o.dir = side == "a" and 1 or -1
+	if side == "d" then
+		weapon.ImageRectOffset = Vector2.new(ART_PX, 0)
+		weapon.ImageRectSize = Vector2.new(-ART_PX, ART_PX)
+		weapon.ScaleType = Enum.ScaleType.Stretch -- square box + square art: same look as Fit, no aspect maths on a negative rect
+	end
+	o.wrot = -12 * o.dir
+	weapon.Rotation = o.wrot
+	o.weapon, o.whome = weapon, weapon.Position
+	o.wkind = weaponKind(w)
 	-- name + tag line
 	local nm = (f.name and tostring(f.name) ~= "") and tostring(f.name) or (side == "a" and Players.LocalPlayer.DisplayName or "?")
 	text(card, nm, { font = "heavy", size = 21, align = Enum.TextXAlignment.Center, pos = UDim2.fromOffset(10, 14 + PORT + 8), sz = UDim2.new(1, -20, 0, 24), z = z + 1, truncate = true })
-	local tagLine = f.tag and ("[" .. tostring(f.tag) .. "]") or (f.ai and "AI NATION") or (side == "a" and "ATTACKER" or "DEFENDER")
+	local tagLine = f.tag and ("[" .. tostring(f.tag) .. "]") or (side == "a" and "ATTACKER" or "DEFENDER")
 	text(card, tagLine, { font = "bold", size = 14, color = C.gold, align = Enum.TextXAlignment.Center, pos = UDim2.fromOffset(10, 14 + PORT + 32), sz = UDim2.new(1, -20, 0, 16), z = z + 1, truncate = true })
 	-- power box: attack for the attacker, defense for the defender
 	local box = mk("Frame", { Name = "Power", BackgroundColor3 = Color3.fromHex("10141a"), BorderSizePixel = 0, Position = UDim2.fromOffset(20, 182), Size = UDim2.fromOffset(CARD_W - 40, 38), ZIndex = z + 1 }, card)
@@ -344,6 +366,11 @@ local function playFight(App, res, opts)
 		while e < t and not skip and alive() do e += task.wait() end
 	end
 	local function close() if token == fightToken then closeModal(App) end end
+	-- battle music while this fight is on screen; back to calm when it goes (DONE, REBUILD, or another popup replacing
+	-- it). A newer fight has already bumped fightToken, so it keeps its battle music.
+	music(App, "battle")
+	sfx(App, "raid_start")
+	stage.Destroying:Connect(function() if token == fightToken then music(App, "calm") end end)
 
 	-- the panel is built at DESIGN size and scaled to fit (phones), popping in from the centre
 	local fitS = math.min(1, (App.W() - 24) / DESIGN_W, (App.H() - 24) / DESIGN_H)
@@ -370,15 +397,88 @@ local function playFight(App, res, opts)
 		end
 	end)
 
-	-- one blow: striker lunges, victim flashes red + shakes, impact art, floating number, HP drops, range marker slides
+	-------------------------------------------------- weapon animations (Kash 19:19: guns aim and fire, melee swings)
+	-- one tween at a time per weapon, so a skip can cancel it and snap the weapon back to rest
+	local function wtw(F, t, props, style, dir)
+		if F.wtween then F.wtween:Cancel() end
+		F.wtween = tw(F.weapon, t, props, style, dir)
+		return F.wtween
+	end
+	local function wrest(F)
+		if F.wtween then F.wtween:Cancel(); F.wtween = nil end
+		F.weapon.Rotation, F.weapon.Position = F.wrot, F.whome
+		for _, x in ipairs(F.card:GetChildren()) do if x.Name == "WeaponFx" then x:Destroy() end end
+	end
+	-- a short-lived effect image on the striker's card, centred at weapon-relative offset (dx, dy)
+	local function weaponFx(F, key, dx, dy, size, color, alpha, rot, life)
+		local fx = UI.img(F.card, key, { name = "WeaponFx", slice = false, fit = true, color = color, alpha = alpha or 0, z = F.weapon.ZIndex + 2,
+			anchor = Vector2.new(0.5, 0.5), pos = F.whome + UDim2.fromOffset(dx, dy), sz = UDim2.fromOffset(size, size) })
+		fx.Rotation = rot or 0
+		local sc = mk("UIScale", { Scale = 0.4 }, fx)
+		tw(sc, life * 0.35, { Scale = 1.15 }, Enum.EasingStyle.Back)
+		task.delay(life * 0.35, function() if fx.Parent then tw(fx, life * 0.65, { ImageTransparency = 1 }) end end)
+		task.delay(life + 0.05, function() if fx.Parent then fx:Destroy() end end)
+		return fx
+	end
+	-- plays the striker's weapon move; returns the seconds until the blow lands
+	local function swing(F)
+		local dir = F.dir
+		local function at(px, py) return F.whome + UDim2.fromOffset(px * dir, py or 0) end
+		if F.wkind == "gun" then
+			-- aim (barrel level with the enemy), fire: recoil back + muzzle up with a flash at the barrel end, then return
+			local AIM = 42
+			wtw(F, 0.1, { Rotation = AIM * dir, Position = at(4) }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+			task.delay(0.1, function()
+				if finished or not F.weapon.Parent then return end
+				-- barrel tip in the unrotated art is ~(0.42, -0.43) of the image from its centre; rotate it by the aim angle
+				local th = math.rad(AIM)
+				local bx, by = 0.42 * WEAPON_PX, -0.43 * WEAPON_PX
+				local mx, my = bx * math.cos(th) - by * math.sin(th), bx * math.sin(th) + by * math.cos(th)
+				weaponFx(F, "fx_burst", (mx + 4 + 6) * dir, my, 30, Color3.fromRGB(255, 226, 92), 0, math.random(0, 40), 0.2)
+				wtw(F, 0.05, { Rotation = (AIM - 18) * dir, Position = at(-12, -3) }).Completed:Connect(function(state)
+					if state ~= Enum.PlaybackState.Completed or finished then return end
+					task.delay(0.1, function()
+						if finished or not F.weapon.Parent then return end
+						wtw(F, 0.3, { Rotation = F.wrot, Position = F.whome }, Enum.EasingStyle.Back)
+					end)
+				end)
+			end)
+			return 0.1
+		end
+		-- melee: wind up (rotate back), then a fast arc through toward the enemy with a faded slash trail, then return
+		local fist = F.wkind == "fist"
+		wtw(F, 0.12, { Rotation = (fist and -24 or -62) * dir, Position = at(fist and -14 or -8, fist and 0 or 4) }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+		task.delay(0.12, function()
+			if finished or not F.weapon.Parent then return end
+			wtw(F, 0.09, { Rotation = (fist and 0 or 78) * dir, Position = at(fist and 36 or 24, fist and 0 or 6) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+			task.delay(0.04, function()
+				if finished or not F.weapon.Parent then return end
+				weaponFx(F, "fx_slash", (fist and 52 or 46) * dir, fist and 0 or 8, fist and 56 or 92, nil, fist and 0.55 or 0.4, 20 * dir, 0.32)
+			end)
+			task.delay(0.15, function() -- hold the follow-through a moment, then return
+				if finished or not F.weapon.Parent then return end
+				wtw(F, 0.28, { Rotation = F.wrot, Position = F.whome }, Enum.EasingStyle.Back)
+			end)
+		end)
+		return 0.17
+	end
+
+	-- one blow: the striker's weapon moves, then the card lunges, victim flashes red + shakes, impact art, floating
+	-- number, HP drops, range marker slides, and the weapon's sound plays
 	local function blow(h)
 		local S_, V_ = (h.who == "a") and A or D, (h.who == "a") and D or A
 		local dir = h.who == "a" and 1 or -1
-		tw(S_.card, 0.09, { Position = S_.home + UDim2.fromOffset(26 * dir, -4) }).Completed:Connect(function()
-			if S_.card.Parent then tw(S_.card, 0.22, { Position = S_.home }, Enum.EasingStyle.Back) end
+		local lead = swing(S_)
+		task.delay(lead, function()
+			if finished or not S_.card.Parent then return end
+			tw(S_.card, 0.09, { Position = S_.home + UDim2.fromOffset(26 * dir, -4) }).Completed:Connect(function()
+				if S_.card.Parent and not finished then tw(S_.card, 0.22, { Position = S_.home }, Enum.EasingStyle.Back) end
+			end)
+			S_:Roll(h.r, h.crit, true)
+			sfx(App, KIND_SFX[S_.wkind] or "hit_blade")
+			if h.crit then sfx(App, "crit") end
 		end)
-		S_:Roll(h.r, h.crit, true)
-		task.delay(0.09, function()
+		task.delay(lead + 0.09, function()
 			if finished or not V_.portrait.Parent then return end -- skipped: the final state is already shown
 			V_.flash.BackgroundTransparency = h.crit and 0.2 or 0.4
 			tw(V_.flash, 0.4, { BackgroundTransparency = 1 })
@@ -427,6 +527,7 @@ local function playFight(App, res, opts)
 		A.card.Position, D.card.Position = A.home, D.home
 		A.portrait.Position, D.portrait.Position = A.phome, D.phome
 		for _, side in ipairs({ A, D }) do
+			wrest(side)
 			side.flash.BackgroundTransparency = 1
 			for _, x in ipairs(side.portrait:GetChildren()) do if x.Name == "Impact" then x:Destroy() end end
 		end
@@ -443,17 +544,30 @@ local function playFight(App, res, opts)
 		loser.stroke.Color = C.bad
 		if loser.img then tw(loser.img, 0.5, { ImageColor3 = Color3.fromRGB(90, 90, 96) }) end
 		tw(loser.weapon, 0.5, { ImageTransparency = 0.5 })
-		-- banner
-		local holder = mk("Frame", { Name = "Result", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(DESIGN_W / 2, 404), Size = UDim2.fromOffset(DESIGN_W - 40, 60), ZIndex = 80 }, panel)
-		text(holder, win and "VICTORY" or "DEFEAT", { font = "display", size = 58, color = win and C.gold or C.bad, align = Enum.TextXAlignment.Center, sz = UDim2.fromScale(1, 1), z = 81, stroke = 1.5 })
+		sfx(App, win and "victory" or "defeat")
+		-- bottom area, stacked in fixed design-pixel bands so nothing can overlap (the panel scales as a whole):
+		--   cards end 376 · title 384-436 · reward row 446-486 · casualty row 494-534 · buttons 560-606
+		local holder = mk("Frame", { Name = "Result", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(DESIGN_W / 2, 410), Size = UDim2.fromOffset(DESIGN_W - 40, 52), ZIndex = 80 }, panel)
+		text(holder, win and "VICTORY" or "DEFEAT", { font = "display", size = 50, color = win and C.gold or C.bad, align = Enum.TextXAlignment.Center, sz = UDim2.fromScale(1, 1), z = 81, stroke = 1.5 })
 		FX.popIn(holder, 0.4, 0.42)
-		-- rewards
+		-- rewards: two rows of pills (rewards, then casualties); a row whose pills grow wider than the panel
+		-- (huge numbers) shrinks to fit instead of spilling out
 		local function pillRow(y)
 			local r = mk("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(DESIGN_W / 2, y), Size = UDim2.fromOffset(DESIGN_W - 40, 40), ZIndex = 80 }, panel)
-			mk("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 12), SortOrder = Enum.SortOrder.LayoutOrder }, r)
+			local lay = mk("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 12), SortOrder = Enum.SortOrder.LayoutOrder }, r)
+			local fit = mk("UIScale", { Name = "Fit", Scale = 1 }, r)
+			local function refit()
+				-- both sizes include every UIScale above, so their ratio is the true fit
+				local cw, rw = lay.AbsoluteContentSize.X, r.AbsoluteSize.X
+				if cw <= 0 or rw <= 0 then return end
+				local s = math.clamp(rw / cw, 0.5, 1)
+				if math.abs(s - fit.Scale) > 0.01 then fit.Scale = s end
+			end
+			lay:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(refit)
+			task.defer(refit)
 			return r
 		end
-		local r1, r2 = pillRow(440), pillRow(486)
+		local r1, r2 = pillRow(446), pillRow(494)
 		if win then
 			local _, cashL = rewardPill(UI, r1, "icon_cash", C.good, "+$0", 1, 81)
 			countUp(cashL, 0, res.cash or 0, function(n) return "+" .. R.Money(n) end, 0.9)
@@ -687,7 +801,7 @@ S.takedown = { build = function(host, App)
 	empty.Visible = false
 	UI.icon(empty, "icon_alliance", 64, C.manila, UDim2.new(0.5, 0, 0, 28), { z = 7, anchor = Vector2.new(0.5, 0) })
 	text(empty, "WEEKLY TAKEDOWN", { font = "display", size = 26, color = C.manila, align = Enum.TextXAlignment.Center, pos = UDim2.fromOffset(20, 102), sz = UDim2.new(1, -40, 0, 30), z = 7 })
-	text(empty, "Join an alliance to storm a new enemy stronghold every week with your teammates and earn Seals and crates.", { size = 16, color = C.muted, wrap = true, align = Enum.TextXAlignment.Center, pos = UDim2.fromOffset(30, 138), sz = UDim2.new(1, -60, 0, 54), z = 7 })
+	text(empty, "Join an alliance to storm a new enemy stronghold every week with your teammates and earn Merits and crates.", { size = 16, color = C.muted, wrap = true, align = Enum.TextXAlignment.Center, pos = UDim2.fromOffset(30, 138), sz = UDim2.new(1, -60, 0, 54), z = 7 })
 	UI.button(empty, "gold", "FIND AN ALLIANCE", function() App.open("alliance") end, { sz = UDim2.fromOffset(240, 48), pos = UDim2.new(0.5, 0, 1, -24), anchor = Vector2.new(0.5, 1), z = 8, icon = "icon_alliance" })
 
 	-------------------------------------------------- header
@@ -705,7 +819,7 @@ S.takedown = { build = function(host, App)
 	rewardDot.Visible = false
 	infoButton(App, root, "WEEKLY TAKEDOWN",
 		"Your whole alliance attacks the same stronghold this week: <b>5 stages</b>, the last one is the boss.\n\n" ..
-		"You get <b>10 free attacks</b> (+1 every hour). After that each attack uses a <b>Takedown Ticket</b> from the Seals shop in Tasks.\n\n" ..
+		"You get <b>10 free attacks</b> (+1 every hour). After that each attack uses a <b>Takedown Ticket</b> from the Merits shop in Tasks.\n\n" ..
 		"Every member who attacked at least once can claim the reward for each stage cleared. A <font color='#e2695f'><b>BIG HIT</b></font> deals double damage.",
 		UDim2.new(1, -(3 * 148 + 16) - 34, 0, 11), 7)
 
@@ -1010,7 +1124,7 @@ S.takedown = { build = function(host, App)
 		elseif res.msg == "no_attacks" then
 			App.shake(attackBtn.Inst)
 			local wait = (view.nextFree or 0) - (os.clock() - viewClock)
-			App.toast("OUT OF ATTACKS", "Next free attack in " .. dhm(wait) .. ". Takedown Tickets are in the Seals shop (Tasks).", "bad")
+			App.toast("OUT OF ATTACKS", "Next free attack in " .. dhm(wait) .. ". Takedown Tickets are in the Merits shop (Tasks).", "bad")
 			poll()
 		end
 	end
@@ -1030,7 +1144,7 @@ S.takedown = { build = function(host, App)
 			text(card, (tgt.stages and tgt.stages[s]) or "", { font = "heavy", size = 15, pos = UDim2.fromOffset(12, 24), sz = UDim2.new(0.38, -12, 0, 22), z = 75, scaled = true })
 			local rew = mk("Frame", { BackgroundTransparency = 1, Position = UDim2.new(0.38, 0, 0, 0), Size = UDim2.new(0.42, 0, 1, 0), ZIndex = 75 }, card)
 			mk("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }, rew)
-			UI.chip(rew, rw.seals .. " Seals", { icon = "icon_seal", color = C.gold, z = 76, order = 1, h = 26 })
+			UI.chip(rew, rw.seals .. " Merits", { icon = "icon_seal", color = C.gold, z = 76, order = 1, h = 26 })
 			if rw.basic then
 				local c = UI.img(rew, "crate_basic", { slice = false, fit = true, sz = UDim2.fromOffset(32, 32), z = 76, order = 2 })
 				c.ScaleType = Enum.ScaleType.Fit
@@ -1050,7 +1164,7 @@ S.takedown = { build = function(host, App)
 			local res = req(App, "tdClaim", {}, btn)
 			if res.ok then
 				local r = res.reward or {}
-				local bits = { "+" .. (r.seals or 0) .. " Seals" }
+				local bits = { "+" .. (r.seals or 0) .. " Merits" }
 				if (r.basicCrates or 0) > 0 then table.insert(bits, "+" .. r.basicCrates .. " Supply Crate" .. (r.basicCrates > 1 and "s" or "")) end
 				if (r.limitedCrates or 0) > 0 then table.insert(bits, "+" .. r.limitedCrates .. " Founder's Crate") end
 				App.toast("TAKEDOWN REWARDS CLAIMED", table.concat(bits, " · "), "gold")
@@ -1154,12 +1268,12 @@ S.battle = { build = function(host, App)
 	mk("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Right, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }, chips)
 
 	infoButton(App, body, "HOW RAIDS WORK",
-		"You can raid the other nations in <b>this server</b> plus <b>3 AI nations</b>. The list is fixed: it cannot be refreshed.\n\n" ..
+		"You can raid the other nations in <b>this server</b> plus <b>3 rival nations</b> from around the world. The list is fixed: it cannot be refreshed.\n\n" ..
 		"Their defense and cash are <b>hidden</b>. <font color='#7fb0e6'><b>SPY</b></font> (" .. SPY_SUPPLY .. " Supply) to see them for 15 minutes. They are told you spied.\n\n" ..
 		"Win and you take <font color='#8fd07a'><b>10% of their cash on hand</b></font>, up to about 1 hour of their law income. Banked cash is safe.\n\n" ..
 		"The same nation can be raided again after <b>1 minute</b>. <font color='#e2695f'><b>Soldiers die on both sides</b></font>, cheapest first.",
 		UDim2.fromOffset(0, 5), 8)
-	text(body, "Raid nations in your server and 3 AI nations. SPY first to see their defense and cash. Win to steal 10% of their cash on hand.",
+	text(body, "Raid nations in your server and 3 rival nations. SPY first to see their defense and cash. Win to steal 10% of their cash on hand.",
 		{ size = 14, color = C.muted, wrap = true, pos = UDim2.fromOffset(34, 0), sz = UDim2.new(1, -34, 0, 36), z = 7, valign = Enum.TextYAlignment.Center })
 
 	local revengeHost = mk("Frame", { Name = "Revenge", BackgroundTransparency = 1, Position = UDim2.fromOffset(0, 44), Size = UDim2.new(1, 0, 0, 68), ZIndex = 6, Visible = false }, body)
@@ -1308,7 +1422,6 @@ S.battle = { build = function(host, App)
 			local tags = mk("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(80, 40), Size = UDim2.new(0.3, -80, 0, 22), ZIndex = 8 }, card)
 			mk("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }, tags)
 			UI.chip(tags, "LV " .. (t.lv or 1), { manila = true, h = 22, size = 13, z = 9, order = 1 })
-			if t.ai then UI.chip(tags, "AI", { icon = "icon_bot", color = C.blue, h = 22, size = 12, z = 9, order = 2 }) end
 			if t.tag then UI.chip(tags, "[" .. tostring(t.tag) .. "]", { color = C.gold, h = 22, size = 12, z = 9, order = 3 }) end
 
 			text(card, "DEFENSE", { font = "bold", size = 12, color = C.muted, pos = UDim2.new(0.3, 0, 0, 10), sz = UDim2.new(0.18, -8, 0, 16), z = 8 })

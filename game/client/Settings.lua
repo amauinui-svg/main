@@ -333,11 +333,11 @@ M._settings = { init = function(App)
 				kw("Founder's Crate", O2) .. ": " .. kw(limited.gold .. " gold", M2) .. " or Robux. Same crate, so everyone chases the same items.",
 				"Mostly " .. kw("cool gear", P) .. ", sometimes an " .. kw("officer", T) .. ". The limited crate rotates.",
 			} },
-			{ title = "ORDERS & SEALS", img = "icon_seal", color = M2, lines = {
-				kw("Daily orders", G) .. " (easy, medium, hard) pay " .. kw("Seals", M2) .. " and cash. Finish all for a bonus.",
+			{ title = "ORDERS & MERITS", img = "icon_seal", color = M2, lines = {
+				kw("Daily orders", G) .. " (easy, medium, hard) pay " .. kw("Merits", M2) .. " and cash. Finish all for a bonus.",
 				kw("Weekly challenges", P) .. " reset Monday. Clear all 5 for a chest with Rare+ gear.",
 				"One " .. kw("free replace", B) .. " per day for an order you do not like.",
-				"Spend Seals in the " .. kw("Seals Shop", M2) .. ": Takedown tickets, refills, shields, crates.",
+				"Spend Merits in the " .. kw("Merits Shop", M2) .. ": Takedown tickets, refills, shields, crates.",
 			} },
 			{ title = "ALLIANCE TAKEDOWN", img = "takedown_bg", crop = true, color = Rd, lines = {
 				"Every week your alliance storms a stronghold: " .. kw("5 stages", Rd) .. ", the last one is a boss.",

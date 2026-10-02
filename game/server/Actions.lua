@@ -416,7 +416,7 @@ function act.sealBuy(plr, p, a)
 	local d = p.data
 	local it = TK.ShopByKey[a.key]
 	if not it then return no("Unknown item") end
-	if d.seals < it.cost then return no("Not enough Seals (" .. it.cost .. " needed)") end
+	if d.seals < it.cost then return no("Not enough Merits (" .. it.cost .. " needed)") end
 	if it.refill == "inf" and d.inf >= R.MaxInfluence(d.lv, d.sk) then return no("Influence is already full") end
 	if it.refill == "sup" and d.sup >= R.MaxSupply(d.lv, d.sk) then return no("Supply is already full") end
 	d.seals -= it.cost
@@ -497,9 +497,48 @@ local BUYABLE = { GoldSmall = true, GoldBig = true, GoldHuge = true, Crate1 = tr
 function act.buyProduct(plr, p, a)
 	if not BUYABLE[a.key] then return no("Unknown item") end
 	if a.key == "LimitedBundle" and p.data.bundle then return no("You already own the Limited Bundle") end
+	if (a.key == "LimitedBundle" or a.key == "Crate1" or a.key == "Crate3" or a.key == "Crate10") and os.time() > Config.Crates.Limited.ends then
+		return no("This limited offer has ended")
+	end
 	return MK.PromptProduct(plr, a.key)
 end
 act.buyGold = act.buyProduct
+-- out-of-Influence popup (Kash 19:19): the first Robux refill ever costs 9, then the normal price
+function act.refillInfluence(plr, p, a)
+	local d = p.data
+	if d.inf >= R.MaxInfluence(d.lv, d.sk) then return no("Influence is already full") end
+	if a.method == "gold" then return act.goldInf(plr, p, a) end
+	return MK.PromptProduct(plr, d.firstRefill and "InfluenceRefill" or "InfluenceRefillFirst")
+end
+-- flags: everyone can pick the basic layouts/colours; the Custom Flag pass adds more layouts, colours, an emblem
+-- and your own image (an asset id; Roblox moderates every uploaded image)
+function act.setFlag(plr, p, a)
+	local f = type(a.flag) == "table" and a.flag or {}
+	local pass = PS.Has(p, "CustomFlag")
+	local layouts = pass and R.FlagLayoutsAll or R.FlagLayouts
+	local colors = pass and R.FlagColorsAll or R.FlagColors
+	if not table.find(layouts, f.l) then return no("That layout needs the Custom Flag pass") end
+	if type(f.c) ~= "table" then return no("Bad colours") end
+	local c = {}
+	for k = 1, 3 do
+		if not table.find(colors, f.c[k]) then return no("That colour needs the Custom Flag pass") end
+		c[k] = f.c[k]
+	end
+	local flag = { l = f.l, c = c }
+	if f.e ~= nil then
+		if not pass then return no("Emblems need the Custom Flag pass") end
+		if not table.find(R.FlagEmblems, f.e) then return no("Unknown emblem") end
+		flag.e = f.e
+	end
+	if f.img ~= nil then
+		if not pass then return no("Custom images need the Custom Flag pass") end
+		local id = tonumber(f.img)
+		if not id or id < 1 or id > 1e15 or id ~= math.floor(id) then return no("Paste an image or decal id (numbers only)") end
+		flag.img = string.format("%d", id)
+	end
+	p.data.flag = flag
+	return ok({ flag = flag })
+end
 function act.revengeStrike(plr, p, a)
 	local r = p.data.revenge
 	if not r then return no("Nobody has raided you yet") end

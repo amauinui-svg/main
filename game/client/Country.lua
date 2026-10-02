@@ -278,6 +278,221 @@ local function showLogin(App)
 	end
 end
 
+---------------------------------------------------------------- FLAG EDITOR POPUP (Kash 19:24: Custom Flag pass, 99 Robux)
+-- Everyone: the 8 basic layouts and 12 colours. Pass owners: 14 layouts, 24 colours, an emblem and their own image.
+-- Non-owners can PREVIEW the locked options (try before you buy); SAVE asks them to unlock first.
+local function showFlagEditor(App)
+	local UI = App.UI
+	local C = UI.C
+	local text = UI.text
+	local Config = require(Shared.Config)
+	local st = App.state
+	if not st then return end
+	local host = App.modalHost
+	UI.clear(host)
+	host.Visible = true
+	local passInfo = Config.Passes.CustomFlag or { price = 99 }
+	local function owns() return (App.state and App.state.gp and App.state.gp.CustomFlag) and true or false end
+	local basicL, basicC = {}, {}
+	for _, l in ipairs(R.FlagLayouts) do basicL[l] = true end
+	for _, c in ipairs(R.FlagColors) do basicC[c] = true end
+	local allL = R.FlagLayoutsAll or R.FlagLayouts
+	local allC = R.FlagColorsAll or R.FlagColors
+	local emblems = R.FlagEmblems or {}
+
+	-- working copy of the flag
+	local cur = st.flag or { l = "h3", c = { "1f3a93", "ecf0f1", "c0392b" } }
+	local f = { l = cur.l or "h3", c = { (cur.c or {})[1] or "1f3a93", (cur.c or {})[2] or "ecf0f1", (cur.c or {})[3] or "c0392b" }, e = cur.e, img = cur.img }
+	local slot = 1
+
+	local W = math.min(App.W() - 40, 820)
+	local H = math.min(App.H() - 40, 560)
+	local panel, body = UI.panel(host, "EDIT FLAG", { sz = UDim2.fromOffset(W, H), pos = UDim2.fromScale(0.5, 0.5), anchor = Vector2.new(0.5, 0.5), z = 71 })
+	local sc = FX.popIn(panel, 0.6, 0.32)
+	local closed = false
+	local function close()
+		if closed then return end
+		closed = true
+		local tw = tween(sc, 0.15, { Scale = 0.9 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+		tw.Completed:Connect(function() if panel.Parent then host.Visible = false; UI.clear(host) end end)
+	end
+	UI.button(panel, "slate", "", function() close() end, { pos = UDim2.new(1, -14, 0, 12), anchor = Vector2.new(1, 0), sz = UDim2.fromOffset(38, 36), z = 75, icon = "icon_x", iconSize = 18 })
+
+	-- left: live preview + save
+	local leftW = math.clamp(math.floor(W * 0.34), 210, 270)
+	local left = UI.mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(0, leftW, 1, 0), ZIndex = 72 }, body)
+	local stage = UI.img(left, "inset", { sz = UDim2.new(1, 0, 0, math.floor((leftW - 30) * 0.66) + 30), z = 72 })
+	local previewHost = UI.mk("Frame", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 73 }, stage)
+	local previewW = leftW - 40
+	local usesLocked = text(left, "", { font = "bold", size = 13, color = C.gold, wrap = true, align = Enum.TextXAlignment.Center, pos = UDim2.fromOffset(0, stage.Size.Y.Offset + 6), sz = UDim2.new(1, 0, 0, 34), z = 73 })
+	local save
+	local unlockBtns = {}
+
+	local function lockedNow()
+		if owns() then return false end
+		if not basicL[f.l] then return true end
+		for k = 1, 3 do if not basicC[f.c[k]] then return true end end
+		return f.e ~= nil or f.img ~= nil
+	end
+	local function drawPreview()
+		UI.clear(previewHost)
+		local fl = UI.flag(previewHost, { l = f.l, c = { f.c[1], f.c[2], f.c[3] }, e = f.e, img = f.img }, previewW, { z = 74, pos = UDim2.fromScale(0.5, 0.5), anchor = Vector2.new(0.5, 0.5) })
+		local s = Instance.new("UIScale"); s.Scale = 0.94; s.Parent = fl
+		tween(s, 0.18, { Scale = 1 }, Enum.EasingStyle.Back)
+		local lk = lockedNow()
+		usesLocked.Text = lk and ("Uses Custom Flag options · unlock for R$" .. passInfo.price) or ""
+		if save then save:Set(lk and "locked" or "green") end
+	end
+
+	save = UI.button(left, "green", "SAVE FLAG", function(btn)
+		if lockedNow() then
+			App.toast("Custom Flag pass needed", "Unlock all layouts, colours, emblems and your own image for R$" .. passInfo.price, "bad")
+			App.shake(btn.Inst)
+			for _, u in ipairs(unlockBtns) do if u.Inst.Parent then App.shake(u.Inst) end end
+			return
+		end
+		local out = { l = f.l, c = { f.c[1], f.c[2], f.c[3] }, e = f.e, img = f.img }
+		local res = App.req("setFlag", { flag = out }, btn)
+		if res.ok then
+			App.toast("FLAG SAVED", "Your nation flies its new colours.", "good")
+			if App.sfx then pcall(App.sfx, "coin", { volume = 0.4 }) end
+			close()
+		end
+	end, { pos = UDim2.new(0, 0, 1, -50), sz = UDim2.new(1, 0, 0, 48), z = 74, textSize = 18 })
+	UI.button(left, "slate", "CANCEL", function() close() end, { pos = UDim2.new(0, 0, 1, -104), sz = UDim2.new(1, 0, 0, 44), z = 74 })
+
+	-- right: scrolling option sections
+	local list = UI.list(body, { pos = UDim2.fromOffset(leftW + 14, 0), sz = UDim2.new(1, -leftW - 14, 1, 0), gap = 8, z = 72 })
+	local order = 0
+	local function section(title)
+		order += 1
+		local l = text(list, title, { font = "display", size = 18, color = C.manila, sz = UDim2.new(1, 0, 0, 24), z = 73, order = order })
+		return l
+	end
+	local function grid(cell, rows)
+		order += 1
+		local g = UI.mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, ZIndex = 73, LayoutOrder = order }, list)
+		UI.mk("UIGridLayout", { CellSize = cell, CellPadding = UDim2.fromOffset(6, 6), SortOrder = Enum.SortOrder.LayoutOrder }, g)
+		local _ = rows
+		return g
+	end
+	-- a pickable cell with a selection ring and an optional lock badge
+	local function pickCell(parent, ord, selected, locked, onPick)
+		local b = UI.mk("TextButton", { Text = "", AutoButtonColor = false, BackgroundColor3 = C.black, BackgroundTransparency = 0.35, BorderSizePixel = 0, LayoutOrder = ord, ZIndex = 74 }, parent)
+		UI.mk("UICorner", { CornerRadius = UDim.new(0, 6) }, b)
+		local ring = UI.mk("UIStroke", { Color = selected and C.gold or C.rule, Thickness = selected and 3 or 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, b)
+		local s = UI.mk("UIScale", {}, b)
+		b.MouseEnter:Connect(function() tween(s, 0.12, { Scale = 1.06 }, Enum.EasingStyle.Back); if not selected then tween(ring, 0.12, { Color = C.manila }) end end)
+		b.MouseLeave:Connect(function() tween(s, 0.15, { Scale = 1 }); if not selected then tween(ring, 0.15, { Color = C.rule }) end end)
+		b.Activated:Connect(onPick)
+		if locked then
+			local lb = UI.img(b, "circle", { sz = UDim2.fromOffset(18, 18), pos = UDim2.new(1, -2, 0, 2), anchor = Vector2.new(1, 0), color = C.black, z = 78, slice = false })
+			UI.icon(lb, "icon_lock", 11, C.gold, UDim2.fromScale(0.5, 0.5), { z = 79, anchor = Vector2.new(0.5, 0.5) })
+		end
+		return b
+	end
+
+	local draw
+	local function unlockBanner()
+		order += 1
+		local card = UI.card(list, { sz = UDim2.new(1, 0, 0, 66), z = 73, order = order, hot = true })
+		UI.icon(card, "icon_flag", 28, C.gold, UDim2.new(0, 12, 0.5, 0), { z = 75, anchor = Vector2.new(0, 0.5) })
+		text(card, "CUSTOM FLAG PASS", { font = "heavy", size = 16, color = C.gold, pos = UDim2.fromOffset(50, 10), sz = UDim2.new(1, -220, 0, 20), z = 75, truncate = true })
+		text(card, #allL .. " layouts · " .. #allC .. " colours · emblems · your own image", { size = 13, color = C.muted, pos = UDim2.fromOffset(50, 32), sz = UDim2.new(1, -220, 0, 18), z = 75, truncate = true })
+		local u = UI.button(card, "gold", "UNLOCK ALL · R$" .. passInfo.price, function(btn) App.req("buyPass", { key = "CustomFlag" }, btn) end,
+			{ pos = UDim2.new(1, -10, 0.5, 0), anchor = Vector2.new(1, 0.5), sz = UDim2.fromOffset(160, 42), z = 75, textSize = 15 })
+		table.insert(unlockBtns, u)
+	end
+
+	draw = function()
+		UI.clear(list)
+		order = 0
+		unlockBtns = {}
+		local pass = owns()
+		if not pass then unlockBanner() end
+
+		-- LAYOUT
+		section("LAYOUT")
+		local lg = grid(UDim2.fromOffset(64, 46))
+		for i, l in ipairs(allL) do
+			local locked = not pass and not basicL[l]
+			local cell = pickCell(lg, i, f.l == l, locked, function() f.l = l; draw() end)
+			UI.flag(cell, { l = l, c = { f.c[1], f.c[2], f.c[3] } }, 52, { z = 75, pos = UDim2.fromScale(0.5, 0.5), anchor = Vector2.new(0.5, 0.5) })
+		end
+
+		-- COLOURS: pick the slot, then the swatch
+		section("COLOURS")
+		order += 1
+		local slots = UI.mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 34), ZIndex = 73, LayoutOrder = order }, list)
+		UI.mk("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }, slots)
+		for k = 1, 3 do
+			local b = UI.button(slots, slot == k and "manila" or "slate", "COLOUR " .. k, function() slot = k; draw() end, { sz = UDim2.fromOffset(110, 34), z = 74, textSize = 13, order = k })
+			local sw = UI.mk("Frame", { BackgroundColor3 = Color3.fromHex(f.c[k]), BorderSizePixel = 0, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -8, 0.5, -1), Size = UDim2.fromOffset(16, 16), ZIndex = 76 }, b.Face)
+			UI.mk("UICorner", { CornerRadius = UDim.new(1, 0) }, sw)
+			UI.mk("UIStroke", { Color = C.black, Thickness = 1.5 }, sw)
+			b.Label.Size = UDim2.new(1, -36, 1, 0)
+		end
+		local cg = grid(UDim2.fromOffset(36, 36))
+		for i, hexC in ipairs(allC) do
+			local locked = not pass and not basicC[hexC]
+			local cell = pickCell(cg, i, f.c[slot] == hexC, locked, function() f.c[slot] = hexC; draw() end)
+			local sw = UI.mk("Frame", { BackgroundColor3 = Color3.fromHex(hexC), BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(1, -8, 1, -8), ZIndex = 75 }, cell)
+			UI.mk("UICorner", { CornerRadius = UDim.new(0, 4) }, sw)
+		end
+
+		-- EMBLEM
+		section("EMBLEM")
+		local eg = grid(UDim2.fromOffset(44, 44))
+		local none = pickCell(eg, 0, f.e == nil, false, function() f.e = nil; draw() end)
+		text(none, "NONE", { font = "heavy", size = 11, color = C.muted, align = Enum.TextXAlignment.Center, sz = UDim2.fromScale(1, 1), z = 75 })
+		for i, key in ipairs(emblems) do
+			local cell = pickCell(eg, i, f.e == key, not pass, function() f.e = key; f.img = nil; draw() end)
+			UI.icon(cell, key, 24, C.white, UDim2.fromScale(0.5, 0.5), { z = 75, anchor = Vector2.new(0.5, 0.5) })
+		end
+
+		-- YOUR OWN IMAGE
+		section("USE MY OWN IMAGE")
+		order += 1
+		local row = UI.img(list, "inset", { sz = UDim2.new(1, 0, 0, 44), z = 73, order = order })
+		local box = UI.mk("TextBox", { Text = f.img and tostring(f.img) or "", PlaceholderText = pass and "Paste an image or decal ID (numbers only)" or "Custom Flag pass: paste any image ID",
+			PlaceholderColor3 = C.dim, ClearTextOnFocus = false, FontFace = UI.Font.bold, TextSize = 15, TextColor3 = C.ink, TextXAlignment = Enum.TextXAlignment.Left,
+			BackgroundTransparency = 1, Position = UDim2.fromOffset(12, 0), Size = UDim2.new(1, -110, 1, 0), ZIndex = 74, TextTruncate = Enum.TextTruncate.AtEnd }, row)
+		if not pass then
+			UI.icon(row, "icon_lock", 16, C.gold, UDim2.new(1, -96, 0.5, 0), { z = 75, anchor = Vector2.new(1, 0.5) })
+		end
+		box:GetPropertyChangedSignal("Text"):Connect(function()
+			local digits = box.Text:gsub("%D", "")
+			if digits ~= box.Text then box.Text = digits end
+		end)
+		box.FocusLost:Connect(function()
+			local id = box.Text:match("^%d+$")
+			if id and #id >= 3 and #id <= 15 then f.img = id; f.e = nil else f.img = nil; box.Text = "" end
+			drawPreview()
+		end)
+		UI.button(row, "slate", "CLEAR", function() f.img = nil; box.Text = ""; drawPreview() end, { pos = UDim2.new(1, -6, 0.5, 0), anchor = Vector2.new(1, 0.5), sz = UDim2.fromOffset(80, 34), z = 75, textSize = 13 })
+		order += 1
+		text(list, "Covers the whole flag. Roblox moderates every uploaded image.", { size = 12, color = C.dim, sz = UDim2.new(1, 0, 0, 16), z = 73, order = order })
+
+		drawPreview()
+	end
+	draw()
+
+	-- the pass can be bought from inside this popup: unlock everything the moment it lands
+	local had = owns()
+	task.spawn(function()
+		while not closed and panel.Parent and host.Visible do
+			task.wait(0.5)
+			if owns() ~= had then
+				had = owns()
+				if had then App.toast("CUSTOM FLAG UNLOCKED", "Every layout, colour, emblem and your own image.", "gold") end
+				local y = list.CanvasPosition.Y
+				draw()
+				task.defer(function() list.CanvasPosition = Vector2.new(0, y) end)
+			end
+		end
+	end)
+end
+
 ---------------------------------------------------------------- COUNTRY
 S.country = { build = function(host, App)
 	local UI = App.UI
@@ -353,8 +568,12 @@ S.country = { build = function(host, App)
 	-- stats: identity header
 	local idRow = UI.mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 44), ZIndex = 9 }, statsB)
 	local flagHost = UI.mk("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(60, 40), Position = UDim2.fromOffset(0, 2), ZIndex = 9 }, idRow)
-	local nameL = text(idRow, "", { font = "display", size = 22, pos = UDim2.fromOffset(70, 0), sz = UDim2.new(1, -70, 0, 26), z = 10, truncate = true })
-	local ideoL = text(idRow, "", { size = 13, color = C.muted, pos = UDim2.fromOffset(70, 26), sz = UDim2.new(1, -70, 0, 16), z = 10, truncate = true })
+	local nameL = text(idRow, "", { font = "display", size = 22, pos = UDim2.fromOffset(70, 0), sz = UDim2.new(1, -184, 0, 26), z = 10, truncate = true })
+	local ideoL = text(idRow, "", { size = 13, color = C.muted, pos = UDim2.fromOffset(70, 26), sz = UDim2.new(1, -184, 0, 16), z = 10, truncate = true })
+	-- EDIT FLAG (Kash 19:24): opens the flag editor; the Custom Flag pass unlocks the extra options
+	UI.button(idRow, "manila", "EDIT FLAG", function() showFlagEditor(App) end, { pos = UDim2.new(1, 0, 0.5, 0), anchor = Vector2.new(1, 0.5), sz = UDim2.fromOffset(108, 36), z = 11, textSize = 14, icon = "icon_flag", iconSize = 16 })
+	local flagClick = UI.mk("TextButton", { Text = "", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 12 }, flagHost)
+	flagClick.Activated:Connect(function() showFlagEditor(App) end)
 	local xpBar = UI.bar(statsB, C.xp, { pos = UDim2.fromOffset(0, 52), sz = UDim2.new(1, 0, 0, 26), z = 10, textSize = 14 })
 	local statRows = UI.mk("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(0, 88), Size = UDim2.new(1, 0, 1, -88), ZIndex = 9 }, statsB)
 	UI.mk("UIListLayout", { Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder }, statRows)
@@ -469,10 +688,10 @@ S.country = { build = function(host, App)
 		sub.Text = "Your nation in the <font color='#f0c75a'><b>" .. eraTitle(E.name) .. "</b></font>"
 
 		-- identity + stats
-		local fk = st.flag and (tostring(st.flag.l) .. table.concat(st.flag.c or {}, ""))
+		local fk = st.flag and (tostring(st.flag.l) .. table.concat(st.flag.c or {}, "") .. tostring(st.flag.e) .. tostring(st.flag.img))
 		if fk ~= obj.flagKey then
 			obj.flagKey = fk
-			UI.clear(flagHost)
+			for _, ch in ipairs(flagHost:GetChildren()) do if ch.Name == "Flag" then ch:Destroy() end end
 			UI.flag(flagHost, st.flag, 58, { z = 10 })
 		end
 		nameL.Text = string.upper((st.name and st.name ~= "") and st.name or Players.LocalPlayer.DisplayName)
@@ -519,6 +738,7 @@ end }
 -- ClientMain calls _init.init(App) at load so App.showLogin exists before the Country screen is ever opened
 S._init = { init = function(App)
 	App.showLogin = function() showLogin(App) end
+	App.showFlagEditor = function() showFlagEditor(App) end
 end }
 
 return S

@@ -120,14 +120,14 @@ S.tasks = { build = function(host, App)
 	-- top-right chips: seals + next orders
 	local chipRow = UI.mk("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -18, 0, 12), Size = UDim2.fromOffset(460, 30), ZIndex = 7 }, panel)
 	UI.mk("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Right, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, chipRow)
-	local sealChip, sealL = UI.chip(chipRow, "0 SEALS", { order = 1, h = 30, size = 15, icon = "icon_seal", iconColor = C.white, z = 8 })
+	local sealChip, sealL = UI.chip(chipRow, "0 MERITS", { order = 1, h = 30, size = 15, icon = "icon_seal", iconColor = C.white, z = 8 })
 	local _, newL = UI.chip(chipRow, "NEW ORDERS IN 00:00:00", { order = 2, h = 30, size = 15, icon = "icon_clock", iconColor = C.blue, z = 8 })
 	-- the seal icon is a coloured image, not a white glyph: show it untinted
 	local sealIcon = sealChip:FindFirstChild("Icon")
 	if sealIcon then sealIcon.ImageColor3 = C.white end
 
-	text(body, "Daily and weekly orders reward Seals, spent in the Seals Shop.", { size = 16, color = C.muted, sz = UDim2.new(1, 0, 0, 22), z = 7, truncate = true })
-	local tabs = UI.tabs(body, { "ORDERS", "SEALS SHOP" }, function(i) obj.tab = i; obj:Refresh(App.state) end, { pos = UDim2.fromOffset(0, 28), w = 170, z = 7, textSize = 16, sz = UDim2.new(1, 0, 0, 38) })
+	text(body, "Daily and weekly orders reward Merits, spent in the Merits Shop.", { size = 16, color = C.muted, sz = UDim2.new(1, 0, 0, 22), z = 7, truncate = true })
+	local tabs = UI.tabs(body, { "ORDERS", "MERITS SHOP" }, function(i) obj.tab = i; obj:Refresh(App.state) end, { pos = UDim2.fromOffset(0, 28), w = 170, z = 7, textSize = 16, sz = UDim2.new(1, 0, 0, 38) })
 	tabs:Set(1)
 	local area = UI.mk("Frame", { Name = "Area", BackgroundTransparency = 1, Position = UDim2.fromOffset(0, 76), Size = UDim2.new(1, 0, 1, -76), ZIndex = 6 }, body)
 	local list -- current ScrollingFrame
@@ -192,7 +192,7 @@ S.tasks = { build = function(host, App)
 		text(bar.Inst, ord.done and "DONE" or label, { font = "heavy", size = 13, color = C.white, align = Enum.TextXAlignment.Center, sz = UDim2.fromScale(1, 1), z = 12, stroke = 1.4 })
 		local rw = (st.taskRewards and st.taskRewards[isWeekly and "weekly" or ord.diff]) or {}
 		rewardChips(mid, {
-			{ "+" .. (rw.seals or 0) .. " SEAL" .. ((rw.seals or 0) == 1 and "" or "S"), "icon_seal", nil, C.gold },
+			{ "+" .. (rw.seals or 0) .. " MERIT" .. ((rw.seals or 0) == 1 and "" or "S"), "icon_seal", nil, C.gold },
 			{ R.Money(rw.cash or 0), "icon_cash", C.good, C.good },
 		}, 9)
 		local bpos = UDim2.new(1, -12, 0.5, 0)
@@ -203,7 +203,7 @@ S.tasks = { build = function(host, App)
 		elseif ready then
 			UI.button(card, "gold", "CLAIM", function(btn)
 				local res = App.req("taskClaim", { src = src, i = i }, btn)
-				if res.ok then App.float(btn.Inst, "+" .. (res.seals or 0) .. " SEALS  <font color='#8fd07a'>+" .. R.Money(res.cash or 0) .. "</font>", C.gold) end
+				if res.ok then App.float(btn.Inst, "+" .. (res.seals or 0) .. " MERITS  <font color='#8fd07a'>+" .. R.Money(res.cash or 0) .. "</font>", C.gold) end
 			end, { pos = bpos, anchor = Vector2.new(1, 0.5), sz = bsz, z = 9, textSize = 18 })
 		else
 			local rf = st.refresh or {}
@@ -239,9 +239,9 @@ S.tasks = { build = function(host, App)
 				if res.ok then
 					if action == "weeklyChest" then
 						local g = res.gear
-						App.toast("WEEKLY CHEST OPENED", "+12 Seals · Founder's Crate" .. (g and g.name and (" · " .. tostring(g.name)) or " · Rare+ gear"), "gold")
+						App.toast("WEEKLY CHEST OPENED", "+12 Merits · Founder's Crate" .. (g and g.name and (" · " .. tostring(g.name)) or " · Rare+ gear"), "gold")
 					else
-						App.float(btn.Inst, "+" .. (res.seals or 2) .. " SEALS · FULL INFLUENCE", C.gold)
+						App.float(btn.Inst, "+" .. (res.seals or 2) .. " MERITS · FULL INFLUENCE", C.gold)
 					end
 				end
 			end, { pos = bpos, anchor = Vector2.new(1, 0.5), sz = bsz, z = 9, textSize = 18 })
@@ -274,7 +274,7 @@ S.tasks = { build = function(host, App)
 		end
 		if #dl == 0 then text(list, "No orders today. Check back soon.", { size = 15, color = C.muted, order = nextOrder(), z = 8 }) end
 		bonusRow(nextOrder(), "Claim all " .. math.max(#dl, TK.DailyCount) .. " daily orders", "Finish every order today for a bonus.", dn, math.max(#dl, 1),
-			{ { "+" .. TK.DailyBonus.seals .. " SEALS", "icon_seal", nil, C.gold }, { "FULL INFLUENCE", "icon_influence", C.inf, C.inf } }, t and t.bonus, "taskBonus")
+			{ { "+" .. TK.DailyBonus.seals .. " MERITS", "icon_seal", nil, C.gold }, { "FULL INFLUENCE", "icon_influence", C.inf, C.inf } }, t and t.bonus, "taskBonus")
 
 		local spacer = UI.mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 6), LayoutOrder = nextOrder() }, list)
 		local _ = spacer
@@ -286,7 +286,7 @@ S.tasks = { build = function(host, App)
 			if ord.done then wn += 1 end
 		end
 		bonusRow(nextOrder(), "Claim all " .. math.max(#wl, 5) .. " weekly challenges", "The weekly chest: guaranteed Rare or better gear.", wn, math.max(#wl, 1),
-			{ { "+" .. TK.WeeklyChest.seals .. " SEALS", "icon_seal", nil, C.gold }, { "FOUNDER'S CRATE", "icon_gift", C.gold, C.gold }, { "RARE+ GEAR", "icon_sparkles", C.blue, C.blue } }, wk and wk.chest, "weeklyChest")
+			{ { "+" .. TK.WeeklyChest.seals .. " MERITS", "icon_seal", nil, C.gold }, { "FOUNDER'S CRATE", "icon_gift", C.gold, C.gold }, { "RARE+ GEAR", "icon_sparkles", C.blue, C.blue } }, wk and wk.chest, "weeklyChest")
 	end
 
 	------------------------------------------------ seals shop
@@ -294,7 +294,7 @@ S.tasks = { build = function(host, App)
 		obj.timers = {}
 		local seals = st.seals or 0
 		local head = UI.mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 30), ZIndex = 7, LayoutOrder = 0 }, list)
-		text(head, "Seals come only from orders. They cannot be traded or bought.", { size = 15, color = C.muted, sz = UDim2.new(1, -180, 1, 0), z = 8, truncate = true })
+		text(head, "Merits come only from orders. They cannot be traded or bought.", { size = 15, color = C.muted, sz = UDim2.new(1, -180, 1, 0), z = 8, truncate = true })
 		UI.chip(head, (st.tickets or 0) .. " TICKETS", { pos = UDim2.new(1, -4, 0.5, 0), anchor = Vector2.new(1, 0.5), h = 26, size = 14, icon = "icon_ticket", iconColor = C.white, z = 8 })
 		local contentW = App.W() - App.NAVW - 20 - 28
 		local cols = contentW >= 980 and 4 or 3
@@ -332,10 +332,10 @@ S.tasks = { build = function(host, App)
 			end
 			text(card, string.upper(it.name), { font = "heavy", size = 17, align = Enum.TextXAlignment.Center, pos = UDim2.fromOffset(8, 110), sz = UDim2.new(1, -16, 0, 22), z = 10, scaled = true, color = it.key == "limited" and C.gold or C.ink })
 			text(card, it.desc, { size = 13, color = C.muted, align = Enum.TextXAlignment.Center, valign = Enum.TextYAlignment.Top, wrap = true, pos = UDim2.fromOffset(10, 134), sz = UDim2.new(1, -20, 0, 36), z = 10, scaled = true })
-			UI.button(card, can and "gold" or "locked", it.cost .. " SEALS", function(btn)
-				if (App.state.seals or 0) < it.cost then App.toast("Not enough Seals", "Finish daily and weekly orders to earn more", "bad"); App.shake(btn.Inst); return end
+			UI.button(card, can and "gold" or "locked", it.cost .. " MERITS", function(btn)
+				if (App.state.seals or 0) < it.cost then App.toast("Not enough Merits", "Finish daily and weekly orders to earn more", "bad"); App.shake(btn.Inst); return end
 				local res = App.req("sealBuy", { key = it.key }, btn)
-				if res.ok then App.toast(string.upper(it.name), "Bought for " .. it.cost .. " Seals", "gold"); App.float(btn.Inst, "-" .. it.cost .. " SEALS", C.gold) end
+				if res.ok then App.toast(string.upper(it.name), "Bought for " .. it.cost .. " Merits", "gold"); App.float(btn.Inst, "-" .. it.cost .. " MERITS", C.gold) end
 			end, { pos = UDim2.new(0, 10, 1, -54), sz = UDim2.new(1, -20, 0, 44), z = 11, icon = "icon_seal", textSize = 16 })
 			local bi = card:FindFirstChild("Button")
 			local ic = bi and bi:FindFirstChild("Face") and bi.Face:FindFirstChild("Icon")
@@ -352,10 +352,10 @@ S.tasks = { build = function(host, App)
 		sealL:SetAttribute("v", to)
 		if from ~= to then
 			local nv = Instance.new("NumberValue"); nv.Value = from
-			nv.Changed:Connect(function(v) sealL.Text = math.floor(v + 0.5) .. " SEALS" end)
+			nv.Changed:Connect(function(v) sealL.Text = math.floor(v + 0.5) .. " MERITS" end)
 			local tw = tween(nv, 0.6, { Value = to }, Enum.EasingStyle.Quart)
-			tw.Completed:Connect(function() sealL.Text = to .. " SEALS"; nv:Destroy() end)
-		else sealL.Text = to .. " SEALS" end
+			tw.Completed:Connect(function() sealL.Text = to .. " MERITS"; nv:Destroy() end)
+		else sealL.Text = to .. " MERITS" end
 
 		local pos = list and list.CanvasPosition
 		local keepTab = obj.drawnTab == obj.tab

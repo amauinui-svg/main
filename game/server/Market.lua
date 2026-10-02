@@ -96,6 +96,10 @@ function grant.InfluenceRefill(p)
 	p.data.inf = math.max(p.data.inf, R.MaxInfluence(p.data.lv, p.data.sk)); p.data.infT = 0
 	return true
 end
+function grant.InfluenceRefillFirst(p)
+	p.data.firstRefill = true
+	return grant.InfluenceRefill(p)
+end
 function grant.SupplyRefill(p)
 	local R = require(game:GetService("ReplicatedStorage").Shared.Rules)
 	p.data.sup = math.max(p.data.sup, R.MaxSupply(p.data.lv, p.data.sk)); p.data.supT = 0

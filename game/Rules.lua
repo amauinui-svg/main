@@ -113,6 +113,11 @@ for _, d in ipairs(R.Ideologies) do R.IdeologyByKey[d.key] = d end
 
 R.FlagColors = { "c0392b", "e67e22", "f1c40f", "27ae60", "16a085", "2980b9", "1f3a93", "8e44ad", "ecf0f1", "1b1b1b", "7f5539", "e84393" }
 R.FlagLayouts = { "h3", "v3", "h2", "v2", "cross", "diag", "canton", "border" }
+-- Custom Flag pass (Kash 19:24): more layouts, colours and emblems
+R.FlagLayoutsAll = { "h3", "v3", "h2", "v2", "cross", "diag", "canton", "border", "nordic", "saltire", "tri", "quad", "band", "disc" }
+R.FlagColorsAll = { "c0392b", "e67e22", "f1c40f", "27ae60", "16a085", "2980b9", "1f3a93", "8e44ad", "ecf0f1", "1b1b1b", "7f5539", "e84393",
+	"7b1e1e", "ff8c42", "d4af37", "0b6623", "00a7b5", "4fa3e0", "0a1f44", "5b2a86", "c0c0c0", "4a4a4a", "f5deb3", "ff69b4" }
+R.FlagEmblems = { "icon_crown", "icon_sparkles", "icon_castle", "icon_flame", "icon_anvil", "icon_globe", "icon_gem", "icon_defense", "icon_leaf", "icon_rocket" }
 
 ---------------------------------------------------------------- formatting
 local SUFFIX = { "", "K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc" }

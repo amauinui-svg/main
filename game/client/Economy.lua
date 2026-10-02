@@ -14,6 +14,104 @@ local function frame(host, App, title)
 	return panel, body, sub
 end
 
+---------------------------------------------------------------- OUT OF INFLUENCE popup (Kash 19:19)
+-- Influence bar with the regen timer, REFILL with gold, REFILL with Robux (first refill ever is cheap), or WAIT.
+local GOLD_REFILL = 10 -- matches A.GoldPrices.inf in server/Actions.lua
+local function showRefill(App)
+	local UI = App.UI
+	local C = UI.C
+	local text = UI.text
+	local TweenService = game:GetService("TweenService")
+	local Config = require(Shared.Config)
+	local host = App.modalHost
+	if not host then return end
+	local st = App.state
+	if not st then return end
+	UI.clear(host)
+	host.Visible = true
+	local cheap = not st.firstRefill
+	local robux = cheap and ((Config.Products.InfluenceRefillFirst or {}).robux or 9) or ((Config.Products.InfluenceRefill or {}).robux or 19)
+	local w = math.min(App.W() - 40, 480)
+	local panel, body = UI.panel(host, "OUT OF INFLUENCE", { sz = UDim2.fromOffset(w, 330), pos = UDim2.fromScale(0.5, 0.5), anchor = Vector2.new(0.5, 0.5), z = 71 })
+	local sc = UI.mk("UIScale", { Scale = 0.6 }, panel)
+	TweenService:Create(sc, TweenInfo.new(0.32, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
+	local closed = false
+	local function close()
+		if closed then return end
+		closed = true
+		local tw = TweenService:Create(sc, TweenInfo.new(0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.In), { Scale = 0.85 })
+		tw.Completed:Connect(function() if panel.Parent then host.Visible = false; UI.clear(host) end end)
+		tw:Play()
+	end
+	UI.button(panel, "slate", "", function() close() end, { pos = UDim2.new(1, -14, 0, 12), anchor = Vector2.new(1, 0), sz = UDim2.fromOffset(38, 36), z = 75, icon = "icon_x", iconSize = 18 })
+
+	-- big influence icon + explanation
+	local iconBg = UI.img(body, "circle", { sz = UDim2.fromOffset(56, 56), pos = UDim2.fromOffset(0, 2), color = C.slate, z = 73, slice = false })
+	UI.icon(iconBg, "icon_influence", 32, C.inf, UDim2.fromScale(0.5, 0.5), { z = 74, anchor = Vector2.new(0.5, 0.5) })
+	text(body, "Laws cost Influence.", { font = "heavy", size = 18, pos = UDim2.fromOffset(68, 4), sz = UDim2.new(1, -68, 0, 22), z = 73 })
+	text(body, "It refills by itself over time, or refill it right now.", { size = 14, color = C.muted, pos = UDim2.fromOffset(68, 28), sz = UDim2.new(1, -68, 0, 20), z = 73, truncate = true })
+	local bar = UI.bar(body, C.inf, { pos = UDim2.fromOffset(0, 70), sz = UDim2.new(1, 0, 0, 28), z = 73, textSize = 15 })
+	local timer = text(body, "", { font = "bold", size = 14, color = C.muted, align = Enum.TextXAlignment.Center, pos = UDim2.fromOffset(0, 102), sz = UDim2.new(1, 0, 0, 18), z = 73, rich = true })
+	local function upd()
+		local s = App.state
+		if not s then return end
+		local since = os.clock() - (App.tickClock or os.clock())
+		local inf, max = s.inf or 0, math.max(1, s.infMax or 1)
+		local regen, t = s.regenSec or 60, s.infT or 0
+		bar:Set(inf / max, "INFLUENCE", inf .. " / " .. max)
+		if inf >= max then
+			timer.Text = "<font color='#8fd07a'><b>FULL</b></font>"
+		else
+			timer.Text = "+1 in <font color='#e0a650'><b>" .. R.Clock(math.max(0, regen - t - since)) .. "</b></font>  ·  full in <b>" .. R.Duration((max - inf) * regen - t - since) .. "</b>"
+		end
+		return inf >= max
+	end
+	upd()
+
+	-- options
+	local opts = UI.mk("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(0, 134), Size = UDim2.new(1, 0, 0, 60), ZIndex = 73 }, body)
+	local gold = UI.button(opts, (st.gold or 0) >= GOLD_REFILL and "gold" or "slate", "REFILL · " .. GOLD_REFILL .. " GOLD", function(btn)
+		local res = App.req("refillInfluence", { method = "gold" }, btn)
+		if res.ok then
+			if App.sfx then pcall(App.sfx, "coin", { volume = 0.5 }) end
+			App.toast("INFLUENCE REFILLED", "Back to passing laws!", "good")
+			close()
+		end
+	end, { pos = UDim2.fromOffset(0, 8), sz = UDim2.new(0.5, -6, 0, 50), z = 74, textSize = 16 })
+	local _ = gold
+	local rb = UI.button(opts, "green", "REFILL · R$" .. robux, function(btn)
+		App.req("refillInfluence", { method = "robux" }, btn)
+	end, { pos = UDim2.new(0.5, 6, 0, 8), sz = UDim2.new(0.5, -6, 0, 50), z = 74, textSize = 16 })
+	if cheap then
+		-- "First refill only R$9!" ribbon over the Robux button, with a gentle pulse
+		local rib = UI.mk("Frame", { Name = "Ribbon", BackgroundColor3 = C.bad, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0, 0),
+			Size = UDim2.fromOffset(0, 20), AutomaticSize = Enum.AutomaticSize.X, ZIndex = 78, Rotation = -3 }, rb.Inst)
+		UI.mk("UICorner", { CornerRadius = UDim.new(0, 4) }, rib)
+		UI.mk("UIPadding", { PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8) }, rib)
+		UI.mk("UIStroke", { Color = C.black, Thickness = 1.5, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, rib)
+		local rl = text(rib, "FIRST REFILL ONLY R$" .. robux .. "!", { font = "heavy", size = 12, color = C.white, sz = UDim2.new(0, 0, 1, 0), z = 79 })
+		rl.AutomaticSize = Enum.AutomaticSize.X
+		local rs = UI.mk("UIScale", {}, rib)
+		TweenService:Create(rs, TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Scale = 1.08 }):Play()
+	end
+	UI.button(body, "slate", "WAIT", function() close() end, { pos = UDim2.new(0.5, 0, 1, -2), anchor = Vector2.new(0.5, 1), sz = UDim2.fromOffset(170, 42), z = 74 })
+
+	-- live timer; closes itself when Influence is full again (a Robux refill lands through a full sync)
+	local startInf = st.inf or 0
+	task.spawn(function()
+		while not closed and panel.Parent and host.Visible do
+			local full = upd()
+			local s = App.state
+			if full and s and (s.inf or 0) > startInf then
+				App.toast("INFLUENCE REFILLED", "Back to passing laws!", "good")
+				close()
+				break
+			end
+			task.wait(0.25)
+		end
+	end)
+end
+
 ---------------------------------------------------------------- LAWS
 S.laws = { build = function(host, App)
 	local UI = App.UI
@@ -85,7 +183,19 @@ S.laws = { build = function(host, App)
 				local function pass(btn, repeating)
 					local s = App.state
 					if s.lv < L.lvl then if not repeating then App.toast("Unlocks at level " .. L.lvl, nil, "bad"); App.shake(btn.Inst) end; return false end
-					if s.inf < L.cost then if not repeating then App.toast("Not enough Influence", "Wait for it to refill, or refill with gold in the Shop", "bad"); App.shake(btn.Inst) end; return false end
+					if s.inf < L.cost then
+						-- Kash 19:19: out of Influence -> the REFILL popup (once per 10 s; a held button just stops)
+						if not repeating then
+							App.shake(btn.Inst)
+							if os.clock() - (obj.refillShown or -100) >= 10 then
+								obj.refillShown = os.clock()
+								showRefill(App)
+							else
+								App.toast("Not enough Influence", "Wait for it to refill, or refill it now", "bad")
+							end
+						end
+						return false
+					end
 					local res = App.req("passLaw", { i = i }, not repeating and btn or nil)
 					if res.ok then
 							App.float(btn.Inst, "+" .. R.Money(res.cash) .. "  <font color='#b19cff'>+" .. res.xp .. " XP</font>")
@@ -137,11 +247,32 @@ S.properties = { build = function(host, App)
 	local TweenService = game:GetService("TweenService")
 	local Config = require(Shared.Config)
 	local _, body, sub = frame(host, App, "PROPERTIES")
-	local obj = { tab = 1, building = {}, pickLot = nil, lights = {} }
-	-- light animation: slow breathing glow, and on some buildings an occasional flicker
+	local obj = { tab = 1, building = {}, pickLot = nil, lights = {}, payTiles = {}, cycle = nil }
+	local CYCLE = 7
+	-- one Heartbeat for the whole screen: the shared 7 s income cycle (Kash 19:19) and the window lights
 	game:GetService("RunService").Heartbeat:Connect(function()
-		if not host.Visible or #obj.lights == 0 then return end
+		if not host.Visible then obj.cycle = nil; return end
 		local t = os.clock()
+		-- income bars: every owned tile fills in sync from the same clock; on wrap every tile pays out together
+		if #obj.payTiles > 0 then
+			local cyc = math.floor(t / CYCLE)
+			local frac = (t % CYCLE) / CYCLE
+			local paid = obj.cycle ~= nil and cyc ~= obj.cycle
+			obj.cycle = cyc
+			local any = false
+			for i = #obj.payTiles, 1, -1 do
+				local pt = obj.payTiles[i]
+				if not pt.fill.Parent then table.remove(obj.payTiles, i)
+				else
+					pt.fill.Size = UDim2.fromScale(frac, 1)
+					if paid then any = true; obj.payOut(pt) end
+				end
+			end
+			if any and App.sfx then pcall(App.sfx, "coin", { volume = 0.25 }) end
+		else
+			obj.cycle = nil
+		end
+		if #obj.lights == 0 then return end
 		for i = #obj.lights, 1, -1 do
 			local L = obj.lights[i]
 			if not L.img.Parent then table.remove(obj.lights, i)
@@ -156,7 +287,32 @@ S.properties = { build = function(host, App)
 	local tabs = UI.tabs(body, { "YOUR BLOCK", "BUILD" }, function(i) obj.tab = i; obj.pickLot = nil; obj:Refresh(App.state) end, { w = 150, z = 7 })
 	tabs:Set(1)
 	local function tw(o, t, props, style) TweenService:Create(o, TweenInfo.new(t, style or Enum.EasingStyle.Quad, Enum.EasingDirection.Out), props):Play() end
-	local function propImg(p) local P = D.Props[p]; return "prop_e" .. P.era .. "_t" .. P.tier end
+	-- payout pop on one owned tile: the price plate bounces and a "+$Y" floats up and fades
+	function obj.payOut(pt)
+		local tile = pt.tile
+		if not tile.Parent then return end
+		pt.scale.Scale = 1.14
+		tw(pt.scale, 0.35, { Scale = 1 }, Enum.EasingStyle.Back)
+		local f = text(tile, "+" .. R.Money(pt.amount), { font = "heavy", size = 18, color = C.good, align = Enum.TextXAlignment.Center, anchor = Vector2.new(0.5, 1),
+			pos = UDim2.new(0.5, 0, 1, -40), sz = UDim2.new(1, 0, 0, 22), z = 14, stroke = 1.4 })
+		local fs = f:FindFirstChildOfClass("UIStroke")
+		tw(f, 1.1, { Position = UDim2.new(0.5, 0, 1, -78), TextTransparency = 1 })
+		if fs then tw(fs, 1.1, { Transparency = 1 }) end
+		task.delay(1.15, function() f:Destroy() end)
+	end
+	-- Kash 19:19: every property has its OWN image (prop_001..), falling back to the era/tier art
+	local function propImg(p)
+		local k = "prop_" .. string.format("%03d", p)
+		if UI.asset(k) ~= "" then return k end
+		local P = D.Props[p]
+		return "prop_e" .. P.era .. "_t" .. P.tier
+	end
+	local function lightsImg(p)
+		local k = "lights_" .. string.format("%03d", p)
+		if UI.asset(k) ~= "" then return k end
+		local P = D.Props[p]
+		return "lights_e" .. P.era .. "_t" .. P.tier
+	end
 	local function plate(parent, s, pos, anchor, z, color)
 		local f = UI.mk("Frame", { BackgroundColor3 = Color3.fromHex("121417"), BackgroundTransparency = 0.15, BorderSizePixel = 0, AutomaticSize = Enum.AutomaticSize.X,
 			Size = UDim2.fromOffset(0, 22), Position = pos, AnchorPoint = anchor, ZIndex = z }, parent)
@@ -234,11 +390,26 @@ S.properties = { build = function(host, App)
 
 		local grid = UI.mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, ZIndex = 6, LayoutOrder = 1 }, list)
 		UI.mk("UIGridLayout", { CellSize = UDim2.fromOffset(cell, cell), CellPadding = UDim2.fromOffset(10, 10), SortOrder = Enum.SortOrder.LayoutOrder }, grid)
+		-- Kash 19:19: richest buildings first (display order only; lot numbers for actions stay the same),
+		-- then the empty FOR SALE lots, then the locked ones
+		local ranked = {}
 		for k = 1, st.lotsMax do
 			local p = st.lots[k]
-			if p and p > 0 then
+			if p and p > 0 and D.Props[p] then table.insert(ranked, k) end
+		end
+		table.sort(ranked, function(a, b)
+			local ia, ib = D.Props[st.lots[a]].inc, D.Props[st.lots[b]].inc
+			if ia ~= ib then return ia > ib end
+			return a < b
+		end)
+		local rankOf = {}
+		for r, k in ipairs(ranked) do rankOf[k] = r end
+		local propMod = (st.mods and st.mods.props) or 1
+		for k = 1, st.lotsMax do
+			local p = st.lots[k]
+			if p and p > 0 and D.Props[p] then
 				local P = D.Props[p]
-				local t = tile(grid, k, "owned")
+				local t = tile(grid, rankOf[k] or k, "owned")
 				if obj.building[k] then
 					construction(t, k)
 				else
@@ -247,7 +418,7 @@ S.properties = { build = function(host, App)
 					UI.mk("UICorner", { CornerRadius = UDim.new(1, 0) }, shadow)
 					local bld = UI.img(t, propImg(p), { sz = UDim2.fromScale(0.8, 0.8), pos = UDim2.fromScale(0.5, 0.52), anchor = Vector2.new(0.5, 0.5), z = 9, slice = false, fit = true })
 					-- living buildings (Kash 18:44): the lit windows / lamps / furnaces glow and flicker softly
-					local lkey = "lights_" .. propImg(p):sub(6)
+					local lkey = lightsImg(p)
 					if UI.asset(lkey) ~= "" then
 						local lights = UI.img(bld, lkey, { sz = UDim2.fromScale(1, 1), z = 10, slice = false, fit = true, alpha = 0.6 })
 						table.insert(obj.lights, { img = lights, seed = k * 1.7 + p * 0.37, flicker = (k + p) % 3 == 0 })
@@ -271,10 +442,19 @@ S.properties = { build = function(host, App)
 				end
 				plate(t, P.n, UDim2.new(0.5, 0, 0, 8), Vector2.new(0.5, 0), 12)
 				if not obj.building[k] then
-					plate(t, "<font color='#8fd07a'><b>" .. R.Money(P.inc * st.mods.props) .. "/hr</b></font>", UDim2.new(0.5, 0, 1, -10), Vector2.new(0.5, 1), 12)
+					local inc = P.inc * propMod
+					local pl = plate(t, "<font color='#8fd07a'><b>" .. R.Money(inc) .. "/hr</b></font>", UDim2.new(0.5, 0, 1, -14), Vector2.new(0.5, 1), 12)
+					local psc = UI.mk("UIScale", {}, pl)
+					-- thin income bar under the price (like the reference), filled by the shared 7 s cycle
+					local track = UI.mk("Frame", { Name = "PayBar", BackgroundColor3 = C.black, BackgroundTransparency = 0.2, BorderSizePixel = 0,
+						Position = UDim2.new(0, 0, 1, 2), Size = UDim2.new(1, 0, 0, 4), ZIndex = 13 }, pl)
+					UI.mk("UICorner", { CornerRadius = UDim.new(1, 0) }, track)
+					local fill = UI.mk("Frame", { Name = "Fill", BackgroundColor3 = C.good, BorderSizePixel = 0, Size = UDim2.fromScale((os.clock() % CYCLE) / CYCLE, 1), ZIndex = 14 }, track)
+					UI.mk("UICorner", { CornerRadius = UDim.new(1, 0) }, fill)
+					table.insert(obj.payTiles, { tile = t, fill = fill, scale = psc, amount = inc / 3600 * CYCLE })
 				end
 			else
-				local t = tile(grid, k, "sale")
+				local t = tile(grid, 500 + k, "sale")
 				local plus = text(t, "+", { font = "heavy", size = 46, color = C.gold, align = Enum.TextXAlignment.Center, pos = UDim2.fromScale(0, 0.18), sz = UDim2.new(1, 0, 0, 50), z = 9 })
 				text(t, "FOR SALE", { font = "heavy", size = 22, align = Enum.TextXAlignment.Center, pos = UDim2.fromScale(0, 0.48), sz = UDim2.new(1, 0, 0, 26), z = 9, stroke = 1 })
 				text(t, "Tap to Build", { font = "bold", size = 17, color = C.gold, align = Enum.TextXAlignment.Center, pos = UDim2.fromScale(0, 0.62), sz = UDim2.new(1, 0, 0, 22), z = 9 })
@@ -283,21 +463,27 @@ S.properties = { build = function(host, App)
 				t.Activated:Connect(function() obj.pickLot = k; obj.tab = 2; tabs:Set(2); obj:Refresh(App.state) end)
 			end
 		end
-		-- locked lots: fill out the last row plus one more, like the reference
+		-- locked lots: fill out the last row plus one more, like the reference. EVERY locked tile says LOCKED (Kash 19:19)
+		-- and what it costs: tile k beyond lotsMax is the (k - lotsMax)th lot purchase from now
 		local shown = st.lotsMax
 		local target = math.ceil((shown + 1) / cols) * cols
 		if target - shown < cols then target += cols end
-		local nextCost = R.SkillByKey.lot.cost(st.sk.lot or 0)
+		local bought = (st.sk and st.sk.lot) or 0
+		local passTile = (not (st.gp and st.gp.ExtraLots) and Config.Passes.ExtraLots.id ~= 0) and target or nil
 		for k = shown + 1, target do
-			local t = tile(grid, k, "locked")
-			if k == shown + 1 then
-				text(t, "LOCKED", { font = "heavy", size = 22, align = Enum.TextXAlignment.Center, pos = UDim2.fromScale(0, 0.36), sz = UDim2.new(1, 0, 0, 26), z = 9, stroke = 1 })
-				text(t, "Unlock with " .. nextCost .. " Skill Point" .. (nextCost > 1 and "s" or ""), { font = "bold", size = 15, color = C.gold, align = Enum.TextXAlignment.Center, wrap = true, pos = UDim2.fromScale(0.08, 0.5), sz = UDim2.new(0.84, 0, 0, 40), z = 9 })
-				t.Activated:Connect(function() App.open("country") end)
-			elseif k == shown + 2 and not (st.gp and st.gp.ExtraLots) and Config.Passes.ExtraLots.id ~= 0 then
-				text(t, "+3 LOTS", { font = "heavy", size = 22, color = C.gold, align = Enum.TextXAlignment.Center, pos = UDim2.fromScale(0, 0.32), sz = UDim2.new(1, 0, 0, 26), z = 9, stroke = 1 })
-				text(t, "Game pass, forever", { font = "bold", size = 14, align = Enum.TextXAlignment.Center, pos = UDim2.fromScale(0, 0.46), sz = UDim2.new(1, 0, 0, 18), z = 9 })
+			local t = tile(grid, 1000 + k, "locked")
+			local first = k == shown + 1
+			text(t, "LOCKED", { font = "heavy", size = 22, align = Enum.TextXAlignment.Center, pos = UDim2.fromScale(0, k == passTile and 0.24 or 0.36), sz = UDim2.new(1, 0, 0, 26), z = 9, stroke = 1 })
+			if k == passTile then
+				text(t, "+3 lots with a game pass", { font = "bold", size = 14, color = C.gold, align = Enum.TextXAlignment.Center, wrap = true, pos = UDim2.fromScale(0.08, 0.38), sz = UDim2.new(0.84, 0, 0, 34), z = 9, stroke = 1 })
 				UI.button(t, "gold", "R$" .. Config.Passes.ExtraLots.price, function(btn) App.req("buyPass", { key = "ExtraLots" }, btn) end, { pos = UDim2.new(0.5, 0, 0.62, 0), anchor = Vector2.new(0.5, 0), sz = UDim2.new(0.7, 0, 0, 36), z = 10, textSize = 15 })
+			else
+				local ok, cost = pcall(R.SkillByKey.lot.cost, bought + (k - shown) - 1)
+				cost = ok and tonumber(cost) and math.floor(cost + 0.5) or nil
+				local s = cost and ("Unlock with " .. R.Commas(cost) .. " Skill Point" .. (cost ~= 1 and "s" or "")) or "Needs more lots"
+				text(t, s, { font = "bold", size = 15, color = first and C.gold or Color3.fromHex("c9b27a"), align = Enum.TextXAlignment.Center, wrap = true,
+					pos = UDim2.fromScale(0.08, 0.5), sz = UDim2.new(0.84, 0, 0, 40), z = 9, stroke = 1 })
+				t.Activated:Connect(function() App.open("country") end)
 			end
 		end
 	end
@@ -313,7 +499,12 @@ S.properties = { build = function(host, App)
 		end
 		local rows = {}
 		for i, P in ipairs(D.Props) do if P.lvl <= st.lv then table.insert(rows, i) end end
-		table.sort(rows, function(a, b) return a > b end)
+		-- Kash 19:19: highest income per hour first
+		table.sort(rows, function(a, b)
+			local ia, ib = D.Props[a].inc, D.Props[b].inc
+			if ia ~= ib then return ia > ib end
+			return a > b
+		end)
 		while #rows > 24 do table.remove(rows) end
 		local locked = {}
 		for i, P in ipairs(D.Props) do if P.lvl > st.lv and #locked < 3 then table.insert(locked, i) end end
@@ -327,7 +518,7 @@ S.properties = { build = function(host, App)
 			local card = UI.card(list, { sz = UDim2.new(1, 0, 0, 84), z = 7, order = isLocked and (1000 + order) or order })
 			local thumb = UI.mk("ImageLabel", { BackgroundColor3 = C.black, BorderSizePixel = 0, Image = UI.asset("tile_owned"), ScaleType = Enum.ScaleType.Crop, Position = UDim2.fromOffset(8, 6), Size = UDim2.fromOffset(72, 72), ZIndex = 8 }, card)
 			UI.mk("UICorner", { CornerRadius = UDim.new(0, 5) }, thumb)
-			UI.img(thumb, "prop_e" .. P.era .. "_t" .. P.tier, { sz = UDim2.fromScale(0.92, 0.92), pos = UDim2.fromScale(0.5, 0.5), anchor = Vector2.new(0.5, 0.5), z = 9, slice = false, fit = true, color = isLocked and Color3.fromHex("555555") or nil })
+			UI.img(thumb, propImg(i), { sz = UDim2.fromScale(0.92, 0.92), pos = UDim2.fromScale(0.5, 0.5), anchor = Vector2.new(0.5, 0.5), z = 9, slice = false, fit = true, color = isLocked and Color3.fromHex("555555") or nil })
 			text(card, P.n .. (owned > 0 and ("  <font color='#9a9fa6'>x" .. owned .. "</font>") or ""), { font = "heavy", size = 18, rich = true, pos = UDim2.fromOffset(92, 12), sz = UDim2.new(0.42, -92, 0, 24), z = 8, truncate = true })
 			text(card, D.Eras[P.era].name .. " · Tier " .. P.tier .. (isLocked and (" · unlocks at level " .. P.lvl) or ""), { size = 14, color = C.muted, pos = UDim2.fromOffset(92, 40), sz = UDim2.new(0.45, -92, 0, 18), z = 8 })
 			text(card, "+" .. R.Money(inc) .. "/hr", { font = "heavy", size = 18, color = C.good, pos = UDim2.new(0.44, 0, 0, 12), sz = UDim2.new(0.2, 0, 0, 24), z = 8 })

@@ -233,16 +233,28 @@ function UI.tabs(parent, labels, onPick, p)
 	return obj
 end
 
----------------------------------------------------------------- flags (8 layouts x 12 colours, built from flat frames like a real flag)
+---------------------------------------------------------------- flags (14 layouts x 24 colours, built from flat frames like a real flag)
+-- flag = { l = layout, c = { hex1, hex2, hex3 }, e = emblem icon key or nil, img = image/decal id or nil }
+-- Custom Flag pass (Kash 19:24) adds nordic, saltire, tri, quad, band, disc, an emblem and your own image.
 function UI.flag(parent, flag, w, p)
 	p = p or {}
 	flag = flag or { l = "h3", c = { "1f3a93", "ecf0f1", "c0392b" } }
+	local cols = type(flag.c) == "table" and flag.c or {}
+	local function col(i, d)
+		local ok, c = pcall(Color3.fromHex, tostring(cols[i] or d))
+		return ok and c or hex(d)
+	end
 	local h = math.floor(w * 0.66)
 	local z = p.z or 5
-	local f = mk("Frame", { Name = "Flag", Position = p.pos or UDim2.new(), Size = UDim2.fromOffset(w, h), AnchorPoint = p.anchor or Vector2.zero, BackgroundColor3 = hex(flag.c[1]), BorderSizePixel = 0, ZIndex = z, ClipsDescendants = true, LayoutOrder = p.order or 0 }, parent)
+	local c1, c2, c3 = col(1, "1f3a93"), col(2, "ecf0f1"), col(3, "c0392b")
+	local f = mk("Frame", { Name = "Flag", Position = p.pos or UDim2.new(), Size = UDim2.fromOffset(w, h), AnchorPoint = p.anchor or Vector2.zero, BackgroundColor3 = c1, BorderSizePixel = 0, ZIndex = z, ClipsDescendants = true, LayoutOrder = p.order or 0 }, parent)
 	mk("UIStroke", { Color = UI.C.black, Thickness = math.max(1, math.floor(w / 36)) }, f)
-	local c2, c3 = hex(flag.c[2]), hex(flag.c[3])
-	local function rect(x, y, sx, sy, c) mk("Frame", { BorderSizePixel = 0, BackgroundColor3 = c, Position = UDim2.fromScale(x, y), Size = UDim2.fromScale(sx, sy), ZIndex = z }, f) end
+	local function rect(x, y, sx, sy, c) return mk("Frame", { BorderSizePixel = 0, BackgroundColor3 = c, Position = UDim2.fromScale(x, y), Size = UDim2.fromScale(sx, sy), ZIndex = z }, f) end
+	-- a centred bar rotated by deg, long enough to cross the whole flag
+	local function bar(thick, deg, c)
+		return mk("Frame", { BorderSizePixel = 0, BackgroundColor3 = c, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.new(0, math.ceil(math.sqrt(w * w + h * h)) + 4, 0, math.max(1, math.floor(h * thick))), Rotation = deg, ZIndex = z }, f)
+	end
 	local l = flag.l
 	if l == "h3" then rect(0, 1 / 3, 1, 1 / 3 + 0.01, c2); rect(0, 2 / 3, 1, 1 / 3 + 0.01, c3)
 	elseif l == "v3" then rect(1 / 3, 0, 1 / 3 + 0.01, 1, c2); rect(2 / 3, 0, 1 / 3 + 0.01, 1, c3)
@@ -254,6 +266,49 @@ function UI.flag(parent, flag, w, p)
 		mk("Frame", { BorderSizePixel = 0, BackgroundColor3 = c3, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(1, 0.4), ZIndex = z }, d)
 	elseif l == "canton" then rect(0, 0.5, 1, 0.5, c3); rect(0, 0, 0.45, 0.55, c2)
 	elseif l == "border" then rect(0.12, 0.18, 0.76, 0.64, c2); rect(0.38, 0.33, 0.24, 0.34, c3)
+	elseif l == "nordic" then
+		-- Scandinavian cross: off-centre towards the hoist, thin fimbriation in colour 2 around a colour 3 cross
+		rect(0.25, 0, 0.17, 1, c2); rect(0, 0.39, 1, 0.22, c2)
+		rect(0.28, 0, 0.11, 1, c3); rect(0, 0.435, 1, 0.13, c3)
+	elseif l == "saltire" then
+		-- diagonal X corner to corner
+		local deg = math.deg(math.atan2(h, w))
+		bar(0.24, deg, c2); bar(0.24, -deg, c2)
+		bar(0.1, deg, c3); bar(0.1, -deg, c3)
+	elseif l == "tri" then
+		-- two horizontal bands with a triangle at the hoist (a 45-degree square half outside the flag)
+		rect(0, 0.5, 1, 0.5, c2)
+		local s = math.ceil(h / math.sqrt(2)) + 1
+		mk("Frame", { BorderSizePixel = 0, BackgroundColor3 = c3, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0, 0.5), Size = UDim2.fromOffset(s, s), Rotation = 45, ZIndex = z }, f)
+	elseif l == "quad" then
+		-- quartered 1/2/2/1 with a thin colour 3 cross between the quarters
+		rect(0.5, 0, 0.5, 0.5, c2); rect(0, 0.5, 0.5, 0.5, c2)
+		rect(0.475, 0, 0.05, 1, c3); rect(0, 0.465, 1, 0.07, c3)
+	elseif l == "band" then
+		-- thick central band (colour 2) edged by thin colour 3 lines; colour 1 shows at the top and bottom edges
+		rect(0, 0.16, 1, 0.68, c3); rect(0, 0.22, 1, 0.56, c2)
+	elseif l == "disc" then
+		-- a disc in the centre with a colour 3 ring
+		local d = math.floor(h * 0.6)
+		local disc = mk("Frame", { BorderSizePixel = 0, BackgroundColor3 = c2, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(d, d), ZIndex = z }, f)
+		mk("UICorner", { CornerRadius = UDim.new(1, 0) }, disc)
+		mk("UIStroke", { Color = c3, Thickness = math.max(1, math.floor(h / 16)), ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, disc)
+	end
+	-- emblem: a white icon in the centre (with a soft dark shadow so it reads on light colours too)
+	if flag.e and flag.e ~= "" and not flag.img and Assets[flag.e] then
+		local sz = math.max(6, math.floor(h * 0.45))
+		local off = math.max(1, math.floor(sz / 20))
+		mk("ImageLabel", { Name = "EmblemShadow", BackgroundTransparency = 1, Image = Assets[flag.e], ImageColor3 = UI.C.black, ImageTransparency = 0.45, AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0.5, off, 0.5, off), Size = UDim2.fromOffset(sz, sz), ScaleType = Enum.ScaleType.Fit, ZIndex = z + 1 }, f)
+		mk("ImageLabel", { Name = "Emblem", BackgroundTransparency = 1, Image = Assets[flag.e], ImageColor3 = UI.C.white, AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(sz, sz), ScaleType = Enum.ScaleType.Fit, ZIndex = z + 2 }, f)
+	end
+	-- your own image covers the whole flag
+	if flag.img and tostring(flag.img) ~= "" then
+		local id = tostring(flag.img):match("%d+")
+		if id then
+			mk("ImageLabel", { Name = "Custom", BackgroundTransparency = 1, Image = "rbxthumb://type=Asset&id=" .. id .. "&w=420&h=420", ScaleType = Enum.ScaleType.Crop, Size = UDim2.fromScale(1, 1), ZIndex = z + 3 }, f)
+		end
 	end
 	return f
 end

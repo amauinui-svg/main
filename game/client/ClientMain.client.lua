@@ -101,6 +101,13 @@ function App.float(gui, str, color)
 	task.delay(1, function() l:Destroy() end)
 end
 
+local PROMPTS = { buyPass = true, buyProduct = true, buyGold = true, revengeStrike = true, refillInfluence = true, finishRobux = true, moveCapital = true }
+-- a completed Robux purchase gets its own celebration sound
+pcall(function()
+	local MPS = game:GetService("MarketplaceService")
+	MPS.PromptGamePassPurchaseFinished:Connect(function(who, _, bought) if who == plr and bought then App.play("cash_big"); App.play("level_up", { volume = 0.6 }) end end)
+	MPS.PromptProductPurchaseFinished:Connect(function(uid, _, bought) if uid == plr.UserId and bought then App.play("cash_big") end end)
+end)
 -- request: shakes the button and toasts the reason when the server says no
 function App.req(action, args, btn)
 	local ok, res = pcall(function() return Remotes.Request:InvokeServer(action, args or {}) end)
@@ -109,6 +116,8 @@ function App.req(action, args, btn)
 		App.toast(res.msg, nil, "bad")
 		if btn then App.shake(btn.Inst or btn) end
 	end
+	-- a Robux prompt is opening: a soft "register" sound (Kash 19:19)
+	if res.ok and PROMPTS[action] and not (action == "refillInfluence" and args and args.method == "gold") then App.play("purchase", { volume = 0.45, pitch = 1.15 }) end
 	return res
 end
 
@@ -140,11 +149,21 @@ do
 	top.mid = mid
 	UI.icon(mid, "icon_cash", 26, C.good, UDim2.fromOffset(0, 10), { z = 22 })
 	top.cash = text(mid, "$0", { font = "display", size = 28, color = C.good, pos = UDim2.fromOffset(32, 4), sz = UDim2.fromOffset(240, 34), z = 22, scaled = true })
-	top.income = text(mid, "", { font = "bold", size = 13, color = C.muted, pos = UDim2.fromOffset(32, 38), sz = UDim2.fromOffset(170, 18), z = 22 })
-	local goldBtn = UI.img(mid, "chip", { button = true, name = "Gold", pos = UDim2.fromOffset(206, 36), sz = UDim2.fromOffset(84, 22), z = 22 })
-	UI.icon(goldBtn, "icon_gold", 16, C.gold, UDim2.fromOffset(5, 3), { z = 23 })
-	top.gold = text(goldBtn, "0", { font = "heavy", size = 14, color = C.gold, pos = UDim2.fromOffset(25, 0), sz = UDim2.new(1, -28, 1, 0), z = 23 })
+	top.income = text(mid, "", { font = "bold", size = 13, color = C.muted, pos = UDim2.fromOffset(32, 38), sz = UDim2.fromOffset(110, 18), z = 22 })
+	-- gold bars and merits, big and readable (Kash 19:24)
+	local function currency(x, w, imgKey, fallback, color, name)
+		local b = UI.img(mid, "chip", { button = true, name = name, pos = UDim2.fromOffset(x, 33), sz = UDim2.fromOffset(w, 28), z = 22 })
+		local key = (Assets[imgKey] and imgKey) or fallback
+		UI.img(b, key, { sz = UDim2.fromOffset(30, 30), pos = UDim2.new(0, -4, 0.5, 0), anchor = Vector2.new(0, 0.5), z = 24, slice = false, fit = true, color = key == fallback and imgKey ~= fallback and color or nil })
+		local l = text(b, "0", { font = "heavy", size = 17, color = color, pos = UDim2.fromOffset(30, 0), sz = UDim2.new(1, -34, 1, 0), z = 23, scaled = true })
+		return b, l
+	end
+	local goldBtn
+	goldBtn, top.gold = currency(144, 76, "icon_goldbar", "icon_gold", C.gold, "Gold")
 	goldBtn.Activated:Connect(function() App.open("shop") end)
+	local meritBtn
+	meritBtn, top.merits = currency(226, 70, "icon_seal", "icon_seal", Color3.fromHex("e9c46a"), "Merits")
+	meritBtn.Activated:Connect(function() App.open("tasks") end)
 
 	local right = mk("Frame", { Name = "Energy", BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -62, 0, 0), Size = UDim2.fromOffset(470, TOP), ZIndex = 21 }, topBar)
 	top.right = right
@@ -190,13 +209,11 @@ local NAV = {
 	{ key = "map", label = "CAPITOL", icon = "icon_map" },
 	{ key = "laws", label = "LAWS", icon = "icon_laws" },
 	{ key = "properties", label = "PROPERTIES", icon = "icon_properties" },
-	{ key = "officers", label = "OFFICERS", icon = "icon_users" },
 	{ key = "inventory", label = "INVENTORY", icon = "icon_boxes" },
 	{ key = "military", label = "MILITARY", icon = "icon_military" },
 	{ key = "battle", label = "RAIDS", icon = "icon_battle" },
 	{ key = "bosses", label = "BOSSES", icon = "icon_bosses" },
 	{ key = "alliance", label = "ALLIANCE", icon = "icon_alliance" },
-	{ key = "takedown", label = "TAKEDOWN", icon = "icon_castle" },
 	{ key = "tasks", label = "ORDERS", icon = "icon_tasks" },
 	{ key = "bank", label = "BANK", icon = "icon_bank" },
 	{ key = "rankings", label = "RANKINGS", icon = "icon_rankings" },
@@ -237,6 +254,63 @@ for _, modName in ipairs({ "Sound", "Map", "Economy", "War", "Social", "Warfare"
 		end
 	else warn("[Idle Country] " .. modName .. ": " .. tostring(mod)) end
 end
+-- tabbed screens (Kash 19:19): Officers live inside Military, the Weekly Takedown inside Alliance.
+-- The child screen's own title is replaced by two tab buttons in the same spot.
+local COMPOSITE = {
+	military = { { key = "military", label = "ARMY", title = "MILITARY" }, { key = "officers", label = "OFFICERS", title = "OFFICERS" } },
+	alliance = { { key = "alliance", label = "ALLIANCE", title = "ALLIANCE" }, { key = "takedown", label = "WEEKLY TAKEDOWN", below = true } },
+}
+local ROUTE = { officers = { "military", 2 }, takedown = { "alliance", 2 } }
+for parentKey, kids in pairs(COMPOSITE) do
+	local childDefs = {}
+	for i, k in ipairs(kids) do childDefs[i] = defs[k.key] end
+	defs[parentKey] = { build = function(host, App)
+		local obj = { kids = {}, cur = 1 }
+		local bar = mk("Frame", { Name = "SubTabs", BackgroundTransparency = 1, Position = UDim2.fromOffset(26, 16), Size = UDim2.fromOffset(460, 38), ZIndex = 40 }, host)
+		mk("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder, VerticalAlignment = Enum.VerticalAlignment.Center }, bar)
+		local btns = {}
+		local function hideTitle(root, title)
+			if not title then return end
+			for _, d in ipairs(root:GetDescendants()) do
+				if d:IsA("TextLabel") and d.Text == title then d.Visible = false end
+			end
+		end
+		function obj.select(i)
+			obj.cur = i
+			for j, kid in ipairs(obj.kids) do kid.host.Visible = j == i end
+			for j, b in ipairs(btns) do b:Set(j == i and "manila" or "slate") end
+			local kid = obj.kids[i]
+			if kid and kid.obj then
+				if App.state and kid.obj.Refresh then pcall(kid.obj.Refresh, kid.obj, App.state) end
+				if kid.obj.Opened then pcall(kid.obj.Opened, kid.obj) end
+			end
+		end
+		for i, k in ipairs(kids) do
+			local h = mk("Frame", { Name = "Sub_" .. k.key, BackgroundTransparency = 1, Position = UDim2.fromOffset(0, k.below and 52 or 0), Size = UDim2.new(1, 0, 1, k.below and -52 or 0), ZIndex = 3, Visible = i == 1 }, host)
+			local okB, o = false, nil
+			if childDefs[i] then okB, o = pcall(childDefs[i].build, h, App) end
+			if not okB then warn("[Idle Country] sub screen " .. k.key .. ": " .. tostring(o)) end
+			obj.kids[i] = { host = h, obj = okB and o or nil }
+			hideTitle(h, k.title)
+			btns[i] = UI.button(bar, i == 1 and "manila" or "slate", k.label, function() if App.play then App.play("tab_open") end; obj.select(i) end,
+				{ sz = UDim2.fromOffset(k.label:len() > 10 and 210 or 140, 38), z = 41, order = i, textSize = 16 })
+		end
+		function obj:Refresh(st)
+			local kid = obj.kids[obj.cur]
+			if kid and kid.obj and kid.obj.Refresh then kid.obj.Refresh(kid.obj, st) end
+			hideTitle(kid.host, kids[obj.cur].title)
+		end
+		function obj:Tick(st)
+			local kid = obj.kids[obj.cur]
+			if kid and kid.obj and kid.obj.Tick then kid.obj.Tick(kid.obj, st) end
+		end
+		function obj:Opened()
+			local kid = obj.kids[obj.cur]
+			if kid and kid.obj and kid.obj.Opened then pcall(kid.obj.Opened, kid.obj) end
+		end
+		return obj
+	end }
+end
 local initsDone = false
 local function runInits()
 	if initsDone then return end
@@ -250,6 +324,13 @@ function App.big(reason) if App.bigMoment then pcall(App.bigMoment, reason) end 
 function App.play(name, opts) if App.sfx then pcall(App.sfx, name, opts) end end
 
 function App.open(key)
+	local route = ROUTE[key]
+	if route then
+		App.open(route[1])
+		local s = App.screens[route[1]]
+		if s and s.obj and s.obj.select then s.obj.select(route[2]) end
+		return
+	end
 	if not defs[key] then App.toast("Coming soon", nil, "info"); return end
 	if App.state and not App.state.onboarded then return end
 	for k, s in pairs(App.screens) do s.host.Visible = (k == key) or (k == "map" and key ~= "map" and false) end
@@ -294,8 +375,9 @@ local function drawTop()
 	top.cash.Text = R.Money(st.cash)
 	top.income.Text = "+" .. R.Money(st.incHr) .. "/hr"
 	top.gold.Text = R.Commas(st.gold)
-	top.inf:Set(st.inf / st.infMax, st.inf .. " / " .. st.infMax, "")
-	top.sup:Set(st.sup / st.supMax, st.sup .. " / " .. st.supMax, "")
+	if top.merits then top.merits.Text = R.Commas(st.seals or 0) end
+	top.inf:Set(st.inf / st.infMax, "INFLUENCE  " .. st.inf .. " / " .. st.infMax, "")
+	top.sup:Set(st.sup / st.supMax, "SUPPLY  " .. st.sup .. " / " .. st.supMax, "")
 	local fk = st.flag and (st.flag.l .. table.concat(st.flag.c, ""))
 	if fk ~= lastFlag then
 		lastFlag = fk

@@ -130,6 +130,9 @@ end
 function WS.LoadAlliance(id)
 	if not id then return nil, true end
 	local ok, a = Store.Get(Store.DS(ALLY_DS), "a_" .. id)
+	-- never step back to an older copy (DataStore reads can be cached for a few seconds): the stage rollback bug
+	local cur = WS.Alliances[id]
+	if ok and a and cur and (a.rev or 0) < (cur.rev or 0) then return cur, true end
 	if ok and a then WS.Alliances[id] = a; WS.Index[id] = summary(a) end
 	if ok and not a then WS.Alliances[id] = nil end
 	return WS.Alliances[id], ok
@@ -161,6 +164,7 @@ function WS.MutateAlliance(id, fn)
 		if not old then err = "Alliance not found"; return nil end
 		local new, r = fn(old)
 		if not new then err = r; return nil end
+		new.rev = (new.rev or 0) + 1
 		result = r
 		return new
 	end)

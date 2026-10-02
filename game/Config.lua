@@ -13,9 +13,10 @@ C.Passes = {
 	BonusOfficer = { id = 2007026302, name = "Bonus Officer Slot", desc = "One extra officer slot on top of the ones you buy.", price = 299 },
 	VIP = { id = 2008088291, name = "VIP", desc = "+10% cash from everything, +10% faster Influence regen and the VIP chat tag.", price = 499 },
 	MegaVIP = { id = 2005772319, name = "Mega VIP", desc = "+25% cash, +25% faster Influence regen, a unique LIMITED officer and the MEGA VIP chat tag.", price = 899 },
+	CustomFlag = { id = 2005904325, name = "Custom Flag", desc = "Design your own flag: extra layouts, emblems and colours, or use your own image.", price = 99 },
 	CrateLuck = { id = 2006090287, name = "2x Crate Luck", desc = "Double the odds of Legendary and better from every crate.", price = 349 },
 }
-C.PassOrder = { "FastConvoys", "AutoDispatch", "ExtraConvoys", "ExtraLots", "BonusOfficer", "VIP", "MegaVIP", "CrateLuck" }
+C.PassOrder = { "FastConvoys", "AutoDispatch", "ExtraConvoys", "ExtraLots", "BonusOfficer", "VIP", "MegaVIP", "CrateLuck", "CustomFlag" }
 
 C.Products = {
 	Crate1 = { id = 3715911170, robux = 29, crates = 1 },
@@ -26,6 +27,7 @@ C.Products = {
 	GoldHuge = { id = 3715911358, robux = 699, gold = 1000 },
 	TreasuryGrant = { id = 3715911479, robux = 49 },
 	InfluenceRefill = { id = 3715911506, robux = 19 },
+	InfluenceRefillFirst = { id = 3715930196, robux = 9 }, -- first refill ever is cheap (Kash 19:19)
 	SupplyRefill = { id = 3715911507, robux = 19 },
 	RaidShield = { id = 3715911508, robux = 39, hours = 4 },
 	InstantArmy = { id = 3715911510, robux = 49 },
@@ -108,7 +110,7 @@ C.Officers = {
 
 C.Crates = {
 	-- the first limited crate (rotates later). Same crate, two prices: gold or Robux.
-	Limited = { key = "limited", name = "FOUNDER'S CRATE", gold = 150, ends = 1793145600 }, -- 2026-10-29 00:00 UTC
+	Limited = { key = "limited", name = "FOUNDER'S CRATE", gold = 150, ends = 1791522000 }, -- 7 days (Kash 19:19): 2026-10-09 05:00 UTC
 	-- free-to-play crate bought with in-game cash: price is this many minutes of law income at your level
 	Basic = { key = "basic", name = "SUPPLY CRATE", lawMinutes = 30 },
 }
