@@ -174,7 +174,7 @@ end
 ---------------------------------------------------------------- bonuses
 -- sum of every slotted officer's traits plus the gear worn by the player and slotted officers
 -- returns { law=0.12, attack=0.3, ... } as fractions, plus atkGear/defGear
-function O.Bonuses(cab, inv)
+function O.Bonuses(cab, inv, maxSlots)
 	local b = {}
 	for _, t in ipairs(O.Traits) do b[t.key] = 0 end
 	b.gearAtk, b.gearDef = 0, 0
@@ -189,8 +189,8 @@ function O.Bonuses(cab, inv)
 		end
 	end
 	wear(cab.player)
-	for _, oid in ipairs(cab.slots or {}) do
-		local o = oid and inv.officers[oid]
+	for si, oid in ipairs(cab.slots or {}) do
+		local o = oid and (not maxSlots or si <= maxSlots) and inv.officers[oid]
 		if o then
 			for _, t in ipairs(o.traits) do b[t.k] += t.v end
 			wear(o)

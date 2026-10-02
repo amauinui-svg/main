@@ -81,7 +81,7 @@ function PS.Mods(p)
 	local perks = WS.Perks(d.alliance)
 	local a = d.alliance and WS.Alliances[d.alliance]
 	local war = a and a.up and a.up.war or 0
-	local b = O.Bonuses(d.cab, d.inv) -- slotted officers + worn gear
+	local b = O.Bonuses(d.cab, d.inv, PS.OfficerSlots(p)) -- slotted officers + worn gear (only slots you own)
 	local vt = PS.VipTier(p)
 	local vip = (vt and vt.cash or 0) + (p.premium and Config.PremiumBonus or 0) + (p.inGroup and Config.Group.Bonus or 0)
 	local vipRegen = vt and vt.regen or 0
