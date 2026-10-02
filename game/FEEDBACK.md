@@ -64,3 +64,14 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
   cost a small repeatable product (~25 Robux).
 - Q13 Soldier losses APPROVED: sweep winner ~2% / loser ~20%; clear win 5% / 15%; close fight 10% / 12%.
   Defenders lose too. Cheapest soldiers die first. Losses shown on the result screen and raid notice with REBUILD.
+- Q14 OFFICERS (Kash's design, replaces my circle layout):
+  * Plain stacked PANELS: the PLAYER is always the top panel; officer slots listed below.
+  * Start with 1 officer slot. Each extra slot costs money, and every slot costs more than the last.
+  * Officers are generated: a RARITY plus a set of random TRAITS (more money, attack, defense, fewer soldier deaths,
+    etc.). Number/size/type of traits scale with rarity; rarer = better.
+  * HIRING has 3 options: CHEAP, MEDIUM, EXPENSIVE. Same prices for every player (NOT level-scaled); EXPENSIVE is
+    extremely late game. Better tiers = better odds of rarer officers and different traits.
+  * NO duplicates and no merging: every hire is a unique officer with its own name.
+  * Players can FIRE officers; firing gives nothing back.
+  * So both unlocking slots and hiring officers cost money.
+  (Assumed "money" = in-game cash; confirm. Weapons/armor still equip on the player and officers.)
