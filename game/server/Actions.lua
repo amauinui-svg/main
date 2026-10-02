@@ -388,6 +388,25 @@ function act.taskRefresh(plr, p, a)
 	return ok()
 end
 
+---------------------------------------------------------------- settings + meta prompts
+local SETTINGS = { music = "bool", sfx = "bool", toasts = "bool", confirmBig = "bool", shortNumbers = "bool", autoClaim = "bool", reduceMotion = "bool", mapLabels = "bool" }
+function act.saveSettings(plr, p, a)
+	local kind = SETTINGS[a.key]
+	if not kind then return no("Unknown setting") end
+	if type(a.value) ~= "boolean" then return no("Bad value") end
+	p.data.settings = p.data.settings or {}
+	p.data.settings[a.key] = a.value
+	return ok()
+end
+-- the favorite prompt (shown after a big moment, once per session) reports back so it never shows again once favorited
+function act.favResult(plr, p, a)
+	local d = p.data
+	d.meta = d.meta or {}
+	d.meta.favShown = (d.meta.favShown or 0) + 1
+	if a.favorited == true then d.meta.favorited = true end
+	return ok()
+end
+
 -- Seals shop
 function act.sealBuy(plr, p, a)
 	local d = p.data

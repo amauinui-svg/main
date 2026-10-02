@@ -23,6 +23,10 @@ function MK.CheckPasses(plr, p)
 	end
 	-- Premium players get a small bonus too (Kash 17:22)
 	p.premium = plr.MembershipType == Enum.MembershipType.Premium or nil
+	if Config.Group.Id ~= 0 then
+		local okG, inG = pcall(plr.IsInGroup, plr, Config.Group.Id)
+		p.inGroup = okG and inG or nil
+	end
 	if p.data.onboarded then PS.GrantVipOfficer(p) end
 	plr:SetAttribute("IC_Vip", (p.gp.MegaVIP and "MEGA VIP") or (p.gp.VIP and "VIP") or nil)
 end

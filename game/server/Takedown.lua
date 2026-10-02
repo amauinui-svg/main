@@ -134,7 +134,7 @@ function TD.View(p)
 	local copy = { td = a.td and table.clone(a.td) or nil, count = a.count }
 	if copy.td then copy.td = { week = a.td.week, ref = a.td.ref, dmg = table.clone(a.td.dmg), log = table.clone(a.td.log), cleared = a.td.cleared,
 		stage = a.td.stage, hp = table.clone(a.td.hp), max = table.clone(a.td.max) } end
-	if pending[d.alliance] and copy.td then apply(copy, pending[d.alliance].hits) end
+	if pending[d.alliance] and #pending[d.alliance].hits > 0 then apply(copy, pending[d.alliance].hits) end
 	local td = copy.td
 	if not td or td.week ~= week() then
 		v.stage, v.cleared, v.enemies, v.log, v.board = 1, 0, nil, {}, {}

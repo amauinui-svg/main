@@ -2415,6 +2415,8 @@ function PS.Snapshot(p)
 		crates = d.crates, basicCratePrice = PS.BasicCratePrice(p), login = d.login, loginReady = PS.LoginReady(p),
 		weekly = d.weekly, refresh = d.refresh, bundle = d.bundle, duesRate = PS.DuesRate(p),
 		targets = PS.Raids and PS.Raids.Targets(p) or {},
+		settings = d.settings or {}, meta = d.meta or {}, inGroup = p.inGroup or false, premium = p.premium or false, groupId = Config.Group.Id,
+		vip = (PS.VipTier(p) or {}).tag, version = Config.Version, td = d.td,
 	}
 end
 function PS.BasicCratePrice(p) return math.floor(R.MinuteValue(p.data.lv) * Config.Crates.Basic.lawMinutes) end
@@ -2713,6 +2715,10 @@ function MK.CheckPasses(plr, p)
 	end
 	-- Premium players get a small bonus too (Kash 17:22)
 	p.premium = plr.MembershipType == Enum.MembershipType.Premium or nil
+	if Config.Group.Id ~= 0 then
+		local okG, inG = pcall(plr.IsInGroup, plr, Config.Group.Id)
+		p.inGroup = okG and inG or nil
+	end
 	if p.data.onboarded then PS.GrantVipOfficer(p) end
 	plr:SetAttribute("IC_Vip", (p.gp.MegaVIP and "MEGA VIP") or (p.gp.VIP and "VIP") or nil)
 end
@@ -3269,7 +3275,7 @@ function TD.View(p)
 	local copy = { td = a.td and table.clone(a.td) or nil, count = a.count }
 	if copy.td then copy.td = { week = a.td.week, ref = a.td.ref, dmg = table.clone(a.td.dmg), log = table.clone(a.td.log), cleared = a.td.cleared,
 		stage = a.td.stage, hp = table.clone(a.td.hp), max = table.clone(a.td.max) } end
-	if pending[d.alliance] and copy.td then apply(copy, pending[d.alliance].hits) end
+	if pending[d.alliance] and #pending[d.alliance].hits > 0 then apply(copy, pending[d.alliance].hits) end
 	local td = copy.td
 	if not td or td.week ~= week() then
 		v.stage, v.cleared, v.enemies, v.log, v.board = 1, 0, nil, {}, {}
@@ -3740,6 +3746,25 @@ function act.taskRefresh(plr, p, a)
 		end
 		return no(err)
 	end
+	return ok()
+end
+
+---------------------------------------------------------------- settings + meta prompts
+local SETTINGS = { music = "bool", sfx = "bool", toasts = "bool", confirmBig = "bool", shortNumbers = "bool", autoClaim = "bool", reduceMotion = "bool", mapLabels = "bool" }
+function act.saveSettings(plr, p, a)
+	local kind = SETTINGS[a.key]
+	if not kind then return no("Unknown setting") end
+	if type(a.value) ~= "boolean" then return no("Bad value") end
+	p.data.settings = p.data.settings or {}
+	p.data.settings[a.key] = a.value
+	return ok()
+end
+-- the favorite prompt (shown after a big moment, once per session) reports back so it never shows again once favorited
+function act.favResult(plr, p, a)
+	local d = p.data
+	d.meta = d.meta or {}
+	d.meta.favShown = (d.meta.favShown or 0) + 1
+	if a.favorited == true then d.meta.favorited = true end
 	return ok()
 end
 
