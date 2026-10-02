@@ -58,3 +58,7 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
   Free path: cash-bought basic crate, gold from bosses/tasks/login/weekly.
   Crates: Kash is fine with either two variants (gold crate + Robux crate) or ONE crate with TWO PRICES (Robux or gold).
   Chosen: one crate, two prices (gold OR Robux), so free and paying players chase the same items.
+- Q12 Weekly challenges: APPROVED as proposed (5 per week, reset Monday, big gold + crate each, weekly chest with
+  guaranteed Rare+ for all 5; daily pool grows to ~20).
+  NEW monetization: REFRESH a challenge. One FREE refresh per day (swap one task you don't want); extra refreshes
+  cost a small repeatable product (~25 Robux).
