@@ -13,3 +13,8 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 7. OPEN - Monetization: lean on repeatable developer products (like eggs in his best game, buyable free-to-play or
    with Robux). Wants a limited-time crate players can buy. Find more ideas like this.
 8. Process: Studio is closed, no build work now. Ask questions ONE BY ONE before building.
+
+## Answers (1 Oct)
+- Q1 Raids: YES, cash is stolen from real players. Winner takes 10% of the defender's cash on hand, with a cap
+  (planned: at most ~1 hour of the defender's own law income per raid), banked cash is safe, the defender is notified,
+  and each player can be raided at most once every 15 minutes. The 3 AI players per server follow the same rules.
