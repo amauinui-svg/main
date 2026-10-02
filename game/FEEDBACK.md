@@ -91,3 +91,23 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
   Creator Dashboard via the built-in browser, and wire their ids into the game. Studio is open.
 - NEW (16:40): a COUNTRY tab. Shows a nice image of what your country looks like (changes with the ERA), your level and
   a few other stats, and the stat upgrades (skill points) live here, so there is no separate Skills tab.
+- NEW (16:45) REFERENCE SCREENSHOTS from the competitor (Idle Mafia): loading screen, Safehouse, Crew, locked slot,
+  hire tiers, hire odds, inventory, properties. What Kash wants copied:
+  * COUNTRY tab like their SAFEHOUSE: a big wide scene image on top, then a title bar ("DOCKSIDE WAREHOUSE",
+    "SAFEHOUSE LEVEL 5 OF 16", "+12% income/attack/defense", NEXT: ... REQUIRES LEVEL 30), then daily playtime
+    rewards row, then YOUR STATS / YOUR UPGRADES.
+  * OFFICERS like their CREW: header with count, +ATTACK, +DEFENSE, size bonus; UNEQUIP ALL / AUTO EQUIP BEST;
+    one ROW per member (YOU on top, gold border): portrait, name + rarity, attack/defense, a box per equipment
+    slot (item image + name + rarity, border in rarity color), AUTO ROLL, DISMISS, move up/down arrows.
+    EMPTY SLOT row: HIRE ODDS + 3 tier buttons (Street $10K / Professional $10M / Elite $10B).
+    LOCKED SLOT row: "Each slot costs more than the last" + UNLOCK SLOT $price.
+  * HIRE ODDS popup with 8 rarities: common, uncommon, rare, epic, legendary, mythic, secret, forbidden, and an
+    "Increase your luck!" button (their luck pass is 520 Robux). Copy their odds.
+  * INVENTORY: filter tabs (All, Weapons, Armor, Crates, ...), rarity dropdown, a grid of cards: type tag, item
+    IMAGE, xN count, name, stat line, rarity bar at the bottom, border in rarity color.
+  * PROPERTIES: square tiles with illustrated isometric buildings on a dark textured ground, name tag on top, $/hr
+    + progress at the bottom; HOVER LIFTS the building off the ground; nice FOR SALE (+ Tap to Build) and LOCKED
+    (fence + padlock) tile backgrounds.
+  * ALL items are real IMAGES. Art should look like painted/generated illustrations ("actual photos that are either
+    generated or designed"), not flat vector icons. My round 2 images were "not the greatest".
+  * Make the game feel much more polished/published. Use Claude Design if possible, otherwise find a better way.
