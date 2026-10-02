@@ -85,3 +85,7 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
   Raid Shield 4h 39; Instant Army 49; Revenge Strike 49; Finish convoy 9/19/29/49; Challenge refresh 19;
   Move Capital 99; Limited Bundle 999.
   Passes: Express 249, Auto Dispatch 399, +2 Convoys 199, +3 Lots 149, Bonus Officer slot 299, VIP 499, 2x Crate Luck 349.
+- Q17 ART: crates, gear and officers in the SAME art style, but they must look really cool and STAND OUT from
+  everything else: add VFX / auras (rarity glow, shimmer).
+- GO (1 Oct, 16:20): start the autonomous pass. Kash asked me to create ALL game passes and developer products in the
+  Creator Dashboard via the built-in browser, and wire their ids into the game. Studio is open.
