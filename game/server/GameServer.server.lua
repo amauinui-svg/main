@@ -100,7 +100,26 @@ if game:GetService("RunService"):IsStudio() then
 	local HttpService = game:GetService("HttpService")
 	local dbg = game.ServerStorage:FindFirstChild("IC_Debug") or Instance.new("BindableFunction")
 	dbg.Name = "IC_Debug"; dbg.Parent = game.ServerStorage
-	dbg.OnInvoke = function(cmd, a, b)
+	local handle
+	-- bridge for sandboxed tools that cannot invoke the BindableFunction: they create a StringValue named IC_DebugReq
+	-- (in ServerStorage or workspace) with attributes cmd/a/b (b as JSON), and get the answer in attribute "res".
+	task.spawn(function()
+		while true do
+			task.wait(0.1)
+			for _, host in ipairs({ game.ServerStorage, workspace }) do
+				for _, req in ipairs(host:GetChildren()) do
+					if req.Name == "IC_DebugReq" and req:GetAttribute("cmd") and req:GetAttribute("res") == nil then
+						local b = req:GetAttribute("b")
+						if type(b) == "string" and (b:sub(1, 1) == "{" or b:sub(1, 1) == "[") then b = HttpService:JSONDecode(b) end
+						local ok, r = pcall(handle, req:GetAttribute("cmd"), req:GetAttribute("a"), b)
+						req:SetAttribute("res", ok and tostring(r) or ("ERR " .. tostring(r)))
+					end
+				end
+			end
+		end
+	end)
+	dbg.OnInvoke = function(...) return handle(...) end
+	handle = function(cmd, a, b)
 		local plr, p = next(PS.Profiles)
 		if cmd == "world" then return HttpService:JSONEncode(WS.PublicState()) end
 		if not p then return "no profile" end
@@ -108,6 +127,8 @@ if game:GetService("RunService"):IsStudio() then
 			local d = p.data
 			return HttpService:JSONEncode({ key = workspace:GetAttribute("IC_TestProfile") and "test" or "LIVE", cash = d.cash, gold = d.gold, lv = d.lv, xp = d.xp, inf = d.inf, sup = d.sup, home = d.home, name = d.name,
 				onboarded = d.onboarded, lots = d.lots, convoys = d.convoys, sk = d.sk, units = d.units, alliance = d.alliance, gp = p.gp, canSave = p.canSave, tasks = d.tasks, boss = d.boss, loan = d.loan })
+		elseif cmd == "get" then
+			return HttpService:JSONEncode(a and p.data[a] or PS.Snapshot(p))
 		elseif cmd == "set" then
 			if not workspace:GetAttribute("IC_TestProfile") then return "refused: not a test profile" end
 			p.data[a] = b; PS.Sync(plr); return "ok"
