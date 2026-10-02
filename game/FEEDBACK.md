@@ -18,3 +18,7 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 - Q1 Raids: YES, cash is stolen from real players. Winner takes 10% of the defender's cash on hand, with a cap
   (planned: at most ~1 hour of the defender's own law income per raid), banked cash is safe, the defender is notified,
   and each player can be raided at most once every 15 minutes. The 3 AI players per server follow the same rules.
+- Q1b Raid cooldown: about 1 MINUTE (not 15). Read as: the same player can be raided again after ~1 min.
+- Q2 AI players FIGHT BACK (raid real players too) so every server feels alive even when people don't attack each other.
+  NO "bank your cash" nudge: players should discover the bank on their own.
+  YES a REVENGE nudge: the raid notice offers a one-tap revenge attack on whoever raided you.
