@@ -130,3 +130,24 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
     5% less energy, +1 SKILL POINT. A "Mastery 47/50 to Silver" bar under each job. Gives a reason to do every law.
   * IMAGE GENERATION must be AUTONOMOUS: find an app/API so I generate, review, import and wire images myself,
     instead of Kash generating by hand.
+- NEW (16:54) TWO VIP PASSES (both give a VIP CHAT TAG):
+  * VIP ~499 Robux: more cash and faster Influence/energy regen.
+  * MEGA VIP ~899 Robux: +25% cash, +25% energy (Influence) regen, and a unique LIMITED officer.
+  * PLAYER PROFILE popup (like theirs): big avatar with level badge (VIP badge, ranking border frames, cool themed
+    backgrounds), EQUIPPED gear tiles, alliance + role, STATS (power, attack, defense, officers), ALLIANCE
+    CONTRIBUTIONS, rankings chips, LAST ACTIVE / ONLINE NOW, SCOUT button, red ATTACK button. You can attack anyone
+    from the RANKINGS (Players / Weekly / Alliances; Top power/cash/property value/level/wins; podium for top 3,
+    "Your standing", ranking border rewards Top 1/2/3/10/100 giving +attack/+defense). "You were scouted" toast.
+  * Asked if OpenAI is the easiest/cheapest autonomous route; he got OpenAI free daily tokens.
+- NEW (17:22) CONVOYS + META:
+  * Distance alone should NOT mean more pay. Pay depends on going to a DIFFERENT REGION with different resources
+    (Europe->Asia, Americas->Asia, Asia->Africa pay a lot).
+  * WANTS change with player activity: each convoy sent to a capital adds a tick for that good; after enough ticks
+    the capital switches to wanting something else. The payout is LOCKED when you send, so it never changes en route.
+  * Convoy icon by terrain: land icon on land, boat on water; later eras use trains, cars, better ships, rockets.
+  * LATER (once tuned): scale everything into multiple stages for hours of progression.
+  * PREMIUM bonus for Roblox Premium players. A GAME DESCRIPTION. GROUP bonus + join-group popup.
+  * FAVORITE popup: shown behind the scenes after a big achievement (also on later sessions, e.g. day 3, 5th visit),
+    max once per session, never if already in the group/favorited.
+  * SETTINGS button top-right: many quality-of-life settings, a CHANGELOG (date + version per entry) and a GAME
+    INFO/mechanics guide that uses images and colors as much as possible. All polished and clean.
