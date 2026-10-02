@@ -29,7 +29,7 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 - Q4 Bank interest: 1.5% per hour (planned: paid every minute online, half rate offline, offline capped at 12 h).
 - NEW (Kash idea): alliance leaders can set a JOIN FEE (cash to join, goes to the treasury) and optional DUES
   (a rate charged for staying in the alliance). Goal: more diverse kinds of alliances.
-- Q5 Dues: percentage of members' earnings (0-10%, to the treasury). PLUS a political option: the leader chooses
+- Q5 Dues: PERCENTAGES confirmed by Kash. Percentage of members' earnings (0-10%, to the treasury). PLUS a political option: the leader chooses
   whether higher levels pay more, lower levels pay more, or everyone pays the same.
   Planned: leader sets a base % and a style (Flat / Progressive: higher levels pay more / Regressive: lower levels
   pay more), each member's rate scaling from half to double the base by level within the alliance, never above 15%.
