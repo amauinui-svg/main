@@ -26,3 +26,6 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
   NO buying straight from the bank: players must withdraw first. Loan system stays as is.
   UI rule (all screens): cut descriptions down. Put details behind a small "i" icon (letter i in a circle) that
   players hover or tap to open a short tab explaining that system.
+- Q4 Bank interest: 1.5% per hour (planned: paid every minute online, half rate offline, offline capped at 12 h).
+- NEW (Kash idea): alliance leaders can set a JOIN FEE (cash to join, goes to the treasury) and optional DUES
+  (a rate charged for staying in the alliance). Goal: more diverse kinds of alliances.
