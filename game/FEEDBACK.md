@@ -22,3 +22,7 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 - Q2 AI players FIGHT BACK (raid real players too) so every server feels alive even when people don't attack each other.
   NO "bank your cash" nudge: players should discover the bank on their own.
   YES a REVENGE nudge: the raid notice offers a one-tap revenge attack on whoever raided you.
+- Q3 Bank: withdraw is free (yes). Players EARN INTEREST on their bank balance (yes). NO deposit cap.
+  NO buying straight from the bank: players must withdraw first. Loan system stays as is.
+  UI rule (all screens): cut descriptions down. Put details behind a small "i" icon (letter i in a circle) that
+  players hover or tap to open a short tab explaining that system.
