@@ -200,3 +200,9 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
     (switch between ARMY and OFFICERS). No separate Officers tab.
   * Don't call the task currency "Seals": rename it.
   * Every property should have its OWN unique image (all 144), flawless.
+- NEW (19:24) TOP BAR + MISC:
+  * Description: simpler, with a short emoji bullet list rundown, and mention PREMIUM benefits (Roblox recommends it).
+  * Top bar: label the bars "INFLUENCE" and "SUPPLY"; the gold icon must look like real GOLD BARS and be bigger;
+    use the empty space; show the task currency (ex-Seals) up there too.
+  * NEW PASS (99 Robux), in the Country tab: CUSTOM FLAG: many more flag options, or import your own flag image.
+  * AI nations must NOT be labeled "AI" anywhere (they should look like any other nation).
