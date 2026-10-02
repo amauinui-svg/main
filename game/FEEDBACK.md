@@ -111,3 +111,14 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
   * ALL items are real IMAGES. Art should look like painted/generated illustrations ("actual photos that are either
     generated or designed"), not flat vector icons. My round 2 images were "not the greatest".
   * Make the game feel much more polished/published. Use Claude Design if possible, otherwise find a better way.
+- ART DECISION (16:46): BOTH. I ship detailed drawn art now so the game works; I also write a prompt pack so Kash can
+  generate painted images (ChatGPT/Gemini/Midjourney) and I swap them in as they arrive.
+- NEW (16:47) ALLIANCE tab like their FAMILY > TAKEDOWN (our own version):
+  * Sub tabs (Overview, Members, Perks, Takedown, War, Audit log, Manage, Browse).
+  * WEEKLY TAKEDOWN: a big illustrated scene with enemy characters (name + HP bar each), YOU portrait + HP and a big
+    ATTACK button (GET TICKETS when out), 5 STAGES along the bottom with progress.
+  * Header boxes: FREE ATTACKS 7/10 (+1 per hour), TICKETS (used after free attacks), YOUR WEEKLY DAMAGE + rank in
+    the alliance. Buttons: REWARDS, LEADERBOARDS, RECENT ATTACKS (popup log, "BIG HIT" crits).
+  * TICKETS come from a separate task currency: their CONTRACTS tab has Daily (easy/medium/hard + a bonus for all 5)
+    and Weekly tasks (+ bonus for all 5) that pay SEALS + cash, a free REPLACE per task, and a CONTRACTS SHOP where
+    seals buy tickets etc. Seals are separate from gold and are not tradable.
