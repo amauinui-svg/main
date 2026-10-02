@@ -563,7 +563,8 @@ function PS.Load(plr)
 		return
 	end
 	data = sanitize(data)
-	local p = { data = data, canSave = canSave and Store.Online, gp = {}, notes = {}, lastAct = 0, userId = plr.UserId, player = plr, pending = {} }
+	local p = { data = data, canSave = canSave and Store.Online, gp = {}, notes = {}, lastAct = 0, userId = plr.UserId, player = plr, pending = {}, loading = true }
+	local lastSeen = data.last -- captured before any yield: Step must not overwrite it before CatchUp (review #1)
 	PS.Profiles[plr] = p
 	if data.alliance then
 		local a, readOk = WS.LoadAlliance(data.alliance)
@@ -574,7 +575,9 @@ function PS.Load(plr)
 	PS.EnsureTasks(p)
 	PS.MemberLevel(p)
 	PS.EnsureConvoys(p)
+	data.last = lastSeen or data.last
 	PS.CatchUp(p)
+	p.loading = nil
 	PS.Sync(plr)
 	if not canSave then PS.Note(p, { kind = "toast", text = "Your save could not be loaded. Progress this session will NOT be saved. Rejoin to retry.", tone = "bad" }) end
 	return p
@@ -675,7 +678,8 @@ function PS.Start()
 	Players.PlayerAdded:Connect(PS.Load)
 	for _, plr in ipairs(Players:GetPlayers()) do task.spawn(PS.Load, plr) end
 	Players.PlayerRemoving:Connect(function(plr)
-		if PS.Profiles[plr] then PS.Save(plr, true) end
+		local p = PS.Profiles[plr]
+		if p then p.leaving = true; PS.Save(plr, true) end
 		PS.Profiles[plr] = nil
 	end)
 	game:BindToClose(function()
@@ -690,6 +694,7 @@ function PS.Start()
 			task.wait(1)
 			clock += 1
 			for plr, p in pairs(PS.Profiles) do
+				if p.loading or p.leaving then continue end
 				local ok, err = pcall(PS.Step, plr, p)
 				if not ok then warn("[Idle Country] tick " .. plr.Name .. ": " .. tostring(err)) end
 			end

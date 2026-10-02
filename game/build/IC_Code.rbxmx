@@ -1276,7 +1276,7 @@ function O.NewOfficer(rng, rarityIndex, avoidTrait)
 	local rar = O.Rarities[rarityIndex]
 	local traits = pickTraits(rng, rar, avoidTrait)
 	return {
-		id = string.format("o%x%04x", os.time(), rng:NextInteger(0, 65535)),
+		id = string.format("o%x%06x", os.time(), rng:NextInteger(0, 16777215)),
 		name = FIRST[rng:NextInteger(1, #FIRST)] .. " " .. LAST[rng:NextInteger(1, #LAST)],
 		rarity = rar.key, traits = traits, title = O.TraitByKey[traits[1].k].title,
 		portrait = rng:NextInteger(1, O.Portraits), hired = os.time(),
@@ -1299,7 +1299,7 @@ function O.NewGear(rng, rarityIndex, kind)
 	local adj = ADJ[rarityIndex]
 	local rar = O.Rarities[rarityIndex]
 	local g = {
-		id = string.format("g%x%04x", os.time(), rng:NextInteger(0, 65535)),
+		id = string.format("g%x%06x", os.time(), rng:NextInteger(0, 16777215)),
 		kind = kind, type = t[1], icon = t[2], rarity = rar.key,
 		name = adj[rng:NextInteger(1, #adj)] .. " " .. t[1], power = rar.gear,
 	}
@@ -1786,8 +1786,11 @@ function WS.MutateAlliance(id, fn)
 				end
 			end
 		else
-			WS.Index[id] = summary(a)
-			writeIndex(id, WS.Index[id])
+			local s = summary(a)
+			local old = WS.Index[id]
+			WS.Index[id] = s
+			-- skip the shared index write when nothing in the summary changed (review #5)
+			if not old or HttpService:JSONEncode(old) ~= HttpService:JSONEncode(s) then writeIndex(id, s) end
 		end
 		publish("a", id)
 	end
@@ -1888,8 +1891,9 @@ function WS.Credit(aid, amount)
 	pendingTreasury[aid] = (pendingTreasury[aid] or 0) + amount
 end
 function WS.FlushTreasury()
-	for aid, amt in pairs(pendingTreasury) do
-		pendingTreasury[aid] = nil
+	local batch = pendingTreasury
+	pendingTreasury = {}
+	for aid, amt in pairs(batch) do
 		local rec, err = WS.MutateAlliance(aid, function(a) a.treasury = (a.treasury or 0) + amt; return a, true end)
 		if not rec and err ~= "Alliance not found" then pendingTreasury[aid] = (pendingTreasury[aid] or 0) + amt end
 	end
@@ -1925,7 +1929,7 @@ function WS.Attack(i, aid, dmg, plrName)
 			local fort = (winner and winner.up and winner.up.fort) or 0
 			local g = math.floor(WS.CityGarrison(i) * (1 + 0.10 * fort))
 			result.captured = true; result.winner = bestId; result.prevOwner = c.owner
-			c.owner = bestId; c.hp = g; c.maxHp = g; c.prot = now() + AC.ProtectSeconds; c.contrib = {}; c.tax = 5; c.taxSet = 0
+			c.owner = bestId; c.hp = g; c.maxHp = g; c.prot = now() + AC.ProtectSeconds; c.contrib = {}; c.tax = 5; c.taxSet = 0; c.rent = 0; c.rentSet = 0
 		end
 		return c
 	end)
@@ -2658,7 +2662,8 @@ function PS.Load(plr)
 		return
 	end
 	data = sanitize(data)
-	local p = { data = data, canSave = canSave and Store.Online, gp = {}, notes = {}, lastAct = 0, userId = plr.UserId, player = plr, pending = {} }
+	local p = { data = data, canSave = canSave and Store.Online, gp = {}, notes = {}, lastAct = 0, userId = plr.UserId, player = plr, pending = {}, loading = true }
+	local lastSeen = data.last -- captured before any yield: Step must not overwrite it before CatchUp (review #1)
 	PS.Profiles[plr] = p
 	if data.alliance then
 		local a, readOk = WS.LoadAlliance(data.alliance)
@@ -2669,7 +2674,9 @@ function PS.Load(plr)
 	PS.EnsureTasks(p)
 	PS.MemberLevel(p)
 	PS.EnsureConvoys(p)
+	data.last = lastSeen or data.last
 	PS.CatchUp(p)
+	p.loading = nil
 	PS.Sync(plr)
 	if not canSave then PS.Note(p, { kind = "toast", text = "Your save could not be loaded. Progress this session will NOT be saved. Rejoin to retry.", tone = "bad" }) end
 	return p
@@ -2770,7 +2777,8 @@ function PS.Start()
 	Players.PlayerAdded:Connect(PS.Load)
 	for _, plr in ipairs(Players:GetPlayers()) do task.spawn(PS.Load, plr) end
 	Players.PlayerRemoving:Connect(function(plr)
-		if PS.Profiles[plr] then PS.Save(plr, true) end
+		local p = PS.Profiles[plr]
+		if p then p.leaving = true; PS.Save(plr, true) end
 		PS.Profiles[plr] = nil
 	end)
 	game:BindToClose(function()
@@ -2785,6 +2793,7 @@ function PS.Start()
 			task.wait(1)
 			clock += 1
 			for plr, p in pairs(PS.Profiles) do
+				if p.loading or p.leaving then continue end
 				local ok, err = pcall(PS.Step, plr, p)
 				if not ok then warn("[Idle Country] tick " .. plr.Name .. ": " .. tostring(err)) end
 			end
@@ -3036,7 +3045,13 @@ function MK.Start()
 		local p = PS.Profiles[plr]
 		if not p then return end
 		for key, pass in pairs(Config.Passes) do
-			if pass.id == id then p.gp[key] = true; PS.Note(p, { kind = "toast", text = pass.name .. " unlocked!", tone = "good" }) end
+			if pass.id == id then
+				-- verify with Roblox before granting anything permanent (review #8)
+				local okO, owns = pcall(MarketplaceService.UserOwnsGamePassAsync, MarketplaceService, plr.UserId, id)
+				if (okO and owns) or (Store.IsStudio and Config.StudioGrantsPasses) then
+					p.gp[key] = true; PS.Note(p, { kind = "toast", text = pass.name .. " unlocked!", tone = "good" })
+				end
+			end
 		end
 		PS.EnsureConvoys(p)
 		PS.GrantVipOfficer(p)
@@ -3205,7 +3220,7 @@ function RA.Targets(p)
 	local list = {}
 	local t = now()
 	for plr, q in pairs(PS.Profiles) do
-		if q ~= p and q.data.onboarded then
+		if q ~= p and q.data.onboarded and not q.loading and not q.leaving then
 			local _, def = PS.Power(q)
 			local id = "u" .. plr.UserId
 			table.insert(list, {
@@ -3272,7 +3287,7 @@ local function findTarget(id)
 	local uid = tonumber(id:match("^u(%d+)$"))
 	local plr = uid and Players:GetPlayerByUserId(uid)
 	local q = plr and PS.Profiles[plr]
-	if q and q.data.onboarded then return q, nil, plr end
+	if q and q.data.onboarded and not q.loading and not q.leaving then return q, nil, plr end
 	return nil
 end
 
@@ -3286,6 +3301,10 @@ function RA.Attack(plr, p, id, guaranteed)
 	if q == p then return { ok = false, msg = "You cannot raid yourself" } end
 	local t = now()
 	if (lastHit[id] or 0) + RC.Cooldown > t then return { ok = false, msg = "They were just raided. Try again in " .. ((lastHit[id] or 0) + RC.Cooldown - t) .. "s" } end
+	-- you can't hammer the same target: one attack per target per cooldown, win or lose (review #7)
+	p.raidCd = p.raidCd or {}
+	if not guaranteed and (p.raidCd[id] or 0) + RC.Cooldown > t then return { ok = false, msg = "You just attacked them. Try again in " .. ((p.raidCd[id] or 0) + RC.Cooldown - t) .. "s" } end
+	if not guaranteed then p.raidCd[id] = t end
 	if q and (q.data.shield or 0) > t then return { ok = false, msg = "They are under a raid shield" } end
 	if not guaranteed then
 		if d.sup < RC.Supply then return { ok = false, msg = "Not enough Supply (" .. RC.Supply .. " needed)" } end
@@ -3354,7 +3373,7 @@ local function aiRaid()
 	local t = now()
 	for plr, q in pairs(PS.Profiles) do
 		local d = q.data
-		if d.onboarded and d.lv >= RC.AIMinTargetLevel and (d.shield or 0) <= t and (lastHit["u" .. plr.UserId] or 0) + RC.Cooldown <= t
+		if d.onboarded and not q.loading and not q.leaving and d.lv >= RC.AIMinTargetLevel and (d.shield or 0) <= t and (lastHit["u" .. plr.UserId] or 0) + RC.Cooldown <= t
 			and d.cash > R.MinuteValue(d.lv) * 10 then
 			table.insert(candidates, { plr, q })
 		end
@@ -3452,6 +3471,18 @@ local function enemyHp(td, stage, members)
 	if stage == 5 then base *= 3 end
 	return math.floor(base)
 end
+local function memberCount(a)
+	local n = 0
+	for _ in pairs(a.members or {}) do n += 1 end
+	return math.max(1, n)
+end
+-- difficulty reference: the strongest attack seen this week, floored by the members' average level (review #3)
+local function refOf(a, td)
+	local sum, n = 0, 0
+	for _, m in pairs(a.members or {}) do if m.lv then sum += m.lv; n += 1 end end
+	local floor = n > 0 and 20 * sum / n or 10
+	return math.max(td.refMax or td.ref or 10, floor)
+end
 local function newStage(td, stage, members)
 	td.stage = stage
 	td.hp, td.max = {}, {}
@@ -3464,8 +3495,9 @@ end
 local function ensure(a, refAtk)
 	local w = week()
 	if not a.td or a.td.week ~= w then
-		a.td = { week = w, ref = math.max(10, refAtk or 10), dmg = {}, log = {}, cleared = 0 }
-		newStage(a.td, 1, a.count or 1)
+		a.td = { week = w, ref = math.max(10, refAtk or 10), refMax = refAtk, dmg = {}, log = {}, cleared = 0 }
+		a.td.ref = refOf(a, a.td)
+		newStage(a.td, 1, memberCount(a))
 	end
 	return a.td
 end
@@ -3475,6 +3507,7 @@ local function apply(a, hits)
 	local td = ensure(a, hits[1] and hits[1].ref)
 	for _, h in ipairs(hits) do
 		if td.stage > 5 then break end
+		td.refMax = math.max(td.refMax or 0, h.ref or 0)
 		local e = h.e
 		if not td.hp[e] or td.hp[e] <= 0 then
 			e = nil
@@ -3483,7 +3516,7 @@ local function apply(a, hits)
 		if e then
 			local dealt = math.min(td.hp[e], h.dmg)
 			td.hp[e] -= dealt
-			td.dmg[h.uid] = (td.dmg[h.uid] or 0) + h.dmg
+			td.dmg[h.uid] = (td.dmg[h.uid] or 0) + dealt -- count damage actually dealt (review #12)
 			local who = TD.Enemies[td.stage][e][1]
 			if who == "" then who = TD.Target(td.week).stages[5] end
 			table.insert(td.log, 1, { t = h.t, who = h.who, e = who, dmg = h.dmg, big = h.big })
@@ -3493,7 +3526,7 @@ local function apply(a, hits)
 			if not alive then
 				td.cleared = td.stage
 				WS.AddLog(a, "Takedown stage " .. td.stage .. " cleared: " .. TD.Target(td.week).stages[td.stage])
-				if td.stage < 5 then newStage(td, td.stage + 1, a.count or 1) else td.stage = 6 end
+				if td.stage < 5 then td.ref = refOf(a, td); newStage(td, td.stage + 1, memberCount(a)) else td.stage = 6 end
 			end
 		end
 	end
@@ -3501,8 +3534,10 @@ local function apply(a, hits)
 end
 
 function TD.Flush()
-	for aid, q in pairs(pending) do
-		pending[aid] = nil
+	-- swap the table first: new hits arriving while we yield go to the next batch (review #4)
+	local batch = pending
+	pending = {}
+	for aid, q in pairs(batch) do
 		local hits = q.hits
 		local rec, err = WS.MutateAlliance(aid, function(a) return apply(a, hits), true end)
 		if not rec and err ~= "Alliance not found" then
@@ -3533,16 +3568,16 @@ function TD.View(p)
 		tickets = d.tickets or 0, claimed = mine.claimed, endsIn = (week() + 1) * 7 * 86400 - 3 * 86400 - os.time() }
 	v.target = TD.Target()
 	if not a then return v end
-	local copy = { td = a.td and table.clone(a.td) or nil, count = a.count }
+	local copy = { td = a.td and table.clone(a.td) or nil, count = a.count, members = a.members }
 	if copy.td then copy.td = { week = a.td.week, ref = a.td.ref, dmg = table.clone(a.td.dmg), log = table.clone(a.td.log), cleared = a.td.cleared,
 		stage = a.td.stage, hp = table.clone(a.td.hp), max = table.clone(a.td.max) } end
 	if pending[d.alliance] and #pending[d.alliance].hits > 0 then apply(copy, pending[d.alliance].hits) end
 	local td = copy.td
 	if not td or td.week ~= week() then
 		-- nobody has hit yet this week: preview stage 1 at the size the first hit will create
-		local preview = { ref = math.max(10, (PS.Power(p))), td = nil }
-		local tdp = { ref = preview.ref }
-		newStage(tdp, 1, a.count or 1)
+		local tdp = { refMax = PS.Power(p) }
+		tdp.ref = refOf(a, tdp)
+		newStage(tdp, 1, memberCount(a))
 		v.stage, v.cleared, v.log, v.board, v.myDmg = 1, 0, {}, {}, 0
 		v.enemies = {}
 		for i, e in ipairs(TD.Enemies[1]) do v.enemies[i] = { name = e[1], img = e[2], hp = tdp.hp[i], max = tdp.max[i] } end
@@ -3624,7 +3659,7 @@ end
 function TD.Start()
 	task.spawn(function()
 		while true do
-			task.wait(5)
+			task.wait(20) -- DataStore write budget: one alliance write per 20 s per server (review #5)
 			pcall(TD.Flush)
 		end
 	end)
@@ -4000,6 +4035,9 @@ function act.weeklyChest(plr, p)
 	local d = p.data
 	PS.EnsureTasks(p)
 	if d.weekly.chest then return no("Already opened this week") end
+	local have = 0
+	for _ in pairs(d.inv.gear) do have += 1 end
+	if have >= Config.InventoryMax then return no("Inventory full. Discard some gear first.") end
 	for _, task in ipairs(d.weekly.list) do if not task.done then return no("Claim all 5 weekly challenges first") end end
 	d.weekly.chest = true
 	d.seals += TK.WeeklyChest.seals
@@ -4014,7 +4052,7 @@ function act.taskRefresh(plr, p, a)
 	if not okR then
 		if err == "no_refresh" then
 			-- no free refresh left today: offer the 19 Robux Challenge Refresh
-			return MK.PromptProduct(plr, "ChallengeRefresh", { src = a.src, i = a.i })
+			return MK.PromptProduct(plr, "ChallengeRefresh", { src = a.src == "weekly" and "weekly" or "daily", i = int(a.i, 1, 10) or 1 })
 		end
 		return no(err)
 	end
@@ -4271,8 +4309,14 @@ function act.openCrate(plr, p, a)
 	d.crates[kind] -= n
 	return ok({ results = A.OpenCrates(p, kind, n), kind = kind, left = d.crates[kind] })
 end
+local function invFull(d, n)
+	local have = 0
+	for _ in pairs(d.inv.gear) do have += 1 end
+	return have + (n or 1) > Config.InventoryMax
+end
 function act.buyCrate(plr, p, a)
 	local d = p.data
+	if invFull(d, 1) then return no("Inventory full. Discard some gear first.") end
 	if a.kind == "basic" then
 		local price = PS.BasicCratePrice(p)
 		if d.cash < price then return no("A Supply Crate costs " .. R.Money(price)) end
@@ -4347,6 +4391,7 @@ function act.allyDonate(plr, p, a)
 	if amt <= 0 or amt ~= amt then return no("Bad amount") end
 	amt = math.min(amt, math.floor(d.cash))
 	if amt <= 0 then return no("No cash to donate") end
+	d.cash -= amt -- taken before the yield, refunded if the write fails (review #11)
 	local rec, err = WS.MutateAlliance(id, function(x)
 		x.treasury = (x.treasury or 0) + amt
 		local m = x.members[tostring(plr.UserId)]
@@ -4354,8 +4399,7 @@ function act.allyDonate(plr, p, a)
 		WS.AddLog(x, d.name ~= "" and (d.name .. " donated " .. R.Money(amt)) or (plr.Name .. " donated " .. R.Money(amt)))
 		return x, true
 	end)
-	if not rec then return no(err) end
-	d.cash -= amt
+	if not rec then d.cash += amt; return no(err) end
 	PS.TaskProgress(p, "donate", 1)
 	return ok({ amount = amt })
 end
@@ -4562,7 +4606,7 @@ A.Init(PS, MK, RA, TD)
 local budget = {}
 Request.OnServerInvoke = function(plr, action, args)
 	local p = PS.Profiles[plr]
-	if not p then return { ok = false, msg = "Still loading" } end
+	if not p or p.loading or p.leaving then return { ok = false, msg = "Still loading" } end
 	local b = budget[plr] or { n = 0, t = os.clock() }
 	if os.clock() - b.t > 1 then b.n = 0; b.t = os.clock() end
 	b.n += 1; budget[plr] = b

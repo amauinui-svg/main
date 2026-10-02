@@ -95,7 +95,7 @@ function O.NewOfficer(rng, rarityIndex, avoidTrait)
 	local rar = O.Rarities[rarityIndex]
 	local traits = pickTraits(rng, rar, avoidTrait)
 	return {
-		id = string.format("o%x%04x", os.time(), rng:NextInteger(0, 65535)),
+		id = string.format("o%x%06x", os.time(), rng:NextInteger(0, 16777215)),
 		name = FIRST[rng:NextInteger(1, #FIRST)] .. " " .. LAST[rng:NextInteger(1, #LAST)],
 		rarity = rar.key, traits = traits, title = O.TraitByKey[traits[1].k].title,
 		portrait = rng:NextInteger(1, O.Portraits), hired = os.time(),
@@ -118,7 +118,7 @@ function O.NewGear(rng, rarityIndex, kind)
 	local adj = ADJ[rarityIndex]
 	local rar = O.Rarities[rarityIndex]
 	local g = {
-		id = string.format("g%x%04x", os.time(), rng:NextInteger(0, 65535)),
+		id = string.format("g%x%06x", os.time(), rng:NextInteger(0, 16777215)),
 		kind = kind, type = t[1], icon = t[2], rarity = rar.key,
 		name = adj[rng:NextInteger(1, #adj)] .. " " .. t[1], power = rar.gear,
 	}

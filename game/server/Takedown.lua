@@ -50,6 +50,18 @@ local function enemyHp(td, stage, members)
 	if stage == 5 then base *= 3 end
 	return math.floor(base)
 end
+local function memberCount(a)
+	local n = 0
+	for _ in pairs(a.members or {}) do n += 1 end
+	return math.max(1, n)
+end
+-- difficulty reference: the strongest attack seen this week, floored by the members' average level (review #3)
+local function refOf(a, td)
+	local sum, n = 0, 0
+	for _, m in pairs(a.members or {}) do if m.lv then sum += m.lv; n += 1 end end
+	local floor = n > 0 and 20 * sum / n or 10
+	return math.max(td.refMax or td.ref or 10, floor)
+end
 local function newStage(td, stage, members)
 	td.stage = stage
 	td.hp, td.max = {}, {}
@@ -62,8 +74,9 @@ end
 local function ensure(a, refAtk)
 	local w = week()
 	if not a.td or a.td.week ~= w then
-		a.td = { week = w, ref = math.max(10, refAtk or 10), dmg = {}, log = {}, cleared = 0 }
-		newStage(a.td, 1, a.count or 1)
+		a.td = { week = w, ref = math.max(10, refAtk or 10), refMax = refAtk, dmg = {}, log = {}, cleared = 0 }
+		a.td.ref = refOf(a, a.td)
+		newStage(a.td, 1, memberCount(a))
 	end
 	return a.td
 end
@@ -73,6 +86,7 @@ local function apply(a, hits)
 	local td = ensure(a, hits[1] and hits[1].ref)
 	for _, h in ipairs(hits) do
 		if td.stage > 5 then break end
+		td.refMax = math.max(td.refMax or 0, h.ref or 0)
 		local e = h.e
 		if not td.hp[e] or td.hp[e] <= 0 then
 			e = nil
@@ -81,7 +95,7 @@ local function apply(a, hits)
 		if e then
 			local dealt = math.min(td.hp[e], h.dmg)
 			td.hp[e] -= dealt
-			td.dmg[h.uid] = (td.dmg[h.uid] or 0) + h.dmg
+			td.dmg[h.uid] = (td.dmg[h.uid] or 0) + dealt -- count damage actually dealt (review #12)
 			local who = TD.Enemies[td.stage][e][1]
 			if who == "" then who = TD.Target(td.week).stages[5] end
 			table.insert(td.log, 1, { t = h.t, who = h.who, e = who, dmg = h.dmg, big = h.big })
@@ -91,7 +105,7 @@ local function apply(a, hits)
 			if not alive then
 				td.cleared = td.stage
 				WS.AddLog(a, "Takedown stage " .. td.stage .. " cleared: " .. TD.Target(td.week).stages[td.stage])
-				if td.stage < 5 then newStage(td, td.stage + 1, a.count or 1) else td.stage = 6 end
+				if td.stage < 5 then td.ref = refOf(a, td); newStage(td, td.stage + 1, memberCount(a)) else td.stage = 6 end
 			end
 		end
 	end
@@ -99,8 +113,10 @@ local function apply(a, hits)
 end
 
 function TD.Flush()
-	for aid, q in pairs(pending) do
-		pending[aid] = nil
+	-- swap the table first: new hits arriving while we yield go to the next batch (review #4)
+	local batch = pending
+	pending = {}
+	for aid, q in pairs(batch) do
 		local hits = q.hits
 		local rec, err = WS.MutateAlliance(aid, function(a) return apply(a, hits), true end)
 		if not rec and err ~= "Alliance not found" then
@@ -131,16 +147,16 @@ function TD.View(p)
 		tickets = d.tickets or 0, claimed = mine.claimed, endsIn = (week() + 1) * 7 * 86400 - 3 * 86400 - os.time() }
 	v.target = TD.Target()
 	if not a then return v end
-	local copy = { td = a.td and table.clone(a.td) or nil, count = a.count }
+	local copy = { td = a.td and table.clone(a.td) or nil, count = a.count, members = a.members }
 	if copy.td then copy.td = { week = a.td.week, ref = a.td.ref, dmg = table.clone(a.td.dmg), log = table.clone(a.td.log), cleared = a.td.cleared,
 		stage = a.td.stage, hp = table.clone(a.td.hp), max = table.clone(a.td.max) } end
 	if pending[d.alliance] and #pending[d.alliance].hits > 0 then apply(copy, pending[d.alliance].hits) end
 	local td = copy.td
 	if not td or td.week ~= week() then
 		-- nobody has hit yet this week: preview stage 1 at the size the first hit will create
-		local preview = { ref = math.max(10, (PS.Power(p))), td = nil }
-		local tdp = { ref = preview.ref }
-		newStage(tdp, 1, a.count or 1)
+		local tdp = { refMax = PS.Power(p) }
+		tdp.ref = refOf(a, tdp)
+		newStage(tdp, 1, memberCount(a))
 		v.stage, v.cleared, v.log, v.board, v.myDmg = 1, 0, {}, {}, 0
 		v.enemies = {}
 		for i, e in ipairs(TD.Enemies[1]) do v.enemies[i] = { name = e[1], img = e[2], hp = tdp.hp[i], max = tdp.max[i] } end
@@ -222,7 +238,7 @@ end
 function TD.Start()
 	task.spawn(function()
 		while true do
-			task.wait(5)
+			task.wait(20) -- DataStore write budget: one alliance write per 20 s per server (review #5)
 			pcall(TD.Flush)
 		end
 	end)

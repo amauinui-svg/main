@@ -189,7 +189,13 @@ function MK.Start()
 		local p = PS.Profiles[plr]
 		if not p then return end
 		for key, pass in pairs(Config.Passes) do
-			if pass.id == id then p.gp[key] = true; PS.Note(p, { kind = "toast", text = pass.name .. " unlocked!", tone = "good" }) end
+			if pass.id == id then
+				-- verify with Roblox before granting anything permanent (review #8)
+				local okO, owns = pcall(MarketplaceService.UserOwnsGamePassAsync, MarketplaceService, plr.UserId, id)
+				if (okO and owns) or (Store.IsStudio and Config.StudioGrantsPasses) then
+					p.gp[key] = true; PS.Note(p, { kind = "toast", text = pass.name .. " unlocked!", tone = "good" })
+				end
+			end
 		end
 		PS.EnsureConvoys(p)
 		PS.GrantVipOfficer(p)

@@ -158,7 +158,7 @@ function RA.Targets(p)
 	local list = {}
 	local t = now()
 	for plr, q in pairs(PS.Profiles) do
-		if q ~= p and q.data.onboarded then
+		if q ~= p and q.data.onboarded and not q.loading and not q.leaving then
 			local _, def = PS.Power(q)
 			local id = "u" .. plr.UserId
 			table.insert(list, {
@@ -225,7 +225,7 @@ local function findTarget(id)
 	local uid = tonumber(id:match("^u(%d+)$"))
 	local plr = uid and Players:GetPlayerByUserId(uid)
 	local q = plr and PS.Profiles[plr]
-	if q and q.data.onboarded then return q, nil, plr end
+	if q and q.data.onboarded and not q.loading and not q.leaving then return q, nil, plr end
 	return nil
 end
 
@@ -239,6 +239,10 @@ function RA.Attack(plr, p, id, guaranteed)
 	if q == p then return { ok = false, msg = "You cannot raid yourself" } end
 	local t = now()
 	if (lastHit[id] or 0) + RC.Cooldown > t then return { ok = false, msg = "They were just raided. Try again in " .. ((lastHit[id] or 0) + RC.Cooldown - t) .. "s" } end
+	-- you can't hammer the same target: one attack per target per cooldown, win or lose (review #7)
+	p.raidCd = p.raidCd or {}
+	if not guaranteed and (p.raidCd[id] or 0) + RC.Cooldown > t then return { ok = false, msg = "You just attacked them. Try again in " .. ((p.raidCd[id] or 0) + RC.Cooldown - t) .. "s" } end
+	if not guaranteed then p.raidCd[id] = t end
 	if q and (q.data.shield or 0) > t then return { ok = false, msg = "They are under a raid shield" } end
 	if not guaranteed then
 		if d.sup < RC.Supply then return { ok = false, msg = "Not enough Supply (" .. RC.Supply .. " needed)" } end
@@ -307,7 +311,7 @@ local function aiRaid()
 	local t = now()
 	for plr, q in pairs(PS.Profiles) do
 		local d = q.data
-		if d.onboarded and d.lv >= RC.AIMinTargetLevel and (d.shield or 0) <= t and (lastHit["u" .. plr.UserId] or 0) + RC.Cooldown <= t
+		if d.onboarded and not q.loading and not q.leaving and d.lv >= RC.AIMinTargetLevel and (d.shield or 0) <= t and (lastHit["u" .. plr.UserId] or 0) + RC.Cooldown <= t
 			and d.cash > R.MinuteValue(d.lv) * 10 then
 			table.insert(candidates, { plr, q })
 		end

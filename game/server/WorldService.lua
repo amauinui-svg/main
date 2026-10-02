@@ -185,8 +185,11 @@ function WS.MutateAlliance(id, fn)
 				end
 			end
 		else
-			WS.Index[id] = summary(a)
-			writeIndex(id, WS.Index[id])
+			local s = summary(a)
+			local old = WS.Index[id]
+			WS.Index[id] = s
+			-- skip the shared index write when nothing in the summary changed (review #5)
+			if not old or HttpService:JSONEncode(old) ~= HttpService:JSONEncode(s) then writeIndex(id, s) end
 		end
 		publish("a", id)
 	end
@@ -287,8 +290,9 @@ function WS.Credit(aid, amount)
 	pendingTreasury[aid] = (pendingTreasury[aid] or 0) + amount
 end
 function WS.FlushTreasury()
-	for aid, amt in pairs(pendingTreasury) do
-		pendingTreasury[aid] = nil
+	local batch = pendingTreasury
+	pendingTreasury = {}
+	for aid, amt in pairs(batch) do
 		local rec, err = WS.MutateAlliance(aid, function(a) a.treasury = (a.treasury or 0) + amt; return a, true end)
 		if not rec and err ~= "Alliance not found" then pendingTreasury[aid] = (pendingTreasury[aid] or 0) + amt end
 	end
@@ -324,7 +328,7 @@ function WS.Attack(i, aid, dmg, plrName)
 			local fort = (winner and winner.up and winner.up.fort) or 0
 			local g = math.floor(WS.CityGarrison(i) * (1 + 0.10 * fort))
 			result.captured = true; result.winner = bestId; result.prevOwner = c.owner
-			c.owner = bestId; c.hp = g; c.maxHp = g; c.prot = now() + AC.ProtectSeconds; c.contrib = {}; c.tax = 5; c.taxSet = 0
+			c.owner = bestId; c.hp = g; c.maxHp = g; c.prot = now() + AC.ProtectSeconds; c.contrib = {}; c.tax = 5; c.taxSet = 0; c.rent = 0; c.rentSet = 0
 		end
 		return c
 	end)

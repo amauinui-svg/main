@@ -29,7 +29,7 @@ A.Init(PS, MK, RA, TD)
 local budget = {}
 Request.OnServerInvoke = function(plr, action, args)
 	local p = PS.Profiles[plr]
-	if not p then return { ok = false, msg = "Still loading" } end
+	if not p or p.loading or p.leaving then return { ok = false, msg = "Still loading" } end
 	local b = budget[plr] or { n = 0, t = os.clock() }
 	if os.clock() - b.t > 1 then b.n = 0; b.t = os.clock() end
 	b.n += 1; budget[plr] = b

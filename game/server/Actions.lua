@@ -368,6 +368,9 @@ function act.weeklyChest(plr, p)
 	local d = p.data
 	PS.EnsureTasks(p)
 	if d.weekly.chest then return no("Already opened this week") end
+	local have = 0
+	for _ in pairs(d.inv.gear) do have += 1 end
+	if have >= Config.InventoryMax then return no("Inventory full. Discard some gear first.") end
 	for _, task in ipairs(d.weekly.list) do if not task.done then return no("Claim all 5 weekly challenges first") end end
 	d.weekly.chest = true
 	d.seals += TK.WeeklyChest.seals
@@ -382,7 +385,7 @@ function act.taskRefresh(plr, p, a)
 	if not okR then
 		if err == "no_refresh" then
 			-- no free refresh left today: offer the 19 Robux Challenge Refresh
-			return MK.PromptProduct(plr, "ChallengeRefresh", { src = a.src, i = a.i })
+			return MK.PromptProduct(plr, "ChallengeRefresh", { src = a.src == "weekly" and "weekly" or "daily", i = int(a.i, 1, 10) or 1 })
 		end
 		return no(err)
 	end
@@ -639,8 +642,14 @@ function act.openCrate(plr, p, a)
 	d.crates[kind] -= n
 	return ok({ results = A.OpenCrates(p, kind, n), kind = kind, left = d.crates[kind] })
 end
+local function invFull(d, n)
+	local have = 0
+	for _ in pairs(d.inv.gear) do have += 1 end
+	return have + (n or 1) > Config.InventoryMax
+end
 function act.buyCrate(plr, p, a)
 	local d = p.data
+	if invFull(d, 1) then return no("Inventory full. Discard some gear first.") end
 	if a.kind == "basic" then
 		local price = PS.BasicCratePrice(p)
 		if d.cash < price then return no("A Supply Crate costs " .. R.Money(price)) end
@@ -715,6 +724,7 @@ function act.allyDonate(plr, p, a)
 	if amt <= 0 or amt ~= amt then return no("Bad amount") end
 	amt = math.min(amt, math.floor(d.cash))
 	if amt <= 0 then return no("No cash to donate") end
+	d.cash -= amt -- taken before the yield, refunded if the write fails (review #11)
 	local rec, err = WS.MutateAlliance(id, function(x)
 		x.treasury = (x.treasury or 0) + amt
 		local m = x.members[tostring(plr.UserId)]
@@ -722,8 +732,7 @@ function act.allyDonate(plr, p, a)
 		WS.AddLog(x, d.name ~= "" and (d.name .. " donated " .. R.Money(amt)) or (plr.Name .. " donated " .. R.Money(amt)))
 		return x, true
 	end)
-	if not rec then return no(err) end
-	d.cash -= amt
+	if not rec then d.cash += amt; return no(err) end
 	PS.TaskProgress(p, "donate", 1)
 	return ok({ amount = amt })
 end
