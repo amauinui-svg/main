@@ -877,6 +877,17 @@ function act.setTax(plr, p, a)
 	return ok(res)
 end
 
+function act.setRent(plr, p, a)
+	local rec, id = myAlliance(p)
+	if not id then return no("You are not in an alliance") end
+	if not canManage(rec, plr.UserId) then return no("Only the leader and officers set rent") end
+	local i = int(a.city, 1, #World.Cities)
+	if not i then return no("Bad city") end
+	local res, err = WS.SetRent(i, id, a.pct)
+	if not res then return no(err) end
+	return ok(res)
+end
+
 function act.rankings(plr, p, a)
 	local kind = (a.kind == "wealth" or a.kind == "alliances") and a.kind or "level"
 	return ok({ list = PS.Rankings(kind), kind = kind })

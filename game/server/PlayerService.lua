@@ -97,6 +97,14 @@ function PS.Mods(p)
 end
 function PS.RegenSec(mods) return R.RegenSec / (mods and mods.regen or 1) end
 function PS.Has(p, pass) return p.gp[pass] == true end
+-- silent rent on property income to the alliance holding your home capital (Kash 18:49: never notified)
+function PS.PayRent(p, inc)
+	local rate, owner = WS.RentFor(p.data)
+	if rate <= 0 or not owner or inc <= 0 then return inc end
+	local cut = inc * rate
+	WS.Credit(owner, cut)
+	return inc - cut
+end
 function PS.AllianceTag(aid) local s = WS.Index[aid]; return s and s.tag or nil end
 function PS.VipTier(p)
 	if PS.Has(p, "MegaVIP") then return Config.VIP.MegaVIP end
@@ -585,6 +593,7 @@ function PS.CatchUp(p)
 		if c.to and c.t1 < cut then local dur = c.t1 - c.t0; c.t1 = cut; c.t0 = cut - dur end
 	end
 	local inc = PS.IncHr(p, mods) / 3600 * away * R.OfflinePropShare
+	inc = PS.PayRent(p, inc)
 	PS.Earn(p, inc, "props")
 	local regen = PS.RegenSec(mods)
 	local maxInf = R.MaxInfluence(d.lv, d.sk)
@@ -639,7 +648,7 @@ function PS.Step(plr, p)
 		while d.supT >= R.SupplyRegenSec and d.sup < maxSup do d.sup += 1; d.supT -= R.SupplyRegenSec end
 		if d.sup >= maxSup then d.supT = 0 end
 	else d.supT = 0 end
-	PS.Earn(p, PS.IncHr(p, mods) / 3600, "props")
+	PS.Earn(p, PS.PayRent(p, PS.IncHr(p, mods) / 3600), "props")
 	local st = PS.StipendRate(p)
 	if st > 0 then PS.Earn(p, st, "stipend") end
 	local lvBefore = d.lv

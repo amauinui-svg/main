@@ -10,6 +10,7 @@ local M = require(RS.Shared.Military)
 local Config = require(RS.Shared.Config)
 local RC = Config.Raid
 
+local O = require(RS.Shared.Officers)
 local RA = {}
 local PS
 local lastHit = {} -- [targetId] = os.time() of the last successful raid on it
@@ -66,6 +67,56 @@ local function aiPower(a)
 	local atk = (base + best.atk * units) * a.shape[2]
 	local def = (base + best.def * units) * a.shape[2]
 	return math.floor(atk), math.floor(def)
+end
+
+---------------------------------------------------------------- the fight (Kash 18:47)
+-- Three exchanges: attacker, defender, attacker, defender, attacker, (defender). The winner is decided first by the
+-- win chance; the hits are then rolled so the fight ends on the third blow: either the attacker's 3rd hit finishes
+-- the defender, or the defender's 3rd hit finishes the attacker. Each hit rolls inside a range (shown on screen) and
+-- may crit (x1.5).
+RA.RollLo, RA.RollHi, RA.Crit, RA.CritMult = 0.75, 1.15, 0.12, 1.5
+local function roll(pw)
+	local r = RA.RollLo + math.random() * (RA.RollHi - RA.RollLo)
+	local crit = math.random() < RA.Crit
+	return math.max(1, math.floor(pw * r * (crit and RA.CritMult or 1) + 0.5)), crit, r
+end
+function RA.Fight(aPow, dPow, attackerWins)
+	local A, D = {}, {}
+	for k = 1, 3 do
+		local v, c, r = roll(aPow); A[k] = { dmg = v, crit = c, r = r }
+		v, c, r = roll(dPow); D[k] = { dmg = v, crit = c, r = r }
+	end
+	local aHp, dHp
+	if attackerWins then
+		dHp = math.max(1, math.floor((A[1].dmg + A[2].dmg + A[3].dmg) * 0.97))
+		dHp = math.max(dHp, A[1].dmg + A[2].dmg + 1)
+		aHp = math.floor((D[1].dmg + D[2].dmg) * (1.15 + math.random() * 0.6)) + 1
+	else
+		aHp = math.max(1, math.floor((D[1].dmg + D[2].dmg + D[3].dmg) * 0.97))
+		aHp = math.max(aHp, D[1].dmg + D[2].dmg + 1)
+		dHp = math.floor((A[1].dmg + A[2].dmg + A[3].dmg) * (1.15 + math.random() * 0.6)) + 1
+	end
+	local hits, ha, hd = {}, aHp, dHp
+	for k = 1, 3 do
+		hd = math.max(0, hd - A[k].dmg)
+		table.insert(hits, { who = "a", dmg = A[k].dmg, crit = A[k].crit, r = A[k].r, hp = hd })
+		if hd <= 0 then break end
+		ha = math.max(0, ha - D[k].dmg)
+		table.insert(hits, { who = "d", dmg = D[k].dmg, crit = D[k].crit, r = D[k].r, hp = ha })
+		if ha <= 0 then break end
+	end
+	return {
+		hits = hits, aHp = aHp, dHp = dHp,
+		aRange = { math.floor(aPow * RA.RollLo), math.ceil(aPow * RA.RollHi) },
+		dRange = { math.floor(dPow * RA.RollLo), math.ceil(dPow * RA.RollHi) },
+	}
+end
+-- the weapon a fighter shows: the player's equipped weapon, or fists; AI nations carry their era's weapon
+local ERA_WEAPON = { "gear_spear", "gear_sword", "gear_halberd", "gear_musket", "gear_rifle", "gear_rifle", "gear_rifle", "gear_rifle" }
+local function weaponOf(d)
+	local g = d.cab and d.cab.player and d.cab.player.weapon and d.inv and d.inv.gear[d.cab.player.weapon]
+	if g then return { icon = g.icon, name = g.name, rarity = g.rarity } end
+	return { icon = "gear_fists", name = "Fists", rarity = "common" }
 end
 
 local function stealCap(lv) return R.MinuteValue(lv) * RC.CapLawMinutes end
@@ -173,6 +224,15 @@ function RA.Attack(plr, p, id, guaranteed)
 	else ai.soldiers = math.max(0.2, ai.soldiers - theirLoss) end
 	d.stats.battles += 1
 	local res = { ok = true, win = win, chance = chance, margin = m, lost = myDead, lostN = myN, killed = theirN, target = defName }
+	res.fight = RA.Fight(atk, def, win)
+	res.fight.a = { name = d.name, lv = d.lv, userId = plr.UserId, pow = atk, weapon = weaponOf(d), flag = d.flag }
+	if q then
+		res.fight.d = { name = q.data.name, lv = q.data.lv, userId = qplr and qplr.UserId, pow = def, weapon = weaponOf(q.data), flag = q.data.flag }
+	else
+		local era = R.EraOf(ai.lv)
+		res.fight.d = { name = ai.name, lv = ai.lv, ai = true, pow = def, flag = ai.flag,
+			weapon = { icon = ERA_WEAPON[math.clamp(era, 1, 8)], name = "Army issue", rarity = "uncommon" } }
+	end
 	if win then
 		lastHit[id] = t
 		local onHand = q and q.data.cash or ai.cash

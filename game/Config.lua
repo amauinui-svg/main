@@ -47,6 +47,10 @@ C.StudioGrantsPasses = true
 C.PremiumBonus = 0.05
 C.Group = { Id = 0, Bonus = 0.10 }
 
+-- Rent (Kash 18:49): the alliance holding a capital may charge its residents this % of their property income.
+-- Max by city tier (city, capital, major capital, global city). New players pay nothing for 48 hours. Silent.
+C.Rent = { Max = { 2, 4, 6, 8 }, GraceHours = 48 }
+
 -- VIP tiers (Kash 16:54): Mega VIP replaces VIP (they do not stack)
 C.VIP = { VIP = { cash = 0.10, regen = 0.10, tag = "VIP", color = "f0c75a" }, MegaVIP = { cash = 0.25, regen = 0.25, tag = "MEGA VIP", color = "ff4f8b" } }
 

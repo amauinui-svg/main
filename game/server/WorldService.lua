@@ -29,7 +29,7 @@ local function now() return os.time() end
 ---------------------------------------------------------------- perks
 -- each city grants its owner a perk; size by tier. Only the strongest 2 of each type count (Idle Mafia rule).
 WS.PerkNames = { law = "law cash", props = "property income", convoy = "convoy pay", regen = "Influence regen", attack = "attack", defense = "defense" }
-WS.PerkSize = { 3, 5, 8 }
+WS.PerkSize = { 3, 5, 8, 12 }
 -- countries with 2+ cities: own them all for a +10% bonus to law cash, property income and convoy pay
 WS.Countries = {}
 for i, c in ipairs(World.Cities) do
@@ -82,7 +82,7 @@ end
 local function defaultCity(i) local g = WS.CityGarrison(i); return { owner = nil, tax = 0, hp = g, maxHp = g, prot = 0, taxSet = 0 } end
 
 local function publicCity(i, c)
-	return { owner = c.owner, tax = c.tax or 0, hp = c.hp, maxHp = c.maxHp, prot = c.prot or 0 }
+	return { owner = c.owner, tax = c.tax or 0, hp = c.hp, maxHp = c.maxHp, prot = c.prot or 0, rent = c.rent or 0 }
 end
 
 function WS.RefreshCity(i)
@@ -381,6 +381,41 @@ function WS.SetTax(i, aid, pct)
 	WS.RefreshCity(i)
 	publish("c", i)
 	return result
+end
+
+---------------------------------------------------------------- rent (Kash 18:49)
+-- The alliance holding a capital sets a rent: a % of the property income of everyone who lives there (their home).
+-- Max rent grows with the city's tier. It is silent: residents are never told.
+function WS.SetRent(i, aid, pct)
+	pct = tonumber(pct) or 0
+	if pct ~= pct then pct = 0 end
+	local cap = Config.Rent.Max[World.Cities[i].tier] or 0
+	pct = math.clamp(math.floor(pct), 0, cap)
+	local result
+	local saved = Store.MapUpdate(CITY_MAP, "c" .. i, function(c)
+		if not c or c.owner ~= aid then result = { err = "Your alliance does not hold this city" }; return nil end
+		if (c.rentSet or 0) + AC.TaxChangeCooldown > now() then
+			result = { err = "Rent can change once a day. Next change in " .. math.ceil(((c.rentSet or 0) + AC.TaxChangeCooldown - now()) / 3600) .. "h" }
+			return nil
+		end
+		c.rent = pct; c.rentSet = now()
+		result = { rent = pct }
+		return c
+	end)
+	if not result then return nil, "The city could not be reached. Try again." end
+	if result.err then return nil, result.err end
+	if saved == nil then return nil, "The city could not be reached. Try again." end
+	WS.RefreshCity(i)
+	publish("c", i)
+	return result
+end
+-- rent rate a player pays (fraction), 0 for new players, their own alliance's cities and unowned cities
+function WS.RentFor(d)
+	local c = d.home and WS.Cities[d.home]
+	if not c or not c.owner or (c.rent or 0) <= 0 then return 0, nil end
+	if c.owner == d.alliance then return 0, nil end
+	if os.time() - (d.created or os.time()) < Config.Rent.GraceHours * 3600 then return 0, nil end
+	return c.rent / 100, c.owner
 end
 
 ---------------------------------------------------------------- city wants (Kash 17:22)

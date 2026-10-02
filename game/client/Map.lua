@@ -15,9 +15,9 @@ local Config = require(Shared.Config)
 local Map = {}
 local OCEAN = Color3.fromRGB(24, 32, 42)
 local PERK_TEXT = { law = "law cash", props = "property income", convoy = "convoy pay", regen = "Influence regen", attack = "attack", defense = "defense" }
-local TIER_NAME = { "CITY", "CAPITAL", "MAJOR CAPITAL" }
-local TIER_PIN = { 20, 24, 28 }
-local PERK_SIZE = { 3, 5, 8 }
+local TIER_NAME = { "CITY", "CAPITAL", "MAJOR CAPITAL", "GLOBAL CITY" }
+local TIER_PIN = { 20, 24, 28, 32 }
+local PERK_SIZE = { 3, 5, 8, 12 }
 
 -- parse territory runs once
 local RUNS = {}
@@ -116,7 +116,7 @@ function Map.build(host, App)
 	function obj.labels()
 		for i, p in pairs(pins) do
 			local c = W.Cities[i]
-			p.Label.Visible = (c.tier == 3 and zoom >= 1.3) or zoom >= 2.6 or selected == i or (App.state and App.state.home == i)
+			p.Label.Visible = (c.tier >= 3 and zoom >= 1.3) or zoom >= 2.6 or selected == i or (App.state and App.state.home == i)
 		end
 	end
 	local function drawPins()

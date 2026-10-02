@@ -108,7 +108,7 @@ function O.show(App)
 			local c = W.Cities[i]
 			local card = UI.card(grid, { button = true, z = 64, order = k, hot = form.home == i })
 			text(card, c.name, { font = "heavy", size = 16, pos = UDim2.fromOffset(10, 4), sz = UDim2.new(1, -16, 0, 22), z = 65, truncate = true })
-			text(card, c.country .. " · " .. ({ "City", "Capital", "Major capital" })[c.tier], { size = 12, color = C.muted, pos = UDim2.fromOffset(10, 27), sz = UDim2.new(1, -16, 0, 18), z = 65, truncate = true })
+			text(card, c.country .. " · " .. ({ "City", "Capital", "Major capital", "Global city" })[c.tier], { size = 12, color = C.muted, pos = UDim2.fromOffset(10, 27), sz = UDim2.new(1, -16, 0, 18), z = 65, truncate = true })
 			card.Activated:Connect(function() form.home = i; draw() end)
 		end
 		return function() return true end

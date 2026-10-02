@@ -128,7 +128,7 @@ S.alliance = { build = function(host, App)
 			local card = UI.card(list, { button = true, sz = UDim2.new(1, 0, 0, 50), z = 8, order = 4 + k })
 			UI.icon(card, "icon_flag", 20, Color3.fromHex(a.color), UDim2.fromOffset(14, 15), { z = 9 })
 			text(card, city.name .. " · " .. city.country, { font = "heavy", size = 16, pos = UDim2.fromOffset(44, 0), sz = UDim2.new(0.4, -44, 1, 0), z = 9 })
-			text(card, "Tax " .. (cs.tax or 0) .. "% · Garrison " .. R.Short(cs.hp) .. " · +" .. ({ 3, 5, 8 })[city.tier] .. "% " .. city.perk, { size = 14, color = C.muted, pos = UDim2.new(0.4, 0, 0, 0), sz = UDim2.new(0.6, -16, 1, 0), z = 9, align = Enum.TextXAlignment.Right })
+			text(card, "Tax " .. (cs.tax or 0) .. "% · Garrison " .. R.Short(cs.hp) .. " · +" .. ({ 3, 5, 8, 12 })[city.tier] .. "% " .. city.perk, { size = 14, color = C.muted, pos = UDim2.new(0.4, 0, 0, 0), sz = UDim2.new(0.6, -16, 1, 0), z = 9, align = Enum.TextXAlignment.Right })
 			card.Activated:Connect(function() App.open("map"); if App.focusCity then App.focusCity(i) end end)
 		end
 		local leave = UI.mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 48), ZIndex = 8, LayoutOrder = 100 }, list)

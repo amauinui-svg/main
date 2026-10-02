@@ -60,7 +60,7 @@ M.BossGold = { 3, 4, 5, 6, 8, 10, 12, 15 }
 -- SIEGES. Damage is era-neutral on purpose: a level-150 player must not one-shot a city, so siege damage grows with
 -- level, Attack skill and army size, not with unit stats (which grow 2.6x per era).
 -- 1 Supply = 1 hit. Reinforcing spends Supply the same way and adds the same amount of garrison.
-M.NeutralGarrison = { 3000, 8000, 20000 }
+M.NeutralGarrison = { 3000, 8000, 20000, 45000 } -- tier 4 = global cities (Kash 18:49)
 function M.SiegeDamage(lv, sk, units, mods)
 	local base = 50 + 5 * lv + 10 * ((sk and sk.atk) or 0) + 2 * M.UnitCount(units)
 	return math.floor(base * (1 + ((mods and mods.attack) or 0)) + 0.5)
