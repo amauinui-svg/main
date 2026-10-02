@@ -180,6 +180,7 @@ end
 function act.raid(plr, p, a)
 	return RA.Attack(plr, p, a.id, false)
 end
+function act.spy(plr, p, a) return RA.Spy(plr, p, a.id) end
 
 ---------------------------------------------------------------- alliance takedown
 function act.tdView(plr, p) return ok({ view = TD.View(p) }) end

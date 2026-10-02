@@ -27,4 +27,5 @@ client/Cabinet.lua|ReplicatedStorage.Client|Cabinet|ModuleScript
 client/Country.lua|ReplicatedStorage.Client|Country|ModuleScript
 client/Contracts.lua|ReplicatedStorage.Client|Contracts|ModuleScript
 client/Settings.lua|ReplicatedStorage.Client|Settings|ModuleScript
+client/Shop.lua|ReplicatedStorage.Client|Shop|ModuleScript
 client/ClientMain.client.lua|StarterPlayer.StarterPlayerScripts|ClientMain|LocalScript

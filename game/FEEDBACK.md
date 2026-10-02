@@ -179,3 +179,8 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
     taken from offline earnings. Completely SILENT: no notification, not in the offline summary.
   * Capitals need different perks AND tiers (strong vs weak), by real-world importance: New York, Los Angeles,
     London, Tokyo are top tier and worth fighting over.
+- NEW (18:51) RAID NOTICE + SPYING:
+  * The "you were raided" popup has two buttons: ATTACK (opens Raids and attacks them back normally) and REVENGE
+    (the Robux Revenge Strike).
+  * Players can NEVER see another player's stats (attack, defense, cash) unless they SPY on them. Spying reveals
+    cash on hand, stats, etc. The spied player is NOTIFIED that someone spied on them.

@@ -12,6 +12,7 @@ local RC = Config.Raid
 
 local O = require(RS.Shared.Officers)
 local RA = {}
+local findTargetPublic -- set below (findTarget is defined after the spy code)
 local PS
 local lastHit = {} -- [targetId] = os.time() of the last successful raid on it
 RA.AI = {}
@@ -121,6 +122,37 @@ end
 
 local function stealCap(lv) return R.MinuteValue(lv) * RC.CapLawMinutes end
 
+-- spying (Kash 18:51): stats and cash of other nations are hidden until you spy (1 Supply). The target is told.
+RA.SpySupply = 1
+RA.SpyMinutes = 15
+function RA.Spy(plr, p, id)
+	local d = p.data
+	local q, ai, qplr = findTargetPublic(id)
+	if not q and not ai then return { ok = false, msg = "That nation is no longer in this server" } end
+	if q == p then return { ok = false, msg = "You cannot spy on yourself" } end
+	if d.sup < RA.SpySupply then return { ok = false, msg = "Not enough Supply (" .. RA.SpySupply .. " needed)" } end
+	d.sup -= RA.SpySupply
+	p.spied = p.spied or {}
+	p.spied[id] = os.time()
+	if q then
+		PS.Note(q, { kind = "spied", by = d.name ~= "" and d.name or plr.Name, lv = d.lv })
+	end
+	return { ok = true, intel = RA.Intel(id) }
+end
+function RA.Intel(id)
+	local q, ai = findTargetPublic(id)
+	if q then
+		local qm = PS.Mods(q)
+		local atk, def = PS.Power(q, qm)
+		local units = 0
+		for _, n in pairs(q.data.units) do units += n end
+		return { cash = math.floor(q.data.cash), atk = atk, def = def, lv = q.data.lv, units = units, shield = math.max(0, (q.data.shield or 0) - os.time()) }
+	elseif ai then
+		local atk, def = aiPower(ai)
+		return { cash = math.floor(ai.cash), atk = atk, def = def, lv = ai.lv, ai = true }
+	end
+end
+
 -- everyone you can raid: other onboarded players in this server and the AI nations
 function RA.Targets(p)
 	local list = {}
@@ -141,7 +173,18 @@ function RA.Targets(p)
 		table.insert(list, { id = a.id, name = a.name, flag = a.flag, lv = a.lv, def = def, cash = math.floor(a.cash), ai = true,
 			cooldown = math.max(0, (lastHit[a.id] or 0) + RC.Cooldown - t), shield = 0 })
 	end
-	table.sort(list, function(x, y) return x.def < y.def end)
+	-- hide what you have not spied on (fresh intel lasts RA.SpyMinutes)
+	for _, e in ipairs(list) do
+		local seen = p.spied and p.spied[e.id]
+		if seen and os.time() - seen <= RA.SpyMinutes * 60 then
+			e.intel = true; e.spiedAgo = os.time() - seen
+		else
+			e.sortDef = e.def
+			e.def, e.cash = nil, nil
+		end
+	end
+	table.sort(list, function(x, y) return x.lv < y.lv end)
+	for _, e in ipairs(list) do e.sortDef = nil end
 	return list
 end
 
@@ -185,6 +228,8 @@ local function findTarget(id)
 	if q and q.data.onboarded then return q, nil, plr end
 	return nil
 end
+
+findTargetPublic = findTarget
 
 -- attacker p raids target id. guaranteed = Revenge Strike product
 function RA.Attack(plr, p, id, guaranteed)
