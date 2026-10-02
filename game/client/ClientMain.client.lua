@@ -316,8 +316,11 @@ local function runInits()
 	if initsDone then return end
 	initsDone = true
 	for _, fn in ipairs(inits) do
-		local okI, err = pcall(fn, App)
-		if not okI then warn("[Idle Country] init: " .. tostring(err)) end
+		-- each init in its own thread: one that yields (sound preloading) must not hold up the rest
+		task.spawn(function()
+			local okI, err = pcall(fn, App)
+			if not okI then warn("[Idle Country] init: " .. tostring(err)) end
+		end)
 	end
 end
 function App.big(reason) if App.bigMoment then pcall(App.bigMoment, reason) end end

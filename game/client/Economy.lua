@@ -542,6 +542,8 @@ S.properties = { build = function(host, App)
 	end
 
 	function obj:Refresh(st)
+		st = st or App.state
+		if not st then return end
 		local y = list.CanvasPosition.Y
 		UI.clear(list)
 		local used = 0
