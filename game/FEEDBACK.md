@@ -153,3 +153,15 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
     INFO/mechanics guide that uses images and colors as much as possible. All polished and clean.
 - NEW (18:33) MAP: the Capitol world map must LOOP horizontally like a globe: scroll past the left edge and you see
   the right side, and routes (dotted paths) that cross the edge continue across it (moving left works too).
+- NEW (18:41) POLISH ROUND:
+  * Pop-in animations (crate reveal, officer hire, etc.) grow from the TOP-LEFT corner to the bottom-right. They must
+    scale from the CENTER ("from far away towards me"). Fix for ALL animations. Kash likes the animations otherwise.
+  * The settings button overlaps text on Capitol, Laws and other tabs (panel subtitle, map city panel).
+  * $4.7B after a few hours: check that Auto Dispatch convoys aren't too strong (much of that was test money).
+  * The pulsing circle aura (e.g. Day 7 Founder's Crate) looks AI-made. Use the classic Roblox ROTATING BEAMS
+    (sunburst rays behind the item, like game pass art), tinted, rotating. Open to a better idea.
+  * SOUND: find top-quality SFX in the Roblox Creator Store (the kind top games use, popular ones from other games),
+    picked meticulously, and background MUSIC (no per-era switching). Non-copyright preferred, but quality and theme
+    fit beat non-copyright.
+- NEW (18:44) LIVING PROPERTIES: competitor's property images have small animated details (lights flicker or pulse
+  slowly, sparks from a broken car). Add subtle effects like this to our buildings.
