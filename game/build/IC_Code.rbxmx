@@ -12281,7 +12281,7 @@ local LIMITED = Color3.fromHex("ff9a2e")
 local DARK = Color3.fromHex("121519")
 
 local PASS_ART = { FastConvoys = "pass_express", AutoDispatch = "pass_auto", ExtraConvoys = "pass_convoys", ExtraLots = "pass_lots",
-	BonusOfficer = "pass_officer", CrateLuck = "pass_luck", VIP = "pass_vip", MegaVIP = "pass_megavip" }
+	BonusOfficer = "pass_officer", CrateLuck = "pass_luck", VIP = "pass_vip", MegaVIP = "pass_megavip", CustomFlag = "pass_flag" }
 
 ---------------------------------------------------------------- small local kit
 local function tw(o, t, props, style, dir, rep, rev, delay)
