@@ -38,6 +38,8 @@ function PS.Fresh()
 		inv = { gear = {}, officers = {} }, cab = { slots = {}, bought = 0, player = {} },
 		crates = { limited = 0, basic = 0 }, login = { idx = 1, last = 0 },
 		refresh = { day = 0, tokens = 0 }, weekly = nil, bundle = false,
+		-- 1 Oct evening: seals (task currency) and takedown tickets
+		seals = 0, tickets = 0,
 	}
 end
 
@@ -221,6 +223,7 @@ end
 function PS.LoadsFor(p, a, b, mods)
 	local ctx = PS.TradeCtx(p, mods)
 	ctx.taxPct = PS.TaxFor(p, b)
+	ctx.wants = WS.WantsOf(b)
 	return T.Loads(a, b, ctx)
 end
 
@@ -250,6 +253,7 @@ function PS.Dispatch(p, c, b, load, startAt)
 	local secs = T.TripSeconds(c.at, b, era, fast)
 	c.from = c.at; c.to = b; c.t0 = startAt or now(); c.t1 = c.t0 + secs; c.load = load; c.empty = load == nil or nil
 	c.kind = T.RouteKind(c.from, b)
+	if load and load.good and (not startAt or startAt >= now() - 5) then WS.TickWant(b, load.good) end -- live sends only, not offline catch-up
 	return true
 end
 
@@ -315,12 +319,12 @@ local function pickDistinct(rng, pool, count, exclude)
 	return out
 end
 local function makeTask(def, i, src)
-	return { src = src, i = i, key = def.key, n = def.n, have = 0, done = false, big = def.big, text = def.text, icon = def.icon }
+	return { src = src, i = i, key = def.key, n = def.n, have = 0, done = false, big = def.big, text = def.text, icon = def.icon, diff = src == "weekly" and "weekly" or def.diff or "easy" }
 end
 function PS.EnsureTasks(p)
 	local d = p.data
 	local day = R.Day()
-	if not (d.tasks and d.tasks.day == day and d.tasks.v == 2) then
+	if not (d.tasks and d.tasks.day == day and d.tasks.v == 3) then
 		local rng = Random.new(day * 7919 + (p.userId or 0))
 		local list = {}
 		local keys = {}
@@ -328,13 +332,13 @@ function PS.EnsureTasks(p)
 			local def = TK.Daily[i]
 			if not keys[def.key] and #list < TK.DailyCount then keys[def.key] = true; table.insert(list, makeTask(def, i, "daily")) end
 		end
-		d.tasks = { v = 2, day = day, list = list, bonus = false }
+		d.tasks = { v = 3, day = day, list = list, bonus = false }
 	end
 	local week = TK.Week()
-	if not (d.weekly and d.weekly.week == week) then
+	if not (d.weekly and d.weekly.week == week and d.weekly.v == 3) then
 		local list = {}
 		for i, def in ipairs(TK.Weekly) do table.insert(list, makeTask(def, i, "weekly")) end
-		d.weekly = { week = week, list = list, chest = false }
+		d.weekly = { v = 3, week = week, list = list, chest = false }
 	end
 	if d.refresh.day ~= day then d.refresh.day = day; d.refresh.free = 1 end
 	return d.tasks
@@ -378,9 +382,9 @@ function PS.RefreshTask(p, src, i)
 end
 function PS.TaskReward(p, task)
 	local lv = p.data.lv
-	if task and task.src == "weekly" then return { gold = TK.WeeklyReward.gold, basicCrates = TK.WeeklyReward.basicCrates } end
-	local r = (task and task.big) and TK.DailyRewardBig or TK.DailyReward
-	return { gold = r.gold, cash = math.floor(R.MinuteValue(lv) * r.lawMinutes) }
+	if task and task.src == "weekly" then return { seals = TK.WeeklyReward.seals, cash = math.floor(R.MinuteValue(lv) * TK.WeeklyReward.lawMinutes) } end
+	local r = TK.Diff[task and task.diff or "easy"] or TK.Diff.easy
+	return { seals = r.seals, cash = math.floor(R.MinuteValue(lv) * r.lawMinutes) }
 end
 
 ---------------------------------------------------------------- bosses
@@ -446,13 +450,13 @@ function PS.Snapshot(p)
 	local boss = PS.EnsureBoss(p)
 	return {
 		name = d.name, flag = d.flag, ideo = d.ideo, home = d.home, onboarded = d.onboarded,
-		cash = d.cash, gold = d.gold, lv = d.lv, xp = d.xp, xpReq = R.XpReq(d.lv),
+		cash = d.cash, gold = d.gold, seals = d.seals, tickets = d.tickets, lv = d.lv, xp = d.xp, xpReq = R.XpReq(d.lv),
 		inf = d.inf, infMax = R.MaxInfluence(d.lv, d.sk), infT = d.infT, regenSec = PS.RegenSec(mods),
 		sup = d.sup, supMax = R.MaxSupply(d.lv, d.sk), supT = d.supT,
 		passes = d.passes, lots = d.lots, lotsMax = PS.LotsMax(p), sk = d.sk, skillFree = PS.SkillFree(d), goldLaws = PS.GoldLaws(d),
 		units = d.units, atk = atk, def = def, siege = M.SiegeDamage(d.lv, d.sk, d.units, { attack = mods.siege }),
-		convoys = d.convoys, slots = PS.Slots(p), boss = boss, tasks = tasks, taskReward = PS.TaskReward(p), loan = d.loan,
-		taskRewardBig = PS.TaskReward(p, { big = true }), weeklyReward = PS.TaskReward(p, { src = "weekly" }),
+		convoys = d.convoys, slots = PS.Slots(p), boss = boss, tasks = tasks, loan = d.loan,
+		taskRewards = { easy = PS.TaskReward(p, { diff = "easy" }), medium = PS.TaskReward(p, { diff = "medium" }), hard = PS.TaskReward(p, { diff = "hard" }), weekly = PS.TaskReward(p, { src = "weekly" }) },
 		loanMax = PS.LoanMax(p, mods), alliance = d.alliance, alliance_rec = a, stats = d.stats,
 		gp = p.gp, mods = mods, incHr = PS.IncHr(p, mods), serverTime = now(), autoOff = d.autoOff, studio = Store.IsStudio,
 		online = Store.Online, capitalCredit = d.capitalCredit or 0,
@@ -479,7 +483,7 @@ function PS.Tick(plr)
 	local p = PS.Profiles[plr]
 	if not p then return end
 	local d = p.data
-	Remotes.Sync:FireClient(plr, "tick", { cash = d.cash, gold = d.gold, bank = d.bank, inf = d.inf, infT = d.infT, sup = d.sup, supT = d.supT, t = now() })
+	Remotes.Sync:FireClient(plr, "tick", { cash = d.cash, gold = d.gold, seals = d.seals, bank = d.bank, inf = d.inf, infT = d.infT, sup = d.sup, supT = d.supT, t = now() })
 	if #p.notes > 0 then Remotes.Sync:FireClient(plr, "notes", p.notes); p.notes = {} end
 end
 
@@ -617,6 +621,7 @@ function PS.Step(plr, p)
 	local d = p.data
 	local mods = PS.Mods(p)
 	p.xpMult = mods.xp
+	PS.TaskProgress(p, "online", 1 / 60) -- playtime orders (minutes)
 	if (d.bank or 0) > 0 then d.bank += d.bank * Config.Bank.InterestPerHour * (1 + (mods.interest or 0)) / 3600 end
 	local regen = PS.RegenSec(mods)
 	local maxInf = R.MaxInfluence(d.lv, d.sk)

@@ -65,7 +65,36 @@ end
 -- of what laws earn per minute, short hops about 15%. Six free convoys ~ +150% income; with Express Logistics and
 -- +2 Convoys it is ~ +400%, and Auto Dispatch keeps that going offline (capped at 12 h).
 -- Later eras travel faster; pay is scaled by sqrt(era speed) so a faster era earns ~1.5x per minute, not 2.2x.
-local K = { land = 0.06, coast = 0.07, sea = 0.08 }
+-- Kash 17:22: distance alone must not mean more pay. Pay grows slower than trip time (^0.9) and the big lever is
+-- crossing REGIONS: different regions have different resources (Europe->Asia, Americas->Asia, Asia->Africa pay a lot).
+local K = { land = 0.09, coast = 0.10, sea = 0.11 }
+T.DistExp = 0.9
+
+---------------------------------------------------------------- regions
+T.RegionNames = { NA = "North America", SA = "South America", EU = "Europe", AF = "Africa", ME = "Middle East", AS = "Asia", OC = "Oceania" }
+function T.Region(i)
+	local C = World.Cities[i]
+	if C.region then return C.region end
+	local r
+	if C.land == "AM" then r = C.lat > 12 and "NA" or "SA"
+	elseif C.land == "OC" then r = "OC"
+	elseif C.land == "UK" then r = "EU"
+	elseif C.land == "JP" or C.land == "ID" or C.lon >= 60 then r = "AS"
+	elseif C.lon >= 35 and C.lat > 12 and C.lat < 40 then r = "ME"
+	elseif C.lat < 35 and not (C.lon > 25 and C.lat > 33) then r = "AF"
+	else r = "EU" end
+	C.region = r
+	return r
+end
+-- far-apart regions with very different resources pay the most
+local FAR = { EU_AS = true, NA_AS = true, SA_AS = true, AS_AF = true, NA_AF = true, EU_SA = true, OC_EU = true, OC_NA = true, OC_AF = true }
+function T.RegionMult(a, b)
+	local ra, rb = T.Region(a), T.Region(b)
+	if ra == rb then return 1, "same" end
+	if FAR[ra .. "_" .. rb] or FAR[rb .. "_" .. ra] then return 2.0, "far" end
+	return 1.5, "cross"
+end
+T.WantTicks = 6 -- convoys sent for a wanted good before the capital asks for something else
 
 -- the money yardstick: a minute of law regen, plus a quarter of property income, so trade grows with the country
 function T.TradeValue(lv, incHr) return Rules.MinuteValue(lv) + 0.25 * (incHr or 0) / 60 end
@@ -85,15 +114,17 @@ function T.Loads(a, b, ctx)
 	local base = T.BaseMinutes(a, b)
 	local value = T.TradeValue(ctx.lv, ctx.incHr)
 	local hot = T.HotGood(b, ctx.day)
+	local wants = ctx.wants or B.demand
+	local rmult, rkind = T.RegionMult(a, b)
 	local list, seen = {}, {}
 	local function add(key)
 		if seen[key] then return end
 		local g = T.Goods[key]
 		if not g or g[3] > era then return end
 		seen[key] = true
-		local demand = table.find(B.demand, key) ~= nil
+		local demand = table.find(wants, key) ~= nil
 		local mult = g[4] * (demand and 1.3 or 1) * (key == hot and 1.25 or 1) * (ctx.convoyMult or 1)
-		local profit = value * K[kind] * base ^ 1.1 * mult * math.sqrt(T.EraSpeed[era])
+		local profit = value * K[kind] * base ^ T.DistExp * rmult * mult * math.sqrt(T.EraSpeed[era])
 		local cost = math.floor(profit * 0.6 + 0.5)
 		local pay = math.floor(cost + profit + 0.5)
 		local tax = ctx.taxFree and 0 or math.floor(pay * (ctx.taxPct or 0) / 100 + 0.5)
@@ -101,12 +132,12 @@ function T.Loads(a, b, ctx)
 		table.insert(list, {
 			good = key, name = g[1], icon = g[2], cost = cost, pay = pay, tax = tax, net = pay - tax - cost,
 			xp = math.max(1, math.floor(Rules.MinuteXp(ctx.lv) * base * 0.04 + 0.5)),
-			demand = demand, hot = key == hot, tons = tons,
+			demand = demand, hot = key == hot, tons = tons, region = rkind,
 		})
 	end
 	-- 1) what the origin exports, 2) what the destination wants, 3) era staples, until there are 3 loads
 	for _, k in ipairs(A.exports) do add(k) end
-	for _, k in ipairs(B.demand) do if #list < 3 then add(k) end end
+	for _, k in ipairs(wants) do if #list < 3 then add(k) end end
 	if #list < 3 then
 		local pool = T.Staples
 		local start = (a * 7 + b * 3) % #pool

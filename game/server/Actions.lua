@@ -11,8 +11,8 @@ local O = require(RS.Shared.Officers)
 local TK = require(RS.Shared.Tasks)
 
 local A = {}
-local PS, MK, RA
-function A.Init(ps, mk, ra) PS, MK, RA = ps, mk, ra end
+local PS, MK, RA, TD
+function A.Init(ps, mk, ra, td) PS, MK, RA, TD = ps, mk, ra, td end
 
 local function ok(t) t = t or {}; t.ok = true; return t end
 local function no(msg) return { ok = false, msg = msg } end
@@ -181,6 +181,18 @@ function act.raid(plr, p, a)
 	return RA.Attack(plr, p, a.id, false)
 end
 
+---------------------------------------------------------------- alliance takedown
+function act.tdView(plr, p) return ok({ view = TD.View(p) }) end
+function act.tdAttack(plr, p, a)
+	local t = os.clock()
+	if t - (p.lastTd or 0) < 0.35 then return no("Too fast") end
+	p.lastTd = t
+	local r = TD.Attack(plr, p, a.e)
+	if r.ok then r.view = TD.View(p) end
+	return r
+end
+function act.tdClaim(plr, p) return TD.Claim(plr, p) end
+
 ---------------------------------------------------------------- bosses
 function act.bossHit(plr, p, a)
 	local d = p.data
@@ -322,6 +334,7 @@ end
 local function grantReward(p, r)
 	local d = p.data
 	if r.gold then d.gold += r.gold end
+	if r.seals then d.seals += r.seals end
 	if r.cash then PS.Earn(p, r.cash, "task") end
 	if r.basicCrates then d.crates.basic += r.basicCrates end
 	if r.limitedCrates then d.crates.limited += r.limitedCrates end
@@ -346,8 +359,9 @@ function act.taskBonus(plr, p)
 	if t.bonus then return no("Already claimed") end
 	for _, task in ipairs(t.list) do if not task.done then return no("Claim all of today's orders first") end end
 	t.bonus = true
-	d.gold += TK.DailyBonus.gold
-	return ok({ gold = TK.DailyBonus.gold })
+	d.seals += TK.DailyBonus.seals
+	if TK.DailyBonus.refill then d.inf = math.max(d.inf, R.MaxInfluence(d.lv, d.sk)) end
+	return ok({ seals = TK.DailyBonus.seals })
 end
 function act.weeklyChest(plr, p)
 	local d = p.data
@@ -355,6 +369,7 @@ function act.weeklyChest(plr, p)
 	if d.weekly.chest then return no("Already opened this week") end
 	for _, task in ipairs(d.weekly.list) do if not task.done then return no("Claim all 5 weekly challenges first") end end
 	d.weekly.chest = true
+	d.seals += TK.WeeklyChest.seals
 	d.crates.limited += TK.WeeklyChest.limitedCrates
 	local rng = PS.Rng(p)
 	local g = O.NewGear(rng, math.max(TK.WeeklyChest.gearMinRarity, O.Roll(rng, O.GearOdds.limited, PS.Has(p, "CrateLuck"))))
@@ -371,6 +386,24 @@ function act.taskRefresh(plr, p, a)
 		return no(err)
 	end
 	return ok()
+end
+
+-- Seals shop
+function act.sealBuy(plr, p, a)
+	local d = p.data
+	local it = TK.ShopByKey[a.key]
+	if not it then return no("Unknown item") end
+	if d.seals < it.cost then return no("Not enough Seals (" .. it.cost .. " needed)") end
+	if it.refill == "inf" and d.inf >= R.MaxInfluence(d.lv, d.sk) then return no("Influence is already full") end
+	if it.refill == "sup" and d.sup >= R.MaxSupply(d.lv, d.sk) then return no("Supply is already full") end
+	d.seals -= it.cost
+	if it.tickets then d.tickets += it.tickets end
+	if it.refill == "inf" then d.inf = R.MaxInfluence(d.lv, d.sk) end
+	if it.refill == "sup" then d.sup = R.MaxSupply(d.lv, d.sk) end
+	if it.basicCrates then d.crates.basic += it.basicCrates end
+	if it.limitedCrates then d.crates.limited += it.limitedCrates end
+	if it.shieldHours then d.shield = math.max(d.shield or 0, os.time()) + it.shieldHours * 3600 end
+	return ok({ item = it.key })
 end
 
 ---------------------------------------------------------------- login sheet (pauses, never resets)

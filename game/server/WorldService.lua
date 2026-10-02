@@ -383,12 +383,41 @@ function WS.SetTax(i, aid, pct)
 	return result
 end
 
+---------------------------------------------------------------- city wants (Kash 17:22)
+-- Each capital wants 3 goods. Every convoy sent there with a wanted good is a tick; after T.WantTicks ticks the city
+-- has enough of it and asks for something else. Pay is locked when the convoy leaves, so it never changes en route.
+WS.Wants = {}
+local Trade = require(RS.Shared.Trade)
+local function initWants()
+	for i, C in ipairs(World.Cities) do WS.Wants[i] = { list = table.clone(C.demand), ticks = {} } end
+end
+function WS.WantsOf(i) return WS.Wants[i] and WS.Wants[i].list or World.Cities[i].demand end
+function WS.TickWant(i, good)
+	local w = WS.Wants[i]
+	if not w or not table.find(w.list, good) then return end
+	w.ticks[good] = (w.ticks[good] or 0) + 1
+	if w.ticks[good] < Trade.WantTicks then return end
+	w.ticks[good] = nil
+	-- pick a new good this city does not export and does not already want
+	local C = World.Cities[i]
+	local pool = {}
+	for k, g in pairs(Trade.Goods) do
+		if k ~= "mixed" and not table.find(C.exports, k) and not table.find(w.list, k) then table.insert(pool, k) end
+	end
+	table.sort(pool)
+	if #pool == 0 then return end
+	local idx = table.find(w.list, good)
+	w.list[idx] = pool[math.random(1, #pool)]
+	WS.Changed:Fire("w", i)
+end
+
 ---------------------------------------------------------------- snapshot for clients
 function WS.PublicState()
 	local cities = {}
 	for i = 1, #World.Cities do
 		local c = WS.Cities[i] or defaultCity(i)
 		cities[i] = publicCity(i, c)
+		cities[i].wants = WS.WantsOf(i)
 	end
 	local index = {}
 	for id, s in pairs(WS.Index) do index[id] = s end
@@ -398,6 +427,7 @@ end
 ---------------------------------------------------------------- start
 function WS.Start()
 	for i = 1, #World.Cities do WS.Cities[i] = defaultCity(i) end
+	initWants()
 	task.spawn(function()
 		restoreCities()
 		WS.RefreshAllCities()

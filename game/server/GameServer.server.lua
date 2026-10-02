@@ -19,9 +19,11 @@ local PS = require(Server.PlayerService)
 local MK = require(Server.Market)
 local A = require(Server.Actions)
 local RA = require(Server.Raids)
+local TD = require(Server.Takedown)
 MK.Init(PS)
 RA.Init(PS)
-A.Init(PS, MK, RA)
+TD.Init(PS, WS)
+A.Init(PS, MK, RA, TD)
 
 -- simple flood guard: 25 requests per second per player
 local budget = {}
@@ -87,8 +89,9 @@ end)
 WS.Start()
 MK.Start()
 RA.Start()
+TD.Start()
 PS.Start()
-game:BindToClose(function() pcall(WS.FlushTreasury) end)
+game:BindToClose(function() pcall(TD.Flush); pcall(WS.FlushTreasury) end)
 print("[Idle Country] server ready", WS.PublicState and "" or "")
 
 -- Studio-only test hook (LESSONS: never test destructive actions on a real profile; use IC_TestProfile).
