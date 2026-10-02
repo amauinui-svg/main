@@ -51,3 +51,4 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 - NEW (later): PLAYER-DRIVEN MARKET. Gear has no fixed value; buyers place BUY ORDERS (bids) for a specific item at
   their price; sellers just click their item -> SELL, and it instantly sells to the HIGHEST bid (no choosing between
   orders). "Something is only as valuable as someone is willing to pay for it." Kash: trading rounds out the game.
+- Q10 RESEARCH: NOT now (maybe later). Skill Points stay as they are.
