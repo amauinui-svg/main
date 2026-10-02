@@ -146,7 +146,7 @@ do
 	top.gold = text(goldBtn, "0", { font = "heavy", size = 14, color = C.gold, pos = UDim2.fromOffset(25, 0), sz = UDim2.new(1, -28, 1, 0), z = 23 })
 	goldBtn.Activated:Connect(function() App.open("shop") end)
 
-	local right = mk("Frame", { Name = "Energy", BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -10, 0, 0), Size = UDim2.fromOffset(470, TOP), ZIndex = 21 }, topBar)
+	local right = mk("Frame", { Name = "Energy", BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -62, 0, 0), Size = UDim2.fromOffset(470, TOP), ZIndex = 21 }, topBar)
 	top.right = right
 	UI.icon(right, "icon_influence", 22, C.inf, UDim2.fromOffset(0, 8), { z = 22 })
 	top.inf = UI.bar(right, C.inf, { pos = UDim2.fromOffset(26, 6), sz = UDim2.fromOffset(200, 24), z = 22, textSize = 14 })
@@ -168,7 +168,7 @@ local function layoutTop()
 	local k = 1
 	for _, try in ipairs({ 1, 0.9, 0.8, 0.72, 0.65 }) do
 		k = try
-		local room = w - 10 - 470 * k - (x0 + 340 * k)
+		local room = w - 62 - 470 * k - (x0 + 340 * k)
 		if room >= 300 * k then break end
 	end
 	scaleOf(top.id).Scale = k; scaleOf(top.right).Scale = k; scaleOf(top.mid).Scale = k
@@ -176,7 +176,7 @@ local function layoutTop()
 	top.right.Size = UDim2.fromOffset(470, TOP / k)
 	top.mid.Size = UDim2.fromOffset(300, TOP / k)
 	local midX = x0 + 340 * k
-	local room = w - 10 - 470 * k - midX
+	local room = w - 62 - 470 * k - midX
 	top.mid.Visible = room >= 290 * k
 	top.mid.Position = UDim2.fromOffset(midX + math.max(0, math.floor((room - 300 * k) / 2)), 0)
 end

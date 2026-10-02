@@ -231,7 +231,7 @@ S.takedown = { build = function(host, App)
 
 	-- enemies
 	local foe = mk("Frame", { Name = "Enemies", BackgroundTransparency = 1, Position = UDim2.fromOffset(204, 0), Size = UDim2.new(1, -216, 1, 0), ZIndex = 6 }, scene)
-	local banner = mk("Frame", { Name = "Banner", BackgroundColor3 = C.black, BackgroundTransparency = 0.25, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(0.8, 0, 0, 120), ZIndex = 9, Visible = false }, foe)
+	local banner = mk("Frame", { Name = "Banner", BackgroundColor3 = C.black, BackgroundTransparency = 0.25, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(0.6, 0, 0, 120), ZIndex = 9, Visible = false }, scene)
 	mk("UIStroke", { Color = C.gold, Thickness = 2 }, banner)
 	local bannerTitle = text(banner, "", { font = "display", size = 28, color = C.gold, align = Enum.TextXAlignment.Center, pos = UDim2.fromOffset(10, 14), sz = UDim2.new(1, -20, 0, 34), z = 10, scaled = true })
 	local bannerBody = text(banner, "", { size = 15, color = C.ink, align = Enum.TextXAlignment.Center, pos = UDim2.fromOffset(16, 52), sz = UDim2.new(1, -32, 0, 56), z = 10, wrap = true, valign = Enum.TextYAlignment.Top })
@@ -249,7 +249,6 @@ S.takedown = { build = function(host, App)
 
 	local function buildEnemies(list)
 		UI.clear(foe)
-		banner.Parent = foe
 		enemyViews = {}
 		local n = #list
 		for i, e in ipairs(list) do
@@ -379,7 +378,6 @@ S.takedown = { build = function(host, App)
 		else
 			enemyKey = nil
 			UI.clear(foe)
-			banner.Parent = foe
 			enemyViews = {}
 			banner.Visible = true
 			if stage > 5 then

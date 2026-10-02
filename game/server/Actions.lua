@@ -636,7 +636,7 @@ function act.openCrate(plr, p, a)
 	for _ in pairs(d.inv.gear) do have += 1 end
 	if have + n > Config.InventoryMax then return no("Inventory full (" .. have .. "/" .. Config.InventoryMax .. "). Discard some gear first.") end
 	d.crates[kind] -= n
-	return ok({ results = A.OpenCrates(p, kind, n), kind = kind })
+	return ok({ results = A.OpenCrates(p, kind, n), kind = kind, left = d.crates[kind] })
 end
 function act.buyCrate(plr, p, a)
 	local d = p.data

@@ -493,7 +493,7 @@ end
 local function openCrates(App, kind, n, btn)
 	local res = App.req("openCrate", { kind = kind, n = n }, btn)
 	if not res.ok then return end
-	local left = App.state and App.state.crates and App.state.crates[kind] or 0
+	local left = res.left or (App.state and App.state.crates and App.state.crates[kind]) or 0
 	reveal(App, res, {
 		again = left > 0 and function(b) openCrates(App, kind, 1, b) end or nil,
 		againLabel = "OPEN ANOTHER (" .. left .. ")",

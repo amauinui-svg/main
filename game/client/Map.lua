@@ -35,6 +35,11 @@ function Map.build(host, App)
 
 	local view = mk("Frame", { Name = "View", BackgroundColor3 = OCEAN, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ClipsDescendants = true, ZIndex = 2, Active = true }, host)
 	local mapImg = UI.img(view, "map_world", { name = "World", pixel = true, z = 3, slice = false, sz = UDim2.fromOffset(768, 292) })
+	-- the world loops like a globe (Kash 18:33): two copies of the map sit left and right of the real one, and every
+	-- pin, route, convoy and territory is drawn at whichever copy of its x is nearest the camera (wrapX)
+	for _, side in ipairs({ -1, 1 }) do
+		UI.img(mapImg, "map_world", { name = "Wrap" .. side, pixel = true, z = 3, slice = false, sz = UDim2.fromScale(1, 1), pos = UDim2.fromScale(side, 0) })
+	end
 	local tintLayer = mk("Frame", { Name = "Territory", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 4 }, mapImg)
 	local routeLayer = mk("Frame", { Name = "Routes", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 5 }, mapImg)
 	local pinLayer = mk("Frame", { Name = "Pins", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 6 }, mapImg)
@@ -45,12 +50,17 @@ function Map.build(host, App)
 	local selected, selConvoy = nil, 1
 
 	local function viewSize() return view.AbsoluteSize / App.root:FindFirstChildOfClass("UIScale").Scale end
+	local MW = 768
+	-- the copy of map x nearest the camera centre
+	local function wrapX(px) return px + MW * math.floor((cx - px) / MW + 0.5) end
+	-- shortest horizontal distance on the looping map
+	local function wrapDx(a, b) local d = (a - b) % MW; if d > MW / 2 then d -= MW end; return d end
 	local function clampView()
 		local vs = viewSize()
 		minZoom = math.max(vs.X / 768, 1)
 		zoom = math.clamp(zoom, minZoom, maxZoom)
 		local halfW, halfH = vs.X / 2 / zoom, vs.Y / 2 / zoom
-		cx = math.clamp(cx, halfW, 768 - halfW)
+		cx = cx % MW -- no left/right edge: the map wraps around
 		if halfH * 2 >= 292 then cy = 146 else cy = math.clamp(cy, halfH, 292 - halfH) end
 	end
 	local function place()
@@ -59,13 +69,14 @@ function Map.build(host, App)
 		mapImg.Size = UDim2.fromOffset(768 * zoom, 292 * zoom)
 		mapImg.Position = UDim2.fromOffset(vs.X / 2 - cx * zoom, vs.Y / 2 - cy * zoom)
 		obj.labels()
+		if obj.rewrap then obj.rewrap() end
 	end
 	local function toMap(screen)
 		local s = App.root:FindFirstChildOfClass("UIScale").Scale
 		local rel = (screen - mapImg.AbsolutePosition) / s
 		return rel.X / zoom, rel.Y / zoom
 	end
-	local function at(px, py) return UDim2.fromScale(px / 768, py / 292) end
+	local function at(px, py) return UDim2.fromScale(wrapX(px) / 768, py / 292) end
 
 	---------------------------------------------------------------- territory tints
 	local function drawTerritory()
@@ -82,8 +93,10 @@ function Map.build(host, App)
 			end
 			if color then
 				local holder = mk("Frame", { Name = "T" .. i, BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 4 }, tintLayer)
+				holder:SetAttribute("px", W.Cities[i].px)
+				holder.Position = UDim2.fromScale((wrapX(W.Cities[i].px) - W.Cities[i].px) / MW, 0)
 				for _, r in ipairs(RUNS[i]) do
-					mk("Frame", { BorderSizePixel = 0, BackgroundColor3 = color, BackgroundTransparency = alpha, Position = at(r[2], r[1]), Size = UDim2.fromScale((r[3] - r[2] + 1) / 768, 1 / 292), ZIndex = 4 }, holder)
+					mk("Frame", { BorderSizePixel = 0, BackgroundColor3 = color, BackgroundTransparency = alpha, Position = UDim2.fromScale(r[2] / 768, r[1] / 292), Size = UDim2.fromScale((r[3] - r[2] + 1) / 768, 1 / 292), ZIndex = 4 }, holder)
 				end
 			end
 		end
@@ -152,17 +165,20 @@ function Map.build(host, App)
 				local col = c.load and C.good or C.ink
 				local dots = {}
 				for k = 0, n - 1 do
+					local t = (k + 0.5) / n
+					local x, y = T.Lerp(c.from, c.to, t)
 					local d = UI.img(routeLayer, "dot_route", { sz = UDim2.fromOffset(7, 7), anchor = Vector2.new(0.5, 0.5), z = 5, slice = false, color = col })
-					dots[k + 1] = d
+					dots[k + 1] = { d, t, x, y }
 				end
 				local ring = UI.img(routeLayer, "ring", { sz = UDim2.fromOffset(26, 26), anchor = Vector2.new(0.5, 0.5), pos = at(B.px, B.py), z = 5, slice = false, color = col })
-				routeDots[i] = { dots = dots, n = n, ring = ring, c = c }
+				routeDots[i] = { dots = dots, n = n, ring = ring, c = c, bx = B.px, by = B.py }
 			else
 				parked[c.at] = (parked[c.at] or 0) + 1
 				local k = parked[c.at]
 				local cc = W.Cities[c.at]
-				b.Position = UDim2.new(cc.px / 768, 12 + (k - 1) * 10, cc.py / 292, -16 - (k - 1) * 4)
+				b.Position = UDim2.new(wrapX(cc.px) / 768, 12 + (k - 1) * 10, cc.py / 292, -16 - (k - 1) * 4)
 				b.Size = UDim2.fromOffset(24, 24)
+				b:SetAttribute("parkX", cc.px)
 			end
 		end
 	end
@@ -198,7 +214,23 @@ function Map.build(host, App)
 					local f = math.clamp((now - c.t0) / math.max(1, c.t1 - c.t0), 0, 1)
 					local x, y = T.Lerp(c.from, c.to, f)
 					b.Position = at(x, y)
-					for _, d in ipairs(routeDots[i] or {}) do d[1].ImageTransparency = d[2] < f and 0.85 or 0.15 end
+					local rd = routeDots[i]
+					if rd then
+						-- dots march toward the destination; the part already travelled is hidden
+						for _, d in ipairs(rd.dots) do
+							local img, t = d[1], d[2]
+							if t < f then img.Visible = false
+							else
+								img.Visible = true
+								img.Position = at(d[3], d[4])
+								img.ImageTransparency = 0.1 + 0.55 * (0.5 + 0.5 * math.sin(t * rd.n * 0.8 - now * 6))
+							end
+						end
+						rd.ring.Position = at(rd.bx, rd.by)
+						rd.ring.Rotation = (now * 40) % 360
+						local pulse = 26 * (1 + 0.15 * math.sin(now * 4))
+						rd.ring.Size = UDim2.fromOffset(pulse, pulse)
+					end
 				end
 			end
 		end
@@ -242,7 +274,7 @@ function Map.build(host, App)
 				local mx, my = toMap(Vector2.new(input.Position.X, input.Position.Y))
 				local best, bestD
 				for i, c in ipairs(W.Cities) do
-					local d = math.sqrt((c.px - mx) ^ 2 + (c.py - my) ^ 2)
+					local d = math.sqrt(wrapDx(c.px, mx) ^ 2 + (c.py - my) ^ 2)
 					if not bestD or d < bestD then best, bestD = i, d end
 				end
 				if best and bestD * zoom < 40 then obj.select(best) end
@@ -632,6 +664,18 @@ function Map.build(host, App)
 	end
 	obj.focus = function(i) local c = W.Cities[i]; cx, cy = c.px, c.py; zoom = math.max(zoom, 2.5); place(); obj.select(i) end
 	App.focusCity = obj.focus
+	function obj.rewrap()
+		for i, p in ipairs(pins) do local c = W.Cities[i]; p.Inst.Position = at(c.px, c.py) end
+		for _, h in ipairs(tintLayer:GetChildren()) do
+			local px = h:GetAttribute("px")
+			if px then h.Position = UDim2.fromScale((wrapX(px) - px) / MW, 0) end
+		end
+		for _, b in ipairs(convoyLayer:GetChildren()) do
+			local px = b:GetAttribute("parkX")
+			if px then b.Position = UDim2.new(wrapX(px) / 768, b.Position.X.Offset, b.Position.Y.Scale, b.Position.Y.Offset) end
+		end
+		if selected then local c = W.Cities[selected]; ring.Position = at(c.px, c.py) end
+	end
 	place()
 	return obj
 end

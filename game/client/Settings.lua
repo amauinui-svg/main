@@ -95,8 +95,8 @@ M._settings = { init = function(App)
 	end
 
 	---------------------------------------------------------------- the gear button (top-right, under the top bar)
-	local BTN = 52
-	local basePos = UDim2.new(1, -12, 0, App.TOP + 10)
+	local BTN = 46
+	local basePos = UDim2.new(1, -8, 0, math.floor((App.TOP - 46) / 2)) -- inside the top bar, far right (like the reference menu button)
 	local gear = UI.img(App.root, "btn_slate", { button = true, name = "SettingsButton", pos = basePos, anchor = Vector2.new(1, 0), sz = UDim2.fromOffset(BTN, BTN), z = 30 })
 	local gScale = mk("UIScale", {}, gear)
 	local gIcon = UI.icon(gear, Assets.icon_settings and "icon_settings" or "icon_gauge", 28, C.manila, UDim2.new(0.5, 0, 0.5, -2), { z = 31, anchor = Vector2.new(0.5, 0.5) })
