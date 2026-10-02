@@ -45,3 +45,9 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 - Q8 Name: OFFICERS (chosen). Map cosmetics (convoy skins, pins, flag emblems, titles) = YES as monetization, but Kash
   wants ONE MORE system that actually BENEFITS the player (beyond alliance, laws, buildings, army, officers+gear).
   He feels something is still missing. (Options proposed in Q9.)
+- Q9 Kash likes RESEARCH but worried about complexity. Proposed: merge Skill Points INTO Research (same tab count).
+  Awaiting decision (Q10).
+- NEW: INVENTORY tab to track all gear owned (weapons, armor, officers...).
+- NEW (later): PLAYER-DRIVEN MARKET. Gear has no fixed value; buyers place BUY ORDERS (bids) for a specific item at
+  their price; sellers just click their item -> SELL, and it instantly sells to the HIGHEST bid (no choosing between
+  orders). "Something is only as valuable as someone is willing to pay for it." Kash: trading rounds out the game.
