@@ -12,6 +12,69 @@ local TK = require(Shared.Tasks)
 
 local S = {}
 
+---------------------------------------------------------------- centre pop-ins and rotating beams (Kash 18:41)
+local FX = {}
+local function fxTween(o, t, props, style, dir, rep)
+	local x = TweenService:Create(o, TweenInfo.new(t, style or Enum.EasingStyle.Quad, dir or Enum.EasingDirection.Out, rep or 0), props)
+	x:Play()
+	return x
+end
+-- re-anchor a GuiObject on its centre without moving it, so a UIScale grows it from the middle
+function FX.centre(g)
+	local a = g.AnchorPoint
+	if a.X == 0.5 and a.Y == 0.5 then return g end
+	local p, sz = g.Position, g.Size
+	g.AnchorPoint = Vector2.new(0.5, 0.5)
+	g.Position = UDim2.new(p.X.Scale + sz.X.Scale * (0.5 - a.X), p.X.Offset + sz.X.Offset * (0.5 - a.X), p.Y.Scale + sz.Y.Scale * (0.5 - a.Y), p.Y.Offset + sz.Y.Offset * (0.5 - a.Y))
+	return g
+end
+-- fade a whole tree in from fully transparent to the values it was built with
+function FX.fadeIn(root, t)
+	t = t or 0.18
+	local items = root:GetDescendants()
+	table.insert(items, root)
+	for _, d in ipairs(items) do
+		local props = {}
+		if d:IsA("GuiObject") and d.BackgroundTransparency < 1 then props.BackgroundTransparency = d.BackgroundTransparency end
+		if (d:IsA("ImageLabel") or d:IsA("ImageButton")) and d.ImageTransparency < 1 then props.ImageTransparency = d.ImageTransparency end
+		if (d:IsA("TextLabel") or d:IsA("TextButton")) and d.TextTransparency < 1 then props.TextTransparency = d.TextTransparency end
+		if d:IsA("UIStroke") and d.Transparency < 1 then props.Transparency = d.Transparency end
+		if next(props) then
+			for k in pairs(props) do d[k] = 1 end
+			fxTween(d, t, props)
+		end
+	end
+end
+-- pop in from the centre ("from far away towards me"): UIScale ~0.6 -> 1 with Back easing, plus a quick fade
+function FX.popIn(g, from, t, noFade)
+	FX.centre(g)
+	local sc = g:FindFirstChildOfClass("UIScale")
+	if not sc then sc = Instance.new("UIScale"); sc.Parent = g end
+	sc.Scale = from or 0.6
+	fxTween(sc, t or 0.32, { Scale = 1 }, Enum.EasingStyle.Back)
+	-- deferred so the content the caller builds right after this call fades in with the panel
+	if not noFade then task.defer(FX.fadeIn, g, math.min(0.2, (t or 0.32) * 0.7)) end
+	return sc
+end
+function FX.spin(o, degPerSec)
+	o.Rotation = (os.clock() * degPerSec) % 360 -- phase from the clock, so a rebuilt card does not jump
+	fxTween(o, 360 / math.abs(degPerSec), { Rotation = o.Rotation + (degPerSec >= 0 and 360 or -360) }, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1)
+end
+-- the classic game-pass ROTATING BEAMS behind an item: soft glow + two counter-rotating tinted sunburst layers.
+-- size = full diameter in px (about 1.6-2x the item); strength 0..1
+function FX.beams(UI, parent, color, size, pos, z, strength)
+	strength = math.clamp(strength or 1, 0, 1)
+	local root = UI.mk("Frame", { Name = "Beams", BackgroundTransparency = 1, Size = UDim2.fromOffset(size, size), Position = pos or UDim2.fromScale(0.5, 0.5),
+		AnchorPoint = Vector2.new(0.5, 0.5), ZIndex = z or 2 }, parent)
+	local mid, half = UDim2.fromScale(0.5, 0.5), Vector2.new(0.5, 0.5)
+	UI.img(root, "glow_soft", { name = "Glow", color = color, alpha = 1 - 0.45 * strength, slice = false, z = root.ZIndex, anchor = half, pos = mid, sz = UDim2.fromScale(0.62, 0.62) })
+	local back = UI.img(root, "beams", { name = "Rays", color = color, alpha = 1 - 0.55 * strength, slice = false, z = root.ZIndex, anchor = half, pos = mid, sz = UDim2.fromScale(1, 1) })
+	local front = UI.img(root, "beams_wide", { name = "RaysWide", color = color:Lerp(Color3.new(1, 1, 1), 0.3), alpha = 1 - 0.4 * strength, slice = false, z = root.ZIndex, anchor = half, pos = mid, sz = UDim2.fromScale(0.78, 0.78) })
+	FX.spin(back, 22)
+	FX.spin(front, -34)
+	return root
+end
+
 ---------------------------------------------------------------- local helpers
 local function hms(sec)
 	sec = math.max(0, math.floor(sec))
@@ -70,15 +133,17 @@ local function infoButton(UI, App, parent, pos, title, body, z)
 		local p = (b.AbsolutePosition - root.AbsolutePosition) / s
 		local w = 300
 		local x = math.clamp(p.X - w / 2, 8, App.W() - w - 8)
-		tip = UI.img(root, "panel_plain", { name = "InfoTip", pos = UDim2.fromOffset(x, p.Y + 26), sz = UDim2.fromOffset(w, 0), z = 85 })
+		-- anchored top-centre so it grows out of the "i" button instead of from its top-left corner
+		tip = UI.img(root, "panel_plain", { name = "InfoTip", pos = UDim2.fromOffset(x + w / 2, p.Y + 26), anchor = Vector2.new(0.5, 0), sz = UDim2.fromOffset(w, 0), z = 85 })
 		tip.AutomaticSize = Enum.AutomaticSize.Y
 		UI.mk("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12), PaddingTop = UDim.new(0, 10), PaddingBottom = UDim.new(0, 12) }, tip)
 		UI.mk("UIListLayout", { Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder }, tip)
 		UI.text(tip, title, { font = "heavy", size = 15, color = UI.C.gold, z = 86, order = 1 })
 		local l = UI.text(tip, body, { size = 14, wrap = true, z = 86, order = 2, sz = UDim2.new(1, 0, 0, 0) })
 		l.AutomaticSize = Enum.AutomaticSize.Y
-		local sc = UI.mk("UIScale", { Scale = 0.9 }, tip)
-		tween(sc, 0.15, { Scale = 1 }, Enum.EasingStyle.Back)
+		local sc = UI.mk("UIScale", { Scale = 0.8 }, tip)
+		tween(sc, 0.18, { Scale = 1 }, Enum.EasingStyle.Back)
+		FX.fadeIn(tip, 0.12)
 		local mine = tip
 		task.delay(5, function() if tip == mine then hide() end end)
 	end
@@ -108,16 +173,8 @@ local function buildLoginCards(App, parent, st, onClaimed)
 			color = today and C.gold or (r.big and C.gold or C.ink) })
 		-- reward picture: the big day shows the Founder's Crate art with a soft glow
 		if r.big then
-			local glow = UI.img(card, "circle", { sz = UDim2.fromOffset(64, 64), pos = UDim2.new(0.5, 0, 0, 52), anchor = Vector2.new(0.5, 0.5), color = C.gold, alpha = 0.75, z = z, slice = false })
-			task.spawn(function()
-				while glow.Parent do
-					tween(glow, 1.2, { ImageTransparency = 0.55, Size = UDim2.fromOffset(72, 72) }, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
-					task.wait(1.2)
-					if not glow.Parent then break end
-					tween(glow, 1.2, { ImageTransparency = 0.8, Size = UDim2.fromOffset(62, 62) }, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
-					task.wait(1.2)
-				end
-			end)
+			-- classic rotating game-pass beams behind the crate (Kash 18:41: no pulsing circle)
+			FX.beams(UI, card, C.gold, 96, UDim2.new(0.5, 0, 0, 52), z - 1, claimed and 0.35 or 0.9)
 			local img = UI.img(card, "crate_limited", { sz = UDim2.fromOffset(48, 48), pos = UDim2.new(0.5, 0, 0, 52), anchor = Vector2.new(0.5, 0.5), z = z + 1, slice = false, fit = true })
 			img.ScaleType = Enum.ScaleType.Fit
 		else
@@ -187,8 +244,7 @@ local function showLogin(App)
 	local w = math.min(App.W() - 40, 860)
 	local cardH = App.H() < 560 and 150 or 170
 	local panel, body = UI.panel(host, "DAILY LOGIN", { sz = UDim2.fromOffset(w, cardH + 168), pos = UDim2.fromScale(0.5, 0.5), anchor = Vector2.new(0.5, 0.5), z = 71 })
-	local sc = UI.mk("UIScale", { Scale = 0.85 }, panel)
-	tween(sc, 0.28, { Scale = 1 }, Enum.EasingStyle.Back)
+	local sc = FX.popIn(panel, 0.6, 0.32)
 	local function close()
 		local tw = tween(sc, 0.15, { Scale = 0.9 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
 		tw.Completed:Connect(function() if panel.Parent then host.Visible = false; UI.clear(host) end end)

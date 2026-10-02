@@ -228,7 +228,7 @@ App.content = content
 local defs = {}
 local inits = {} -- modules can return entries without a build field: { init = function(App) end }
 -- later modules override earlier ones (Warfare's raids replace War's battle, Contracts replaces Economy's tasks)
-for _, modName in ipairs({ "Map", "Economy", "War", "Social", "Warfare", "Cabinet", "Country", "Contracts", "Settings", "Shop" }) do
+for _, modName in ipairs({ "Sound", "Map", "Economy", "War", "Social", "Warfare", "Cabinet", "Country", "Contracts", "Settings", "Shop" }) do
 	local okReq, mod = pcall(require, ClientMods:WaitForChild(modName, 5))
 	if okReq and type(mod) == "table" then
 		for k, def in pairs(mod) do
@@ -247,6 +247,7 @@ local function runInits()
 	end
 end
 function App.big(reason) if App.bigMoment then pcall(App.bigMoment, reason) end end
+function App.play(name, opts) if App.sfx then pcall(App.sfx, name, opts) end end
 
 function App.open(key)
 	if not defs[key] then App.toast("Coming soon", nil, "info"); return end
@@ -338,6 +339,7 @@ local function levelBanner(n)
 	if n.slot then table.insert(bits, "+1 convoy slot") end
 	table.insert(bits, "+" .. n.points .. " skill points")
 	App.toast("LEVEL " .. n.lv .. " · INFLUENCE REFILLED", table.concat(bits, " · "), "gold")
+	App.play("level_up")
 	if n.era or n.lv % 5 == 0 then App.big("level") end
 end
 local function handleNotes(notes)
@@ -345,17 +347,24 @@ local function handleNotes(notes)
 		if n.kind == "level" then levelBanner(n)
 		elseif n.kind == "mastery" then
 			App.toast(R.MasteryName[n.tier + 1] .. " MASTERY", n.law .. ": +" .. n.pct .. "% cash and XP" .. (n.tier >= 2 and " · 5% less Influence" or "") .. (n.point and " · +1 skill point" or ""), "gold")
+			App.play(n.point and "stage_clear" or "claim")
 			if n.point then App.big("mastery") end
 		elseif n.kind == "arrive" then
 			local World = require(Shared.World)
 			local Trade = require(Shared.Trade)
+			App.play("convoy_arrive", { volume = 0.5 })
 			App.toast("DELIVERED TO " .. string.upper(World.Cities[n.city].name), Trade.GoodName(n.good) .. " · +" .. R.Money(n.cash) .. (n.tax > 0 and (" (tax " .. R.Money(n.tax) .. ")") or "") .. " · +" .. R.Short(n.xp) .. " XP", "good")
 		elseif n.kind == "offline" then
 			local parts = { "+" .. R.Money(n.cash) }
 			if n.trips > 0 then table.insert(parts, n.trips .. " convoy deliveries") end
 			if n.levels > 0 then table.insert(parts, "+" .. n.levels .. " levels") end
 			App.toast("WHILE YOU WERE AWAY (" .. R.Duration(n.away) .. ")", table.concat(parts, " · "), "good")
-		elseif n.kind == "boss" then App.toast(string.upper(n.name) .. " DEFEATED", "+" .. n.gold .. " gold · +" .. R.Money(n.cash) .. " · +" .. R.Short(n.xp) .. " XP", "gold"); App.big("boss")
+		elseif n.kind == "boss" then App.toast(string.upper(n.name) .. " DEFEATED", "+" .. n.gold .. " gold · +" .. R.Money(n.cash) .. " · +" .. R.Short(n.xp) .. " XP", "gold"); App.play("boss_defeat"); App.big("boss")
+		elseif n.kind == "raided" and App.raidedPopup then
+			pcall(App.raidedPopup, n)
+			App.navBadge("battle", "!")
+		elseif n.kind == "spied" then
+			if App.spiedNote then pcall(App.spiedNote, n) else App.toast(string.upper(n.by or "SOMEONE") .. " SPIED ON YOU", nil, "bad") end
 		elseif n.kind == "raided" then
 			if n.win then
 				App.toast(string.upper(n.by) .. " RAIDED YOU", "Stole " .. R.Money(n.cash) .. (n.lost and n.lost > 0 and (" · " .. n.lost .. " soldiers lost") or "") .. " · open RAIDS for REVENGE", "bad")
@@ -366,7 +375,7 @@ local function handleNotes(notes)
 		elseif n.kind == "raidResult" then
 			App.emit("raidResult", n.res)
 			local r = n.res or {}
-			if r.ok then App.toast(r.win and "REVENGE STRIKE · VICTORY" or "REVENGE STRIKE", r.win and ("+" .. R.Money(r.cash or 0)) or nil, r.win and "gold" or "bad") end
+			if r.ok and not r.fight then App.toast(r.win and "REVENGE STRIKE · VICTORY" or "REVENGE STRIKE", r.win and ("+" .. R.Money(r.cash or 0)) or nil, r.win and "gold" or "bad") end
 		elseif n.kind == "crates" then App.toast("+" .. n.n .. " FOUNDER'S CRATE" .. (n.n > 1 and "S" or ""), "Open them in your Inventory", "gold"); App.navBadge("inventory", "!")
 		elseif n.kind == "bundle" then App.toast("LIMITED BUNDLE UNLOCKED", "Empress Valeria Thorne and the Founder's Saber joined you", "gold"); App.big("bundle")
 		elseif n.kind == "toast" then App.toast(n.text, nil, n.tone)

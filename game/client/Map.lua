@@ -500,8 +500,12 @@ function Map.build(host, App)
 		local ctl = row(30, nx())
 		if owner then
 			mk("Frame", { BackgroundColor3 = Color3.fromHex(owner.color), BorderSizePixel = 0, Size = UDim2.fromOffset(16, 16), Position = UDim2.fromOffset(0, 7), ZIndex = 28 }, ctl)
-			text(ctl, "[" .. owner.tag .. "] " .. owner.name, { font = "heavy", size = 16, pos = UDim2.fromOffset(24, 0), sz = UDim2.new(1, -120, 1, 0), z = 28, truncate = true })
-			UI.chip(ctl, "TAX " .. (cs.tax or 0) .. "%", { icon = "icon_tax", pos = UDim2.new(1, 0, 0, 3), anchor = Vector2.new(1, 0), z = 28, manila = (cs.tax or 0) > 0 })
+			text(ctl, "[" .. owner.tag .. "] " .. owner.name, { font = "heavy", size = 16, pos = UDim2.fromOffset(24, 0), sz = UDim2.new(1, -196, 1, 0), z = 28, truncate = true })
+			-- TAX (convoys) and RENT (residents' property income, Kash 18:49) chips, right-aligned
+			local tags = mk("Frame", { Name = "Rates", BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 3), Size = UDim2.new(0, 170, 0, 24), ZIndex = 28 }, ctl)
+			mk("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Right, Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder }, tags)
+			UI.chip(tags, "TAX " .. (cs.tax or 0) .. "%", { icon = "icon_tax", z = 28, order = 1, manila = (cs.tax or 0) > 0 })
+			UI.chip(tags, "Rent " .. (cs.rent or 0) .. "%", { icon = "icon_home", z = 28, order = 2, manila = (cs.rent or 0) > 0 })
 		else
 			text(ctl, "Unclaimed · no tax", { font = "heavy", size = 16, color = C.muted, sz = UDim2.fromScale(1, 1), z = 28 })
 		end
@@ -580,6 +584,22 @@ function Map.build(host, App)
 				UI.button(tax, "slate", "+", function() obj.taxPick = math.min(Config.Alliance.TaxMax, obj.taxPick + 1); show() end, { sz = UDim2.fromOffset(40, 38), pos = UDim2.fromOffset(198, 0), z = 29 })
 				UI.icon(tax, "icon_tax", 22, C.manila, UDim2.fromOffset(10, 9), { z = 28 })
 				UI.button(tax, "manila", "SET", function(btn) local r = App.req("setTax", { city = b, pct = obj.taxPick }, btn); if r.ok then App.toast("Tax in " .. city.name .. " is now " .. r.tax .. "%", "Changes once a day", "good") end end, { sz = UDim2.fromOffset(80, 38), pos = UDim2.new(1, -80, 0, 0), z = 29, textSize = 15 })
+				-- RENT: a % of the property income of everyone whose capital is this city (max by tier, Kash 18:49)
+				local maxRent = (Config.Rent and Config.Rent.Max and Config.Rent.Max[city.tier]) or 0
+				local rent = row(40, nx())
+				obj.rentPick = math.clamp(obj.rentPick or (cs.rent or 0), 0, maxRent)
+				local rl = text(rent, "", { font = "heavy", size = 16, pos = UDim2.fromOffset(92, 0), sz = UDim2.fromOffset(100, 40), z = 28, align = Enum.TextXAlignment.Center })
+				local function showRent() rl.Text = "RENT " .. obj.rentPick .. "%" end
+				showRent()
+				UI.button(rent, "slate", "-", function() obj.rentPick = math.max(0, obj.rentPick - 1); showRent() end, { sz = UDim2.fromOffset(40, 38), pos = UDim2.fromOffset(46, 0), z = 29 })
+				UI.button(rent, "slate", "+", function() obj.rentPick = math.min(maxRent, obj.rentPick + 1); showRent() end, { sz = UDim2.fromOffset(40, 38), pos = UDim2.fromOffset(198, 0), z = 29 })
+				UI.icon(rent, "icon_home", 22, C.manila, UDim2.fromOffset(10, 9), { z = 28 })
+				UI.button(rent, "manila", "SET", function(btn)
+					local r = App.req("setRent", { city = b, pct = obj.rentPick }, btn)
+					if r.ok then App.toast("Rent in " .. city.name .. " is now " .. tostring(r.rent or obj.rentPick) .. "%", "Changes once a day", "good") end
+				end, { sz = UDim2.fromOffset(80, 38), pos = UDim2.new(1, -80, 0, 0), z = 29, textSize = 15 })
+				local rnote = row(18, nx())
+				text(rnote, "Residents pay this % of their property income · max " .. maxRent .. "% for a " .. string.lower(TIER_NAME[city.tier] or "city"), { size = 12, color = C.muted, sz = UDim2.fromScale(1, 1), z = 28, truncate = true })
 			end
 		else
 			local dmg = st.siege or 0
@@ -610,7 +630,7 @@ function Map.build(host, App)
 	end
 
 	function obj.select(i, keepConvoy)
-		if selected ~= i then obj.taxPick = nil end
+		if selected ~= i then obj.taxPick = nil; obj.rentPick = nil end
 		selected = i
 		ring.Visible = i ~= nil
 		if i then

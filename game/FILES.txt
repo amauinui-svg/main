@@ -17,6 +17,7 @@ server/Takedown.lua|ServerScriptService.Server|Takedown|ModuleScript
 server/Actions.lua|ServerScriptService.Server|Actions|ModuleScript
 server/GameServer.server.lua|ServerScriptService|GameServer|Script
 client/UI.lua|ReplicatedStorage.Client|UI|ModuleScript
+client/Sound.lua|ReplicatedStorage.Client|Sound|ModuleScript
 client/Map.lua|ReplicatedStorage.Client|Map|ModuleScript
 client/Economy.lua|ReplicatedStorage.Client|Economy|ModuleScript
 client/War.lua|ReplicatedStorage.Client|War|ModuleScript

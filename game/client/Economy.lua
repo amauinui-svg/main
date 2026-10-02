@@ -87,7 +87,10 @@ S.laws = { build = function(host, App)
 					if s.lv < L.lvl then if not repeating then App.toast("Unlocks at level " .. L.lvl, nil, "bad"); App.shake(btn.Inst) end; return false end
 					if s.inf < L.cost then if not repeating then App.toast("Not enough Influence", "Wait for it to refill, or refill with gold in the Shop", "bad"); App.shake(btn.Inst) end; return false end
 					local res = App.req("passLaw", { i = i }, not repeating and btn or nil)
-					if res.ok then App.float(btn.Inst, "+" .. R.Money(res.cash) .. "  <font color='#b19cff'>+" .. res.xp .. " XP</font>") end
+					if res.ok then
+							App.float(btn.Inst, "+" .. R.Money(res.cash) .. "  <font color='#b19cff'>+" .. res.xp .. " XP</font>")
+							if App.sfx then App.sfx("law_pass", { volume = 0.55 }) end
+						end
 					return res.ok
 				end
 				o.btn.Inst.Activated:Connect(function() pass(o.btn) end)
@@ -134,7 +137,21 @@ S.properties = { build = function(host, App)
 	local TweenService = game:GetService("TweenService")
 	local Config = require(Shared.Config)
 	local _, body, sub = frame(host, App, "PROPERTIES")
-	local obj = { tab = 1, building = {}, pickLot = nil }
+	local obj = { tab = 1, building = {}, pickLot = nil, lights = {} }
+	-- light animation: slow breathing glow, and on some buildings an occasional flicker
+	game:GetService("RunService").Heartbeat:Connect(function()
+		if not host.Visible or #obj.lights == 0 then return end
+		local t = os.clock()
+		for i = #obj.lights, 1, -1 do
+			local L = obj.lights[i]
+			if not L.img.Parent then table.remove(obj.lights, i)
+			else
+				local a = 0.35 + 0.3 * (0.5 + 0.5 * math.sin(t * 0.9 + L.seed))
+				if L.flicker and math.sin(t * 7.3 + L.seed * 3) > 0.93 then a = 0.95 end
+				L.img.ImageTransparency = a
+			end
+		end
+	end)
 	local list = UI.list(body, { pos = UDim2.fromOffset(0, 44), sz = UDim2.new(1, 0, 1, -44), gap = 10, z = 6 })
 	local tabs = UI.tabs(body, { "YOUR BLOCK", "BUILD" }, function(i) obj.tab = i; obj.pickLot = nil; obj:Refresh(App.state) end, { w = 150, z = 7 })
 	tabs:Set(1)
@@ -184,6 +201,7 @@ S.properties = { build = function(host, App)
 				task.wait(0.3)
 			end
 			obj.building[lot] = nil
+			if App.sfx and host.Visible then App.sfx("build_done") end
 			if host.Visible and obj.tab == 1 then obj:Refresh(App.state) end
 		end)
 		return lbl
@@ -228,6 +246,12 @@ S.properties = { build = function(host, App)
 						Position = UDim2.fromScale(0.5, 0.74), Size = UDim2.fromScale(0.62, 0.16), ZIndex = 8 }, t)
 					UI.mk("UICorner", { CornerRadius = UDim.new(1, 0) }, shadow)
 					local bld = UI.img(t, propImg(p), { sz = UDim2.fromScale(0.8, 0.8), pos = UDim2.fromScale(0.5, 0.52), anchor = Vector2.new(0.5, 0.5), z = 9, slice = false, fit = true })
+					-- living buildings (Kash 18:44): the lit windows / lamps / furnaces glow and flicker softly
+					local lkey = "lights_" .. propImg(p):sub(6)
+					if UI.asset(lkey) ~= "" then
+						local lights = UI.img(bld, lkey, { sz = UDim2.fromScale(1, 1), z = 10, slice = false, fit = true, alpha = 0.6 })
+						table.insert(obj.lights, { img = lights, seed = k * 1.7 + p * 0.37, flicker = (k + p) % 3 == 0 })
+					end
 					t.MouseEnter:Connect(function()
 						tw(bld, 0.18, { Position = UDim2.fromScale(0.5, 0.45), Size = UDim2.fromScale(0.84, 0.84) }, Enum.EasingStyle.Back)
 						tw(shadow, 0.18, { Size = UDim2.fromScale(0.5, 0.12), BackgroundTransparency = 0.72 })
@@ -314,6 +338,7 @@ S.properties = { build = function(host, App)
 				local res = App.req("build", { i = i, lot = obj.pickLot }, btn)
 				if res.ok then
 					obj.building[res.lot] = os.clock()
+					if App.sfx then App.sfx("build_start") end
 					obj.pickLot = nil
 					obj.tab = 1; tabs:Set(1)
 					obj:Refresh(App.state)

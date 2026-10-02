@@ -46,6 +46,69 @@ local function textH(s, size, w)
 	return math.ceil(v.Y) + 4
 end
 
+---------------------------------------------------------------- centre pop-ins and rotating beams (Kash 18:41)
+local FX = {}
+local function fxTween(o, t, props, style, dir, rep)
+	local x = TweenService:Create(o, TweenInfo.new(t, style or Enum.EasingStyle.Quad, dir or Enum.EasingDirection.Out, rep or 0), props)
+	x:Play()
+	return x
+end
+-- re-anchor a GuiObject on its centre without moving it, so a UIScale grows it from the middle
+function FX.centre(g)
+	local a = g.AnchorPoint
+	if a.X == 0.5 and a.Y == 0.5 then return g end
+	local p, sz = g.Position, g.Size
+	g.AnchorPoint = Vector2.new(0.5, 0.5)
+	g.Position = UDim2.new(p.X.Scale + sz.X.Scale * (0.5 - a.X), p.X.Offset + sz.X.Offset * (0.5 - a.X), p.Y.Scale + sz.Y.Scale * (0.5 - a.Y), p.Y.Offset + sz.Y.Offset * (0.5 - a.Y))
+	return g
+end
+-- fade a whole tree in from fully transparent to the values it was built with
+function FX.fadeIn(root, t)
+	t = t or 0.18
+	local items = root:GetDescendants()
+	table.insert(items, root)
+	for _, d in ipairs(items) do
+		local props = {}
+		if d:IsA("GuiObject") and d.BackgroundTransparency < 1 then props.BackgroundTransparency = d.BackgroundTransparency end
+		if (d:IsA("ImageLabel") or d:IsA("ImageButton")) and d.ImageTransparency < 1 then props.ImageTransparency = d.ImageTransparency end
+		if (d:IsA("TextLabel") or d:IsA("TextButton")) and d.TextTransparency < 1 then props.TextTransparency = d.TextTransparency end
+		if d:IsA("UIStroke") and d.Transparency < 1 then props.Transparency = d.Transparency end
+		if next(props) then
+			for k in pairs(props) do d[k] = 1 end
+			fxTween(d, t, props)
+		end
+	end
+end
+-- pop in from the centre ("from far away towards me"): UIScale ~0.6 -> 1 with Back easing, plus a quick fade
+function FX.popIn(g, from, t, noFade)
+	FX.centre(g)
+	local sc = g:FindFirstChildOfClass("UIScale")
+	if not sc then sc = Instance.new("UIScale"); sc.Parent = g end
+	sc.Scale = from or 0.6
+	fxTween(sc, t or 0.32, { Scale = 1 }, Enum.EasingStyle.Back)
+	-- deferred so the content the caller builds right after this call fades in with the panel
+	if not noFade then task.defer(FX.fadeIn, g, math.min(0.2, (t or 0.32) * 0.7)) end
+	return sc
+end
+function FX.spin(o, degPerSec)
+	o.Rotation = (os.clock() * degPerSec) % 360 -- phase from the clock, so a rebuilt card does not jump
+	fxTween(o, 360 / math.abs(degPerSec), { Rotation = o.Rotation + (degPerSec >= 0 and 360 or -360) }, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1)
+end
+-- the classic game-pass ROTATING BEAMS behind an item: soft glow + two counter-rotating tinted sunburst layers.
+-- size = full diameter in px (about 1.6-2x the item); strength 0..1
+function FX.beams(UI, parent, color, size, pos, z, strength)
+	strength = math.clamp(strength or 1, 0, 1)
+	local root = UI.mk("Frame", { Name = "Beams", BackgroundTransparency = 1, Size = UDim2.fromOffset(size, size), Position = pos or UDim2.fromScale(0.5, 0.5),
+		AnchorPoint = Vector2.new(0.5, 0.5), ZIndex = z or 2 }, parent)
+	local mid, half = UDim2.fromScale(0.5, 0.5), Vector2.new(0.5, 0.5)
+	UI.img(root, "glow_soft", { name = "Glow", color = color, alpha = 1 - 0.45 * strength, slice = false, z = root.ZIndex, anchor = half, pos = mid, sz = UDim2.fromScale(0.62, 0.62) })
+	local back = UI.img(root, "beams", { name = "Rays", color = color, alpha = 1 - 0.55 * strength, slice = false, z = root.ZIndex, anchor = half, pos = mid, sz = UDim2.fromScale(1, 1) })
+	local front = UI.img(root, "beams_wide", { name = "RaysWide", color = color:Lerp(Color3.new(1, 1, 1), 0.3), alpha = 1 - 0.4 * strength, slice = false, z = root.ZIndex, anchor = half, pos = mid, sz = UDim2.fromScale(0.78, 0.78) })
+	FX.spin(back, 22)
+	FX.spin(front, -34)
+	return root
+end
+
 local M = {}
 M._settings = { init = function(App)
 	local UI = App.UI
@@ -337,8 +400,12 @@ M._settings = { init = function(App)
 				art = UI.img(box, g.img, { slice = false, z = 75 })
 				art.ScaleType = Enum.ScaleType.Crop
 			else
-				local halo = UI.img(box, "circle", { slice = false, z = 75, sz = UDim2.fromOffset(imgH, imgH), pos = UDim2.fromScale(0.5, 0.5), anchor = Vector2.new(0.5, 0.5), color = acc, alpha = 0.72 })
-				halo.ScaleType = Enum.ScaleType.Fit
+				-- rotating game-pass beams behind the picture (no flat circle, Kash 18:41); a still glow with Reduce animations
+				if calm() then
+					UI.img(box, "glow_soft", { slice = false, z = 75, sz = UDim2.fromOffset(imgH * 1.3, imgH * 1.3), pos = UDim2.fromScale(0.5, 0.5), anchor = Vector2.new(0.5, 0.5), color = acc, alpha = 0.45 })
+				else
+					FX.beams(UI, box, acc, math.floor(imgH * 1.7), UDim2.fromScale(0.5, 0.5), 75, 0.6)
+				end
 				local s = g.icon and 0.5 or 0.86
 				art = UI.img(box, g.img, { slice = false, z = 76, fit = true, sz = UDim2.fromScale(s, s), pos = UDim2.fromScale(0.5, 0.5), anchor = Vector2.new(0.5, 0.5), color = g.icon and acc or C.white })
 				art.ScaleType = Enum.ScaleType.Fit
@@ -398,8 +465,6 @@ M._settings = { init = function(App)
 		local mw = math.min(880, App.W() - 40)
 		local mh = math.min(620, App.H() - 40)
 		local panel, body = UI.panel(modalHost, nil, { plain = true, sz = UDim2.fromOffset(mw, mh), pos = UDim2.fromScale(0.5, 0.5), anchor = Vector2.new(0.5, 0.5), z = 71 })
-		local ps = mk("UIScale", { Scale = calm() and 1 or 0.86 }, panel)
-		tween(ps, 0.22, { Scale = 1 }, Enum.EasingStyle.Back)
 		local page
 		local tabs = UI.tabs(body, { "SETTINGS", "GAME GUIDE", "CHANGELOG" }, function(i)
 			current = i
@@ -418,6 +483,7 @@ M._settings = { init = function(App)
 		tabs:Set(current)
 		local ok, err = pcall(pages[current], page, mw)
 		if not ok then warn("[Idle Country] settings page " .. current .. ": " .. tostring(err)) end
+		if not calm() then FX.popIn(panel, 0.6, 0.3) end
 	end
 	App.openSettings = openSettings
 	gear.Activated:Connect(function() openSettings() end)
@@ -445,27 +511,17 @@ M._settings = { init = function(App)
 			UI.clear(modalHost)
 			modalHost.Visible = true
 			local panel = UI.img(modalHost, "panel", { name = "GroupPopup", sz = UDim2.fromOffset(440, 330), pos = UDim2.fromScale(0.5, 0.5), anchor = Vector2.new(0.5, 0.5), z = 71 })
-			local ps = mk("UIScale", { Scale = calm() and 1 or 0.8 }, panel)
-			tween(ps, 0.25, { Scale = 1 }, Enum.EasingStyle.Back)
 			mk("UIStroke", { Color = C.gold, Thickness = 2, Transparency = 0.3 }, panel)
-			-- glowing emblem
-			local halo = UI.img(panel, "circle", { slice = false, z = 72, sz = UDim2.fromOffset(120, 120), pos = UDim2.new(0.5, 0, 0, 72), anchor = Vector2.new(0.5, 0.5), color = C.gold, alpha = 0.75 })
-			halo.ScaleType = Enum.ScaleType.Fit
+			-- emblem with the classic rotating gold beams behind it (Kash 18:41: no pulsing circle)
+			if calm() then
+				UI.img(panel, "glow_soft", { slice = false, z = 72, sz = UDim2.fromOffset(150, 150), pos = UDim2.new(0.5, 0, 0, 72), anchor = Vector2.new(0.5, 0.5), color = C.gold, alpha = 0.4 })
+			else
+				FX.beams(UI, panel, C.gold, 170, UDim2.new(0.5, 0, 0, 72), 72, 0.85)
+			end
 			local emb = mk("Frame", { BackgroundColor3 = Color3.fromHex("2a2416"), BorderSizePixel = 0, Size = UDim2.fromOffset(84, 84), Position = UDim2.new(0.5, 0, 0, 72), AnchorPoint = Vector2.new(0.5, 0.5), ZIndex = 73 }, panel)
 			mk("UICorner", { CornerRadius = UDim.new(1, 0) }, emb)
 			mk("UIStroke", { Color = C.gold, Thickness = 3 }, emb)
 			UI.icon(emb, "icon_users", 44, C.gold, UDim2.fromScale(0.5, 0.5), { z = 74, anchor = Vector2.new(0.5, 0.5) })
-			if not calm() then
-				task.spawn(function()
-					while halo.Parent and modalHost.Visible do
-						TweenService:Create(halo, TweenInfo.new(1.1, Enum.EasingStyle.Sine), { ImageTransparency = 0.55, Size = UDim2.fromOffset(132, 132) }):Play()
-						task.wait(1.1)
-						if not halo.Parent then break end
-						TweenService:Create(halo, TweenInfo.new(1.1, Enum.EasingStyle.Sine), { ImageTransparency = 0.8, Size = UDim2.fromOffset(116, 116) }):Play()
-						task.wait(1.1)
-					end
-				end)
-			end
 			text(panel, "JOIN THE GROUP", { font = "display", size = 28, color = C.manila, align = Enum.TextXAlignment.Center, pos = UDim2.fromOffset(20, 124), sz = UDim2.new(1, -40, 0, 34), z = 73 })
 			text(panel, '<font color="#8fd07a">+' .. bonus .. "% cash</font> forever", { font = "heavy", size = 26, rich = true, align = Enum.TextXAlignment.Center, pos = UDim2.fromOffset(20, 160), sz = UDim2.new(1, -40, 0, 32), z = 73, stroke = 1.2 })
 			text(panel, "Members earn more from laws, properties and convoys, and hear about updates first.", { size = 15, color = C.muted, wrap = true, align = Enum.TextXAlignment.Center, pos = UDim2.fromOffset(30, 196), sz = UDim2.new(1, -60, 0, 42), z = 73 })
@@ -480,6 +536,7 @@ M._settings = { init = function(App)
 					App.toast("REQUEST SENT", "Your +" .. bonus .. "% starts once the group accepts you", "info")
 				end
 			end, { sz = UDim2.fromOffset(200, 48), pos = UDim2.new(1, -224, 1, -70), z = 73, icon = "icon_users" })
+			if not calm() then FX.popIn(panel, 0.6, 0.34) end
 		end)
 	end
 

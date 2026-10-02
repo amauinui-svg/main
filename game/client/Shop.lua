@@ -15,6 +15,69 @@ local mk, text = UI.mk, UI.text
 
 local S = {}
 
+---------------------------------------------------------------- centre pop-ins and rotating beams (Kash 18:41)
+local FX = {}
+local function fxTween(o, t, props, style, dir, rep)
+	local x = TweenService:Create(o, TweenInfo.new(t, style or Enum.EasingStyle.Quad, dir or Enum.EasingDirection.Out, rep or 0), props)
+	x:Play()
+	return x
+end
+-- re-anchor a GuiObject on its centre without moving it, so a UIScale grows it from the middle
+function FX.centre(g)
+	local a = g.AnchorPoint
+	if a.X == 0.5 and a.Y == 0.5 then return g end
+	local p, sz = g.Position, g.Size
+	g.AnchorPoint = Vector2.new(0.5, 0.5)
+	g.Position = UDim2.new(p.X.Scale + sz.X.Scale * (0.5 - a.X), p.X.Offset + sz.X.Offset * (0.5 - a.X), p.Y.Scale + sz.Y.Scale * (0.5 - a.Y), p.Y.Offset + sz.Y.Offset * (0.5 - a.Y))
+	return g
+end
+-- fade a whole tree in from fully transparent to the values it was built with
+function FX.fadeIn(root, t)
+	t = t or 0.18
+	local items = root:GetDescendants()
+	table.insert(items, root)
+	for _, d in ipairs(items) do
+		local props = {}
+		if d:IsA("GuiObject") and d.BackgroundTransparency < 1 then props.BackgroundTransparency = d.BackgroundTransparency end
+		if (d:IsA("ImageLabel") or d:IsA("ImageButton")) and d.ImageTransparency < 1 then props.ImageTransparency = d.ImageTransparency end
+		if (d:IsA("TextLabel") or d:IsA("TextButton")) and d.TextTransparency < 1 then props.TextTransparency = d.TextTransparency end
+		if d:IsA("UIStroke") and d.Transparency < 1 then props.Transparency = d.Transparency end
+		if next(props) then
+			for k in pairs(props) do d[k] = 1 end
+			fxTween(d, t, props)
+		end
+	end
+end
+-- pop in from the centre ("from far away towards me"): UIScale ~0.6 -> 1 with Back easing, plus a quick fade
+function FX.popIn(g, from, t, noFade)
+	FX.centre(g)
+	local sc = g:FindFirstChildOfClass("UIScale")
+	if not sc then sc = Instance.new("UIScale"); sc.Parent = g end
+	sc.Scale = from or 0.6
+	fxTween(sc, t or 0.32, { Scale = 1 }, Enum.EasingStyle.Back)
+	-- deferred so the content the caller builds right after this call fades in with the panel
+	if not noFade then task.defer(FX.fadeIn, g, math.min(0.2, (t or 0.32) * 0.7)) end
+	return sc
+end
+function FX.spin(o, degPerSec)
+	o.Rotation = (os.clock() * degPerSec) % 360 -- phase from the clock, so a rebuilt card does not jump
+	fxTween(o, 360 / math.abs(degPerSec), { Rotation = o.Rotation + (degPerSec >= 0 and 360 or -360) }, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1)
+end
+-- the classic game-pass ROTATING BEAMS behind an item: soft glow + two counter-rotating tinted sunburst layers.
+-- size = full diameter in px (about 1.6-2x the item); strength 0..1
+function FX.beams(UI, parent, color, size, pos, z, strength)
+	strength = math.clamp(strength or 1, 0, 1)
+	local root = UI.mk("Frame", { Name = "Beams", BackgroundTransparency = 1, Size = UDim2.fromOffset(size, size), Position = pos or UDim2.fromScale(0.5, 0.5),
+		AnchorPoint = Vector2.new(0.5, 0.5), ZIndex = z or 2 }, parent)
+	local mid, half = UDim2.fromScale(0.5, 0.5), Vector2.new(0.5, 0.5)
+	UI.img(root, "glow_soft", { name = "Glow", color = color, alpha = 1 - 0.45 * strength, slice = false, z = root.ZIndex, anchor = half, pos = mid, sz = UDim2.fromScale(0.62, 0.62) })
+	local back = UI.img(root, "beams", { name = "Rays", color = color, alpha = 1 - 0.55 * strength, slice = false, z = root.ZIndex, anchor = half, pos = mid, sz = UDim2.fromScale(1, 1) })
+	local front = UI.img(root, "beams_wide", { name = "RaysWide", color = color:Lerp(Color3.new(1, 1, 1), 0.3), alpha = 1 - 0.4 * strength, slice = false, z = root.ZIndex, anchor = half, pos = mid, sz = UDim2.fromScale(0.78, 0.78) })
+	FX.spin(back, 22)
+	FX.spin(front, -34)
+	return root
+end
+
 -- gold spend prices mirror server/Actions.lua A.GoldPrices (inf = 10, sup = 5); not in Config yet
 local GOLD_INF, GOLD_SUP = 10, 5
 local ROBUX = Color3.fromHex("3fd27a")
@@ -95,42 +158,26 @@ local function gradBorder(card, colors, th)
 	return ring
 end
 
--- soft pulsing halo behind a card (placed in the card's cell, under the card)
+-- soft static glow behind a card (placed in the card's cell, under the card). Was a pulsing frame halo (Kash 18:41)
 local function halo(cell, c1, c2, z, maxPad)
 	maxPad = maxPad or 10
-	for k, pad in ipairs({ math.floor(maxPad * 0.35), math.floor(maxPad * 0.7), maxPad }) do
-		local base = 0.7 + k * 0.08
-		local f = mk("Frame", { Name = "Halo", BackgroundColor3 = C.white, BackgroundTransparency = base, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(1, pad * 2, 1, pad * 2), ZIndex = z }, cell)
-		corner(f, 10 + pad)
-		local g = mk("UIGradient", { Color = ColorSequence.new(c1, c2) }, f)
-		tw(g, 7, { Rotation = 360 }, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1)
-		tw(f, 1.5, { BackgroundTransparency = math.min(0.98, base + 0.14) }, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
-	end
+	UI.img(cell, "glow_soft", { name = "Halo", color = c1:Lerp(c2, 0.35), alpha = 0.55, slice = false, z = z, anchor = Vector2.new(0.5, 0.5),
+		pos = UDim2.fromScale(0.5, 0.5), sz = UDim2.new(1, maxPad * 6, 1, maxPad * 6) })
 end
 
--- spinning rays + stacked soft circles, pulsing (crate auras)
-local function aura(parent, color, size, pos, z, strength, rays)
+-- rays = the classic rotating game-pass beams (premium items); otherwise a faint static soft glow. No pulsing circles.
+-- clip = optional frame to hold the beams so they stay inside the card
+local function aura(parent, color, size, pos, z, strength, rays, clip)
 	strength = strength or 1
-	local root = mk("Frame", { Name = "Aura", BackgroundTransparency = 1, Size = UDim2.fromOffset(size, size), Position = pos or UDim2.fromScale(0.5, 0.5),
-		AnchorPoint = Vector2.new(0.5, 0.5), ZIndex = z }, parent)
 	if rays then
-		local r = mk("Frame", { Name = "Rays", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Position = UDim2.fromScale(0.5, 0.5), AnchorPoint = Vector2.new(0.5, 0.5), ZIndex = z }, root)
-		for k = 0, 5 do
-			local f = mk("Frame", { BackgroundColor3 = color, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
-				Size = UDim2.fromScale(k % 2 == 0 and 0.09 or 0.05, 1), Rotation = k * 30, ZIndex = z }, r)
-			mk("UIGradient", { Rotation = 90, Transparency = NumberSequence.new({ kp(0, 1), kp(0.5, 1 - 0.55 * strength), kp(1, 1) }) }, f)
+		local host = parent
+		if clip then
+			host = mk("Frame", { Name = "BeamClip", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ClipsDescendants = true, ZIndex = z }, parent)
 		end
-		tw(r, 10, { Rotation = 360 }, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1)
+		return FX.beams(UI, host, color, size, pos, z, strength)
 	end
-	for _, s in ipairs({ 0.8, 0.6, 0.42, 0.26 }) do
-		local c = mk("Frame", { BackgroundColor3 = color, BackgroundTransparency = 1 - 0.15 * strength, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(s, s), ZIndex = z }, root)
-		corner(c, UDim.new(1, 0))
-	end
-	local sc = mk("UIScale", { Scale = 0.92 }, root)
-	tw(sc, 1.3, { Scale = 1.07 }, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
-	return root
+	return UI.img(parent, "glow_soft", { name = "Glow", color = color, alpha = 1 - 0.6 * strength, slice = false, z = z, anchor = Vector2.new(0.5, 0.5),
+		pos = pos or UDim2.fromScale(0.5, 0.5), sz = UDim2.fromOffset(size, size) })
 end
 
 -- a layout cell holding a card that lifts and glows on hover. Returns cell, card, glowStroke
@@ -179,8 +226,7 @@ local function infoPopup(App, title, body)
 	mh.Visible = true
 	local w, h = math.min(460, App.W() - 24), math.min(270, App.H() - 24)
 	local panel, bd = UI.panel(mh, title, { sz = UDim2.fromOffset(w, h), pos = UDim2.fromScale(0.5, 0.5), anchor = Vector2.new(0.5, 0.5), z = 71 })
-	local sc = mk("UIScale", { Scale = 0.85 }, panel)
-	tw(sc, 0.22, { Scale = 1 }, Enum.EasingStyle.Back)
+	FX.popIn(panel, 0.6, 0.3)
 	text(bd, body, { size = 16, wrap = true, rich = true, sz = UDim2.new(1, 0, 1, -54), valign = Enum.TextYAlignment.Top, z = 74 })
 	UI.button(bd, "slate", "GOT IT", function() mh.Visible = false end, { sz = UDim2.fromOffset(150, 42), pos = UDim2.new(0.5, 0, 1, -4), anchor = Vector2.new(0.5, 1), z = 74 })
 end
@@ -314,6 +360,8 @@ S.shop = { build = function(host, App)
 		local bart = UI.img(artHost, "shop_bundle", { sz = UDim2.fromScale(1, 1), slice = false, z = 9 })
 		bart.ScaleType = Enum.ScaleType.Crop
 		corner(bart, 8)
+		-- slow golden light rays over the bundle art, like game-pass art (Kash 18:41)
+		FX.beams(UI, artHost, C.gold, math.floor(H * 1.6), UDim2.fromScale(0.5, 0.4), 9, 0.32)
 		local shade = mk("Frame", { BackgroundColor3 = C.black, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ZIndex = 10 }, artHost)
 		corner(shade, 8)
 		mk("UIGradient", { Rotation = 90, Transparency = NumberSequence.new({ kp(0, 0.75), kp(0.3, 1), kp(0.55, 0.75), kp(1, 0.08) }) }, shade)
@@ -365,7 +413,7 @@ S.shop = { build = function(host, App)
 			UDim2.new(1, -34, 0, 14), 30)
 		local cTimer = text(cc, "", { font = "heavy", size = 13, color = LIMITED, pos = UDim2.fromOffset(16, 38), sz = UDim2.new(1, -32, 0, 18), z = 10 })
 		local crateSize = 116
-		aura(cc, LIMITED, 210, UDim2.new(0.5, 0, 0, 62 + crateSize / 2), 9, 0.55, true)
+		aura(cc, LIMITED, 220, UDim2.new(0.5, 0, 0, 62 + crateSize / 2), 9, 0.9, true, true)
 		local crate = UI.img(cc, "crate_limited", { sz = UDim2.fromOffset(crateSize, crateSize), pos = UDim2.new(0.5, 0, 0, 62 + crateSize / 2), anchor = Vector2.new(0.5, 0.5), slice = false, fit = true, z = 11 })
 		tw(crate, 1.6, { Position = UDim2.new(0.5, 0, 0, 56 + crateSize / 2) }, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
 		tw(crate, 2.4, { Rotation = 3 }, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
@@ -478,7 +526,7 @@ S.shop = { build = function(host, App)
 			local pass = Config.Passes[key]
 			local _, card = liftCard(g, { order = order, hot = premium, glow = color, baseGlow = premium and 0.5 or 0.85, halo = premium and { PINK, C.gold } or nil, haloPad = 10 })
 			local art = math.clamp(math.floor(cw * 0.3), 96, 150)
-			aura(card, color, art * 1.35, UDim2.fromOffset(14 + art / 2, 16 + art / 2), 9, premium and 0.6 or 0.4, premium)
+			aura(card, color, premium and math.floor(art * 1.8) or math.floor(art * 1.3), UDim2.fromOffset(14 + art / 2, 16 + art / 2), 9, premium and 0.9 or 0.4, premium, true)
 			local img = UI.img(card, PASS_ART[key], { sz = UDim2.fromOffset(art, art), pos = UDim2.fromOffset(14, 16), slice = false, fit = true, z = 10 })
 			local x = 26 + art
 			local tagText = Config.VIP[key].tag

@@ -41,6 +41,48 @@ local function hoverBtn(btn) -- UI.button already owns a UIScale for the press; 
 	btn.Inst.MouseLeave:Connect(function() tw(sc, 0.12, { Scale = 1 }) end)
 end
 
+-- re-anchor a GuiObject on its centre without moving it, so a UIScale grows it from the middle (Kash 18:41)
+local function centre(g)
+	local a = g.AnchorPoint
+	if a.X == 0.5 and a.Y == 0.5 then return g end
+	local p, sz = g.Position, g.Size
+	g.AnchorPoint = Vector2.new(0.5, 0.5)
+	g.Position = UDim2.new(p.X.Scale + sz.X.Scale * (0.5 - a.X), p.X.Offset + sz.X.Offset * (0.5 - a.X), p.Y.Scale + sz.Y.Scale * (0.5 - a.Y), p.Y.Offset + sz.Y.Offset * (0.5 - a.Y))
+	return g
+end
+-- fade a whole tree in from fully transparent to the values it was built with
+local function fadeIn(root, t)
+	t = t or 0.18
+	local items = root:GetDescendants()
+	table.insert(items, root)
+	for _, d in ipairs(items) do
+		local props = {}
+		if d:IsA("GuiObject") and d.BackgroundTransparency < 1 then props.BackgroundTransparency = d.BackgroundTransparency end
+		if (d:IsA("ImageLabel") or d:IsA("ImageButton")) and d.ImageTransparency < 1 then props.ImageTransparency = d.ImageTransparency end
+		if (d:IsA("TextLabel") or d:IsA("TextButton")) and d.TextTransparency < 1 then props.TextTransparency = d.TextTransparency end
+		if d:IsA("UIStroke") and d.Transparency < 1 then props.Transparency = d.Transparency end
+		if next(props) then
+			for k in pairs(props) do d[k] = 1 end
+			tw(d, t, props)
+		end
+	end
+end
+-- pop in from the centre ("from far away towards me"): UIScale from ~0.6 to 1 with Back easing, plus a fade
+local function popIn(g, from, t, noFade)
+	centre(g)
+	local sc = g:FindFirstChildOfClass("UIScale") or mk("UIScale", {}, g)
+	sc.Scale = from or 0.6
+	tw(sc, t or 0.32, { Scale = 1 }, Enum.EasingStyle.Back)
+	-- deferred so the content the caller builds right after this call fades in with the panel
+	if not noFade then task.defer(fadeIn, g, math.min(0.2, (t or 0.32) * 0.7)) end
+	return sc
+end
+local function spin(o, degPerSec)
+	o.Rotation = (os.clock() * degPerSec) % 360 -- phase from the clock, so a rebuilt card does not jump
+	local goal = o.Rotation + (degPerSec >= 0 and 360 or -360)
+	tw(o, 360 / math.abs(degPerSec), { Rotation = goal }, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1)
+end
+
 local function rar(key) return O.RarityByKey[key or "common"] or O.Rarities[1] end
 local function rcol(key) return Color3.fromHex(rar(key).color) end
 local function ridx(key) return rar(key).index or 1 end
@@ -132,8 +174,7 @@ local function popup(App, title, w, h)
 	w = math.min(w, App.W() - 24)
 	h = math.min(h, App.H() - 24)
 	local panel, body = UI.panel(mh, title, { sz = UDim2.fromOffset(w, h), pos = UDim2.fromScale(0.5, 0.5), anchor = Vector2.new(0.5, 0.5), z = 71 })
-	local sc = mk("UIScale", { Scale = 0.85 }, panel)
-	tw(sc, 0.22, { Scale = 1 }, Enum.EasingStyle.Back)
+	popIn(panel, 0.6, 0.3)
 	local function close() mh.Visible = false; mh.BackgroundTransparency = OVERLAY end
 	local x = UI.img(panel, "icon_x", { button = true, name = "Close", sz = UDim2.fromOffset(22, 22), pos = UDim2.new(1, -16, 0, 16), anchor = Vector2.new(1, 0), color = C.muted, slice = false, z = 76 })
 	x.MouseEnter:Connect(function() x.ImageColor3 = C.ink end)
@@ -158,48 +199,25 @@ local function infoBtn(App, parent, title, body, pos, z)
 end
 
 ---------------------------------------------------------------- visuals: aura, portrait, gear image
--- a spinning rarity aura: rays + soft glow. Uses aura_rays / aura_glow art when it exists, else builds it from frames.
+-- the classic game-pass ROTATING BEAMS (Kash 18:41): two counter-rotating sunburst layers tinted in the rarity colour,
+-- over a subtle soft glow. size is the full diameter (~1.6-2x the item).
 local function aura(parent, color, size, pos, z, strength)
-	strength = strength or 1
-	local root = mk("Frame", { Name = "Aura", BackgroundTransparency = 1, Size = UDim2.fromOffset(size, size), Position = pos or UDim2.fromScale(0.5, 0.5),
+	strength = math.clamp(strength or 1, 0, 1)
+	local root = mk("Frame", { Name = "Beams", BackgroundTransparency = 1, Size = UDim2.fromOffset(size, size), Position = pos or UDim2.fromScale(0.5, 0.5),
 		AnchorPoint = Vector2.new(0.5, 0.5), ZIndex = z or 2 }, parent)
-	local rays
-	if Assets.aura_rays then
-		rays = UI.img(root, "aura_rays", { color = color, alpha = 1 - 0.75 * strength, slice = false, z = root.ZIndex, anchor = Vector2.new(0.5, 0.5), pos = UDim2.fromScale(0.5, 0.5) })
-	else
-		rays = mk("Frame", { Name = "Rays", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Position = UDim2.fromScale(0.5, 0.5), AnchorPoint = Vector2.new(0.5, 0.5), ZIndex = root.ZIndex }, root)
-		local mid = 1 - 0.6 * strength
-		for k = 0, 5 do
-			local f = mk("Frame", { BackgroundColor3 = color, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
-				Size = UDim2.fromScale(k % 2 == 0 and 0.09 or 0.05, 1), Rotation = k * 30, ZIndex = root.ZIndex }, rays)
-			mk("UIGradient", { Rotation = 90, Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.5, mid), NumberSequenceKeypoint.new(1, 1) }) }, f)
-		end
-	end
-	tw(rays, 9, { Rotation = 360 }, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1)
-	if Assets.aura_glow then
-		UI.img(root, "aura_glow", { color = color, alpha = 1 - 0.8 * strength, slice = false, z = root.ZIndex, anchor = Vector2.new(0.5, 0.5), pos = UDim2.fromScale(0.5, 0.5), sz = UDim2.fromScale(0.8, 0.8) })
-	else
-		for _, s in ipairs({ 0.75, 0.58, 0.42, 0.28 }) do
-			local c = mk("Frame", { BackgroundColor3 = color, BackgroundTransparency = 1 - 0.16 * strength, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5),
-				Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(s, s), ZIndex = root.ZIndex }, root)
-			corner(c, UDim.new(1, 0))
-		end
-	end
+	local mid = UDim2.fromScale(0.5, 0.5)
+	local half = Vector2.new(0.5, 0.5)
+	UI.img(root, "glow_soft", { color = color, alpha = 1 - 0.45 * strength, slice = false, z = root.ZIndex, anchor = half, pos = mid, sz = UDim2.fromScale(0.62, 0.62) })
+	local back = UI.img(root, "beams", { color = color, alpha = 1 - 0.55 * strength, slice = false, z = root.ZIndex, anchor = half, pos = mid, sz = UDim2.fromScale(1, 1) })
+	local front = UI.img(root, "beams_wide", { color = color:Lerp(C.white, 0.3), alpha = 1 - 0.4 * strength, slice = false, z = root.ZIndex, anchor = half, pos = mid, sz = UDim2.fromScale(0.78, 0.78) })
+	spin(back, 22)
+	spin(front, -34)
 	return root
 end
--- soft static glow only (cards in grids)
+-- soft static glow only (cards in grids): the soft radial glow art, no rings
 local function glow(parent, color, size, z, strength)
-	local root = mk("Frame", { Name = "Glow", BackgroundTransparency = 1, Size = UDim2.fromScale(size, size), Position = UDim2.fromScale(0.5, 0.5), AnchorPoint = Vector2.new(0.5, 0.5), ZIndex = z }, parent)
-	if Assets.aura_glow then
-		UI.img(root, "aura_glow", { color = color, alpha = 1 - 0.7 * (strength or 1), slice = false, z = z })
-	else
-		for _, s in ipairs({ 1, 0.75, 0.5 }) do
-			local c = mk("Frame", { BackgroundColor3 = color, BackgroundTransparency = 1 - 0.14 * (strength or 1), BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5),
-				Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(s, s), ZIndex = z }, root)
-			corner(c, UDim.new(1, 0))
-		end
-	end
-	return root
+	return UI.img(parent, "glow_soft", { name = "Glow", color = color, alpha = 1 - 0.6 * (strength or 1), slice = false, z = z,
+		anchor = Vector2.new(0.5, 0.5), pos = UDim2.fromScale(0.5, 0.5), sz = UDim2.fromScale(size, size) })
 end
 
 local headshot -- the local player's avatar headshot (fetched once)
@@ -403,11 +421,11 @@ local function reveal(App, result, opts)
 		if not opts.noCrate then
 			local size = math.min(260, H * 0.45)
 			local holder = mk("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.52), Size = UDim2.fromOffset(size, size), ZIndex = 75 }, stage)
-			local g = aura(stage, bestIdx >= 4 and bestColor or C.manila, size * 1.9, UDim2.fromScale(0.5, 0.52), 74, 0.35)
+			local g = aura(stage, bestIdx >= 4 and bestColor or C.manila, size * 1.9, UDim2.fromScale(0.5, 0.52), 74, bestIdx >= 4 and 0.9 or 0.6)
 			local gs = mk("UIScale", { Scale = 0.4 }, g)
 			local img = UI.img(holder, result.kind == "basic" and "crate_basic" or "crate_limited", { sz = UDim2.fromScale(1, 1), slice = false, fit = true, z = 76 })
-			local sc = mk("UIScale", { Scale = 0.2 }, holder)
-			tw(sc, 0.35, { Scale = 1 }, Enum.EasingStyle.Back)
+			local sc = popIn(holder, 0.2, 0.4)
+			if App.sfx then App.sfx("crate_shake") end
 			pause(0.45)
 			tw(gs, 1.2, { Scale = 1.1 })
 			for i = 1, 16 do
@@ -421,6 +439,7 @@ local function reveal(App, result, opts)
 			if not alive() then return end
 			local flash = mk("Frame", { BackgroundColor3 = bestIdx >= 4 and bestColor:Lerp(C.white, 0.5) or C.white, BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ZIndex = 95 }, stage)
 			tw(flash, 0.12, { BackgroundTransparency = 0 })
+			if App.sfx then App.sfx("crate_open") end
 			task.wait(0.13)
 			holder:Destroy(); g:Destroy()
 			tw(flash, 0.5, { BackgroundTransparency = 1 })
@@ -430,6 +449,7 @@ local function reveal(App, result, opts)
 		if bestIdx >= 5 then
 			title.Text = rar(best.rarity).name .. " PULL!"
 			title.TextColor3 = bestColor
+			centre(title)
 			local ts = mk("UIScale", { Scale = 1.4 }, title)
 			tw(ts, 0.4, { Scale = 1 }, Enum.EasingStyle.Back)
 		end
@@ -457,15 +477,15 @@ local function reveal(App, result, opts)
 				Size = UDim2.fromOffset(cw, ch), ZIndex = 77 }, grid)
 			local i = ridx(r.item and r.item.rarity)
 			local rc = rcol(r.item and r.item.rarity)
+			if App.sfx then App.sfx(i >= 5 and "reveal_legendary" or i >= 4 and "reveal_epic" or i >= 3 and "reveal_rare" or "reveal_common") end
 			if i >= 3 then
-				local a = aura(slot, rc, math.floor(math.max(cw, ch) * (0.9 + 0.12 * i)), UDim2.fromScale(0.5, 0.5), 77, math.min(1, 0.25 + 0.1 * i))
+				local a = aura(slot, rc, math.floor(math.max(cw, ch) * (1.15 + 0.1 * i)), UDim2.fromScale(0.5, 0.5), 77, math.min(1, 0.25 + 0.1 * i))
 				local as = mk("UIScale", { Scale = 0 }, a)
 				tw(as, 0.5, { Scale = 1 }, Enum.EasingStyle.Back)
 			end
-			local holder = mk("Frame", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 78 }, slot)
+			local holder = mk("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(1, 1), ZIndex = 78 }, slot)
 			resultCard(holder, r, cw, ch, 79)
-			local sc = mk("UIScale", { Scale = 0.1 }, holder)
-			tw(sc, 0.42, { Scale = 1 }, Enum.EasingStyle.Back)
+			popIn(holder, 0.3, 0.45)
 			if i >= 5 and not skip then
 				local f = mk("Frame", { BackgroundColor3 = rc, BackgroundTransparency = 0.55, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ZIndex = 94 }, stage)
 				tw(f, 0.6, { BackgroundTransparency = 1 })
@@ -480,8 +500,7 @@ local function reveal(App, result, opts)
 		mk("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 14), SortOrder = Enum.SortOrder.LayoutOrder }, bar)
 		local cont = UI.button(bar, "gold", "CONTINUE", close, { sz = UDim2.fromOffset(220, 50), z = 97, order = 2, textSize = 20 })
 		hoverBtn(cont)
-		local cs = mk("UIScale", { Scale = 0.6 }, bar)
-		tw(cs, 0.25, { Scale = 1 }, Enum.EasingStyle.Back)
+		popIn(bar, 0.6, 0.3)
 		if opts.again then
 			local ag = UI.button(bar, "manila", opts.againLabel or "OPEN ANOTHER", function(b) opts.again(b) end, { sz = UDim2.fromOffset(220, 50), z = 97, order = 1, textSize = 18 })
 			hoverBtn(ag)
