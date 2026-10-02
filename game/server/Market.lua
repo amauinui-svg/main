@@ -21,6 +21,10 @@ function MK.CheckPasses(plr, p)
 		end
 		p.gp[key] = owned or nil
 	end
+	-- Premium players get a small bonus too (Kash 17:22)
+	p.premium = plr.MembershipType == Enum.MembershipType.Premium or nil
+	if p.data.onboarded then PS.GrantVipOfficer(p) end
+	plr:SetAttribute("IC_Vip", (p.gp.MegaVIP and "MEGA VIP") or (p.gp.VIP and "VIP") or nil)
 end
 
 function MK.PromptPass(plr, key)
@@ -184,6 +188,8 @@ function MK.Start()
 			if pass.id == id then p.gp[key] = true; PS.Note(p, { kind = "toast", text = pass.name .. " unlocked!", tone = "good" }) end
 		end
 		PS.EnsureConvoys(p)
+		PS.GrantVipOfficer(p)
+		plr:SetAttribute("IC_Vip", (p.gp.MegaVIP and "MEGA VIP") or (p.gp.VIP and "VIP") or nil)
 		PS.Sync(plr)
 	end)
 end

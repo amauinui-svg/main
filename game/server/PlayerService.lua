@@ -80,10 +80,12 @@ function PS.Mods(p)
 	local a = d.alliance and WS.Alliances[d.alliance]
 	local war = a and a.up and a.up.war or 0
 	local b = O.Bonuses(d.cab, d.inv) -- slotted officers + worn gear
-	local vip = PS.Has(p, "VIP") and 0.10 or 0
+	local vt = PS.VipTier(p)
+	local vip = (vt and vt.cash or 0) + (p.premium and Config.PremiumBonus or 0) + (p.inGroup and Config.Group.Bonus or 0)
+	local vipRegen = vt and vt.regen or 0
 	return {
 		law = 1 + (ideo.law or 0) + perks.law + b.law + vip, props = 1 + (ideo.props or 0) + perks.props + b.props + vip,
-		convoy = 1 + (ideo.convoy or 0) + perks.convoy + b.convoy + vip, regen = 1 + perks.regen + b.regen,
+		convoy = 1 + (ideo.convoy or 0) + perks.convoy + b.convoy + vip, regen = 1 + perks.regen + b.regen + vipRegen,
 		xp = 1 + b.xp + vip,
 		attack = (ideo.attack or 0) + perks.attack + b.attack + b.gearAtk, defense = (ideo.defense or 0) + perks.defense + b.defense + b.gearDef,
 		siege = (ideo.attack or 0) + perks.attack + 0.05 * war + b.siege, boss = b.boss,
@@ -93,6 +95,20 @@ function PS.Mods(p)
 end
 function PS.RegenSec(mods) return R.RegenSec / (mods and mods.regen or 1) end
 function PS.Has(p, pass) return p.gp[pass] == true end
+function PS.VipTier(p)
+	if PS.Has(p, "MegaVIP") then return Config.VIP.MegaVIP end
+	if PS.Has(p, "VIP") then return Config.VIP.VIP end
+	return nil
+end
+-- Mega VIP owners get their unique limited officer once (benched if no free slot)
+function PS.GrantVipOfficer(p)
+	local d = p.data
+	if not PS.Has(p, "MegaVIP") or d.vipOfficer then return end
+	d.vipOfficer = true
+	local o = O.VIPOfficer()
+	PS.AddOfficer(p, o)
+	PS.Note(p, { kind = "toast", text = "Mega VIP: " .. o.name .. " joined your cabinet", tone = "gold" })
+end
 function PS.IncHr(p, mods) return R.IncomePerHour(p.data.lots, (mods or PS.Mods(p)).props) end
 function PS.LotsMax(p) return R.Lots(p.data.sk, PS.Has(p, "ExtraLots")) end
 function PS.Slots(p) return R.ConvoySlots(p.data.lv, PS.Has(p, "ExtraConvoys")) end

@@ -47,7 +47,7 @@ T.DailyReward = { gold = 2, lawMinutes = 15 }
 T.DailyRewardBig = { gold = 4, lawMinutes = 30 }
 T.DailyBonus = { gold = 5 } -- all of today's orders claimed
 T.WeeklyReward = { gold = 15, basicCrates = 1 }
-T.WeeklyChest = { limitedCrates = 1, gearMinRarity = 2 } -- all 5 weekly claimed: Founder's Crate + Rare-or-better gear
+T.WeeklyChest = { limitedCrates = 1, gearMinRarity = 3 } -- all 5 weekly claimed: Founder's Crate + Rare-or-better gear
 
 T.Login = {
 	{ text = "30 min of law cash", lawMinutes = 30, icon = "icon_cash" },

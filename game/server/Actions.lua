@@ -54,6 +54,7 @@ function act.onboard(plr, p, a)
 	d.name, d.flag, d.ideo, d.home, d.onboarded = name, { l = layout, c = cols }, ideo, home, true
 	for _, c in ipairs(d.convoys) do if not c.to then c.at = home end end
 	PS.EnsureConvoys(p)
+	PS.GrantVipOfficer(p)
 	return ok()
 end
 
@@ -72,6 +73,12 @@ function act.passLaw(plr, p, a)
 	local before = d.passes[key] or 0
 	local mods = PS.Mods(p)
 	d.inf -= L.cost
+	-- Silver and Gold mastery: 5% less Influence (Kash 16:50). Costs are small whole numbers, so the saving
+	-- accumulates and refunds a whole point whenever it adds up to one.
+	if R.MasteryTier(before) >= 2 then
+		d.infSaved = (d.infSaved or 0) + L.cost * R.MasteryDiscount
+		if d.infSaved >= 1 then local r = math.floor(d.infSaved); d.inf += r; d.infSaved -= r end
+	end
 	local cash = PS.Earn(p, R.LawCash(i, before, mods.law) * (0.9 + math.random() * 0.2), "law")
 	local xp = R.LawXp(i, before)
 	d.passes[key] = before + 1

@@ -11,10 +11,11 @@ C.Passes = {
 	ExtraConvoys = { id = 2005070299, name = "+2 Convoy Slots", desc = "Run two more convoys at once.", price = 199 },
 	ExtraLots = { id = 2004536361, name = "+3 Building Lots", desc = "Three more lots for properties.", price = 149 },
 	BonusOfficer = { id = 2007026302, name = "Bonus Officer Slot", desc = "One extra officer slot on top of the ones you buy.", price = 299 },
-	VIP = { id = 2008088291, name = "VIP", desc = "+10% law cash, property income, convoy pay and XP. VIP tag and map pin.", price = 499 },
+	VIP = { id = 2008088291, name = "VIP", desc = "+10% cash from everything, +10% faster Influence regen and the VIP chat tag.", price = 499 },
+	MegaVIP = { id = 2005772319, name = "Mega VIP", desc = "+25% cash, +25% faster Influence regen, a unique LIMITED officer and the MEGA VIP chat tag.", price = 899 },
 	CrateLuck = { id = 2006090287, name = "2x Crate Luck", desc = "Double the odds of Legendary and better from every crate.", price = 349 },
 }
-C.PassOrder = { "FastConvoys", "AutoDispatch", "ExtraConvoys", "ExtraLots", "BonusOfficer", "VIP", "CrateLuck" }
+C.PassOrder = { "FastConvoys", "AutoDispatch", "ExtraConvoys", "ExtraLots", "BonusOfficer", "VIP", "MegaVIP", "CrateLuck" }
 
 C.Products = {
 	Crate1 = { id = 3715911170, robux = 29, crates = 1 },
@@ -41,6 +42,13 @@ C.Products = {
 -- Studio testing: owners get every gamepass in Studio so the paid paths can be tested
 -- (workspace attribute IC_NoPasses turns this off).
 C.StudioGrantsPasses = true
+
+-- Roblox Premium members: +5% cash. Group members: +10% cash (GroupId 0 = no group yet; Kash to provide).
+C.PremiumBonus = 0.05
+C.Group = { Id = 0, Bonus = 0.10 }
+
+-- VIP tiers (Kash 16:54): Mega VIP replaces VIP (they do not stack)
+C.VIP = { VIP = { cash = 0.10, regen = 0.10, tag = "VIP", color = "f0c75a" }, MegaVIP = { cash = 0.25, regen = 0.25, tag = "MEGA VIP", color = "ff4f8b" } }
 
 C.Alliance = {
 	MinLevel = 8,

@@ -13,6 +13,7 @@ R.OfflinePropShare = 0.5 -- properties earn 50% while you are offline
 R.MasteryAt = { 25, 50, 100 }
 R.MasteryPct = { 0, 5, 10, 15 } -- index = tier + 1
 R.MasteryName = { "", "BRONZE", "SILVER", "GOLD" }
+R.MasteryDiscount = 0.05 -- Silver+ : 5% less Influence per law
 function R.MasteryTier(passes)
 	passes = passes or 0
 	if passes >= 100 then return 3 elseif passes >= 50 then return 2 elseif passes >= 25 then return 1 end

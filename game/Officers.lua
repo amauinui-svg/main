@@ -3,14 +3,19 @@
 -- Gear: weapons (+attack %) and armor (+defense %), worn by the player or an officer. Legendary+ gear has a bonus perk.
 local O = {}
 
+-- 8 tiers like the reference game (Kash 1 Oct 16:45), plus LIMITED for bundle/VIP exclusives
 O.Rarities = {
-	{ key = "common", name = "COMMON", color = "b9bdc3", traits = 1, range = { 2, 4 }, gear = 3 },
-	{ key = "rare", name = "RARE", color = "4f9be8", traits = 2, range = { 4, 7 }, gear = 6 },
+	{ key = "common", name = "COMMON", color = "c9ccd1", traits = 1, range = { 2, 3 }, gear = 2 },
+	{ key = "uncommon", name = "UNCOMMON", color = "6fcf6a", traits = 1, range = { 3, 5 }, gear = 4 },
+	{ key = "rare", name = "RARE", color = "5b9be6", traits = 2, range = { 4, 7 }, gear = 6 },
 	{ key = "epic", name = "EPIC", color = "b06ef0", traits = 2, range = { 7, 11 }, gear = 10 },
-	{ key = "legendary", name = "LEGENDARY", color = "f0c75a", traits = 3, range = { 11, 16 }, gear = 15 },
-	{ key = "mythic", name = "MYTHIC", color = "ff5a7a", traits = 4, range = { 16, 24 }, gear = 22 },
-	{ key = "limited", name = "LIMITED", color = "3fe8d0", traits = 4, range = { 20, 28 }, gear = 30 },
+	{ key = "legendary", name = "LEGENDARY", color = "e9b949", traits = 3, range = { 11, 16 }, gear = 15 },
+	{ key = "mythic", name = "MYTHIC", color = "ff4f8b", traits = 3, range = { 16, 22 }, gear = 22 },
+	{ key = "secret", name = "SECRET", color = "3fe0d0", traits = 4, range = { 22, 30 }, gear = 30 },
+	{ key = "forbidden", name = "FORBIDDEN", color = "ff3b30", traits = 4, range = { 30, 40 }, gear = 40 },
+	{ key = "limited", name = "LIMITED", color = "ff9a2e", traits = 4, range = { 20, 28 }, gear = 30 },
 }
+O.RollTiers = 8 -- limited is never rolled
 O.RarityByKey = {}
 for i, r in ipairs(O.Rarities) do r.index = i; O.RarityByKey[r.key] = r end
 
@@ -42,21 +47,22 @@ local LAST = { "Varga", "Okafor", "Lindqvist", "Moreau", "Castellanos", "Hallora
 O.Portraits = 8
 
 -- odds (percent) by source: common, rare, epic, legendary, mythic
+-- odds in percent: common, uncommon, rare, epic, legendary, mythic, secret, forbidden (copied from the reference)
 O.HireOdds = {
-	cheap = { 70, 24, 5, 0.9, 0.1 },
-	medium = { 35, 40, 18, 6, 1 },
-	expensive = { 0, 30, 40, 22, 8 },
-	crate_officer = { 0, 45, 35, 15, 5 },
-	basic_officer = { 60, 32, 7, 1, 0 },
+	cheap = { 44.85, 26.9, 16.6, 8.5, 2.5, 0.6, 0.05, 0 },
+	medium = { 0, 0, 58.75, 28, 11, 2, 0.25, 0 },
+	expensive = { 0, 0, 0, 50.2, 37, 10, 2.6, 0.2 },
+	crate_officer = { 0, 30, 35, 22, 9, 3.5, 0.45, 0.05 },
+	basic_officer = { 50, 30, 14, 5, 1, 0, 0, 0 },
 }
 O.GearOdds = {
-	limited = { 0, 50, 30, 15, 5 }, -- the Founder's Crate
-	basic = { 62, 30, 7, 1, 0 },
+	limited = { 0, 30, 35, 22, 9, 3.5, 0.45, 0.05 }, -- the Founder's Crate
+	basic = { 45, 30, 17, 6, 1.7, 0.3, 0, 0 },
 }
 
 function O.Roll(rng, odds, luck)
 	local w = table.clone(odds)
-	if luck then w[4] *= 2; w[5] *= 2 end -- 2x Crate Luck pass
+	if luck then for i = 5, #w do w[i] *= 2 end end -- 2x Crate Luck pass: legendary and up
 	local total = 0
 	for _, v in ipairs(w) do total += v end
 	local x = rng:NextNumber() * total
@@ -100,8 +106,9 @@ end
 O.WeaponTypes = { { "Sword", "gear_sword" }, { "Spear", "gear_spear" }, { "Musket", "gear_musket" }, { "Saber", "gear_saber" }, { "Rifle", "gear_rifle" }, { "Halberd", "gear_halberd" } }
 O.ArmorTypes = { { "Helm", "gear_helm" }, { "Cuirass", "gear_cuirass" }, { "Greatcoat", "gear_coat" }, { "Shield", "gear_shield" }, { "Plate", "gear_plate" } }
 local ADJ = {
-	{ "Iron", "Worn", "Plain" }, { "Steel", "Fine", "Tempered" }, { "Damascus", "Masterwork", "Engraved" },
-	{ "Gilded", "Royal", "Imperial" }, { "Celestial", "Dragonbone", "Stormforged" }, { "Founder's" },
+	{ "Iron", "Worn", "Plain" }, { "Steel", "Sturdy", "Fine" }, { "Tempered", "Veteran's", "Polished" },
+	{ "Damascus", "Masterwork", "Engraved" }, { "Gilded", "Royal", "Imperial" }, { "Celestial", "Dragonbone", "Stormforged" },
+	{ "Phantom", "Eclipse", "Voidforged" }, { "Forbidden", "Cursed", "Doomsday" }, { "Founder's" },
 }
 
 function O.NewGear(rng, rarityIndex, kind)
@@ -115,11 +122,11 @@ function O.NewGear(rng, rarityIndex, kind)
 		kind = kind, type = t[1], icon = t[2], rarity = rar.key,
 		name = adj[rng:NextInteger(1, #adj)] .. " " .. t[1], power = rar.gear,
 	}
-	if rarityIndex >= 4 then
+	if rarityIndex >= 5 then
 		-- Legendary and better roll a bonus perk
-		local perkRange = { 4, 6, 8 }
+		local perkRange = { 4, 6, 8, 10, 12 }
 		local trait = O.Traits[rng:NextInteger(1, #O.Traits)]
-		g.perk = { k = trait.key, v = perkRange[math.min(3, rarityIndex - 3)] + rng:NextInteger(0, 3) }
+		g.perk = { k = trait.key, v = perkRange[math.min(5, rarityIndex - 4)] + rng:NextInteger(0, 3) }
 	end
 	return g
 end
@@ -130,6 +137,14 @@ function O.BundleOfficer()
 		id = "o_founder", name = "Empress Valeria Thorne", rarity = "limited", title = "Founder",
 		traits = { { k = "law", v = 25 }, { k = "attack", v = 25 }, { k = "loot", v = 20 }, { k = "losses", v = 20 } },
 		portrait = 0, hired = os.time(), limited = true,
+	}
+end
+-- the Mega VIP pass officer (Kash 16:54): unique, limited
+function O.VIPOfficer()
+	return {
+		id = "o_megavip", name = "Marshal Aurelio Vance", rarity = "limited", title = "Mega VIP",
+		traits = { { k = "law", v = 20 }, { k = "props", v = 20 }, { k = "defense", v = 20 }, { k = "regen", v = 15 } },
+		portrait = 1, hired = os.time(), limited = true,
 	}
 end
 function O.BundleGear()
@@ -143,11 +158,11 @@ function O.OpenCrate(rng, kind, luck, forceEpic)
 	if kind == "limited" then
 		if rng:NextNumber() < 0.25 then
 			local r = O.Roll(rng, O.HireOdds.crate_officer, luck)
-			if forceEpic then r = math.max(r, 3) end
+			if forceEpic then r = math.max(r, 4) end
 			return { type = "officer", item = O.NewOfficer(rng, r) }
 		end
 		local r = O.Roll(rng, O.GearOdds.limited, luck)
-		if forceEpic then r = math.max(r, 3) end
+		if forceEpic then r = math.max(r, 4) end
 		return { type = "gear", item = O.NewGear(rng, r) }
 	end
 	if rng:NextNumber() < 0.08 then
