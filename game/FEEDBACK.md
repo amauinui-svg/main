@@ -42,3 +42,6 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
   * ADVISORS NEVER DIE in battle. Advisors give % boosts and can be equipped with WEAPONS and ARMOR.
   * THE PLAYER IS ALSO AN ADVISOR (their own leader slot that can wear gear).
   * Crates give advisors and gear (weapons, armor). Kash feels something else is missing that crates could give.
+- Q8 Name: OFFICERS (chosen). Map cosmetics (convoy skins, pins, flag emblems, titles) = YES as monetization, but Kash
+  wants ONE MORE system that actually BENEFITS the player (beyond alliance, laws, buildings, army, officers+gear).
+  He feels something is still missing. (Options proposed in Q9.)
