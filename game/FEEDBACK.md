@@ -212,3 +212,14 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
     have animal-like faces. REWORK enemy_general and country_era1, and audit every image for the same problems.
   * officer_founder and officer_megavip look good (keep that style as the reference for people).
   * country_era5 (industrial): the steam train looks like it is morphing into the building. Rework.
+  ART AUDIT (2 Oct, my review of every character + scene image) — rework list for next session:
+  * enemy_general: tiny/dark eyes, face reads off. REWORK.
+  * enemy_guard, enemy_soldier: acceptable alone but faces don't match the officer style; redo all three enemies
+    together so they share one face style (use officer_founder / officer_megavip as the face reference).
+  * country_era1: crowd faces are blank/animal-like. Regenerate with NO close-up people (or tiny silhouettes only).
+  * country_era2: tiny odd figures on the plaza; regenerate without people too (keep the composition).
+  * country_era5: train melts into the factory and bridge. Regenerate: a clearly separate locomotive on the bridge.
+  * shop_army: three identical-face soldiers + a real-world (French-like) flag. Redo with a fictional flag.
+  * loading_bg: the cap badge looks like an eye; minor, redo the cap badge as a star if regenerating.
+  * Fine as is: country_era3, 4, 6, 7, 8, takedown_bg, officer_founder, officer_megavip, all props/gear/icons.
+  Rule for all future people art: no crowds, every face clearly drawn in the officer portrait style.
