@@ -184,3 +184,19 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
     (the Robux Revenge Strike).
   * Players can NEVER see another player's stats (attack, defense, cash) unless they SPY on them. Spying reveals
     cash on hand, stats, etc. The spied player is NOTIFIED that someone spied on them.
+- NEW (19:19) PLAYTEST ROUND:
+  * Fight: each weapon has its own SOUND and ANIMATION: guns aim at the enemy and fire, melee weapons swing.
+  * The VICTORY text overlaps the reward pills/buttons on the fight screen. Fix.
+  * Limited bundles last only SEVEN DAYS.
+  * Sound when a Robux purchase prompt opens, and a special sound when a purchase completes.
+  * The WEEKLY TAKEDOWN belongs INSIDE the Alliance tab (everyone in the alliance takes part), not its own nav tab.
+  * BUG: after clearing a takedown stage, it rolled back to an older stage. Investigate.
+  * Not enough Influence for a law -> a REFILL popup. The FIRST refill purchase is cheap (~9 Robux).
+  * Military units and properties are listed in order of how strong / how much money they make.
+  * "LOCKED" text on ALL locked property tiles.
+  * Properties: an income bar under each tile, all filling IN SYNC (~7 s); when full, each tile pops "+$X" (its income
+    for those 7 s) with a little animation (like the reference).
+  * OFFICERS go inside the MILITARY tab: the "MILITARY" title becomes a button with an "OFFICERS" button next to it
+    (switch between ARMY and OFFICERS). No separate Officers tab.
+  * Don't call the task currency "Seals": rename it.
+  * Every property should have its OWN unique image (all 144), flawless.
