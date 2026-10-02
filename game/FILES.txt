@@ -30,3 +30,4 @@ client/Contracts.lua|ReplicatedStorage.Client|Contracts|ModuleScript
 client/Settings.lua|ReplicatedStorage.Client|Settings|ModuleScript
 client/Shop.lua|ReplicatedStorage.Client|Shop|ModuleScript
 client/ClientMain.client.lua|StarterPlayer.StarterPlayerScripts|ClientMain|LocalScript
+client/Loading.client.lua|ReplicatedFirst|IC_Loading|LocalScript

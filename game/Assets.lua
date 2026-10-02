@@ -265,5 +265,6 @@ local A = {
 	["lights_e8_t1"] = "rbxassetid://133572205734389",
 	["lights_e8_t2"] = "rbxassetid://135149583603531",
 	["lights_e8_t3"] = "rbxassetid://79664056645941",
+	["logo_title"] = "rbxassetid://92029969593916",
 }
 return A
