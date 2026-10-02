@@ -80,3 +80,8 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
   NEW: STARTER/LIMITED BUNDLE at 999 Robux: a limited gear piece with good buffs + a limited officer.
   PRICING RULES (all Robux prices): charm prices ending in 9 (9 not 10, 99 not 100, 999 not 1000).
   Bulk must be cheaper per unit to push the bigger option, e.g. 1 crate 25 -> 5 crates 99 (not 125).
+- Q16 PRICE SHEET APPROVED, except Revenge Strike raised 29 -> 49 Robux.
+  Products: crate 1/3/10 = 29/79/229; gold 50/250/1000 = 49/199/699; Treasury Grant 49; Influence/Supply refill 19;
+  Raid Shield 4h 39; Instant Army 49; Revenge Strike 49; Finish convoy 9/19/29/49; Challenge refresh 19;
+  Move Capital 99; Limited Bundle 999.
+  Passes: Express 249, Auto Dispatch 399, +2 Convoys 199, +3 Lots 149, Bonus Officer slot 299, VIP 499, 2x Crate Luck 349.
