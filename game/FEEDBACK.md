@@ -52,3 +52,9 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
   their price; sellers just click their item -> SELL, and it instantly sells to the HIGHEST bid (no choosing between
   orders). "Something is only as valuable as someone is willing to pay for it." Kash: trading rounds out the game.
 - Q10 RESEARCH: NOT now (maybe later). Skill Points stay as they are.
+- Q11 Robux: ALL repeatable products approved, INCLUDING Revenge Strike: limited-time weekly crate (1/3/10, 10-pack
+  guarantees Epic+), gold packs (50/250/1000), Treasury Grant (~2 h income, level-scaled), Supply/Influence refills,
+  Raid Shield (4 h), Instant Army, Finish Convoy, Revenge Strike. Passes: existing 4 + Officer slot, VIP, 2x crate luck.
+  Free path: cash-bought basic crate, gold from bosses/tasks/login/weekly.
+  Crates: Kash is fine with either two variants (gold crate + Robux crate) or ONE crate with TWO PRICES (Robux or gold).
+  Chosen: one crate, two prices (gold OR Robux), so free and paying players chase the same items.
