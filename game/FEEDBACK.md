@@ -75,3 +75,8 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
   * Players can FIRE officers; firing gives nothing back.
   * So both unlocking slots and hiring officers cost money.
   (Assumed "money" = in-game cash; confirm. Weapons/armor still equip on the player and officers.)
+- Q15 "Money" = IN-GAME CASH: officer slots and hires cost cash.
+  Crates: mainly REALLY COOL GEAR, but can still give officers. The FIRST crate includes officers, gear, etc.
+  NEW: STARTER/LIMITED BUNDLE at 999 Robux: a limited gear piece with good buffs + a limited officer.
+  PRICING RULES (all Robux prices): charm prices ending in 9 (9 not 10, 99 not 100, 999 not 1000).
+  Bulk must be cheaper per unit to push the bigger option, e.g. 1 crate 25 -> 5 crates 99 (not 125).
