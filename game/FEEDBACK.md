@@ -173,3 +173,9 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
   (e.g. 225 to 337) with a marker for where each roll landed. TAP TO SKIP. End: VICTORY/DEFEAT + rewards + DONE.
 - BALANCE (18:47): the $4.7B in Studio was mostly my test money (I set cash to $5B), but I still halved convoy pay
   (K .05/.055/.06, property share of trade value .25 -> .15): 6 convoys now ~30-40% of law+property income.
+- NEW (18:49) RENT + CAPITAL TIERS:
+  * Players pay a % RENT on their property income to the alliance that owns the capital they live in (their home).
+    The owning alliance sets the rate. New players never pay for their first 48 hours. After that rent is also
+    taken from offline earnings. Completely SILENT: no notification, not in the offline summary.
+  * Capitals need different perks AND tiers (strong vs weak), by real-world importance: New York, Los Angeles,
+    London, Tokyo are top tier and worth fighting over.
