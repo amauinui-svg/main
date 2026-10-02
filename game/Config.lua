@@ -47,7 +47,7 @@ C.StudioGrantsPasses = true
 
 -- Roblox Premium members: +5% cash. Group members: +10% cash (GroupId 0 = no group yet; Kash to provide).
 C.PremiumBonus = 0.05
-C.Group = { Id = 0, Bonus = 0.10 }
+C.Group = { Id = 3735672, Bonus = 0.10 }
 
 -- Rent (Kash 18:49): the alliance holding a capital may charge its residents this % of their property income.
 -- Max by city tier (city, capital, major capital, global city). New players pay nothing for 48 hours. Silent.

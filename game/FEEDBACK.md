@@ -206,3 +206,4 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
     use the empty space; show the task currency (ex-Seals) up there too.
   * NEW PASS (99 Robux), in the Country tab: CUSTOM FLAG: many more flag options, or import your own flag image.
   * AI nations must NOT be labeled "AI" anywhere (they should look like any other nation).
+- GROUP ID (20:35): 3735672 (wired into Config.Group: +10% cash, join popup).
