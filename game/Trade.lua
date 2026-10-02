@@ -67,7 +67,7 @@ end
 -- Later eras travel faster; pay is scaled by sqrt(era speed) so a faster era earns ~1.5x per minute, not 2.2x.
 -- Kash 17:22: distance alone must not mean more pay. Pay grows slower than trip time (^0.9) and the big lever is
 -- crossing REGIONS: different regions have different resources (Europe->Asia, Americas->Asia, Asia->Africa pay a lot).
-local K = { land = 0.09, coast = 0.10, sea = 0.11 }
+local K = { land = 0.05, coast = 0.055, sea = 0.06 } -- 1 Oct 18:41: halved after Kash flagged Auto Dispatch as too strong
 T.DistExp = 0.9
 
 ---------------------------------------------------------------- regions
@@ -97,7 +97,7 @@ end
 T.WantTicks = 6 -- convoys sent for a wanted good before the capital asks for something else
 
 -- the money yardstick: a minute of law regen, plus a quarter of property income, so trade grows with the country
-function T.TradeValue(lv, incHr) return Rules.MinuteValue(lv) + 0.25 * (incHr or 0) / 60 end
+function T.TradeValue(lv, incHr) return Rules.MinuteValue(lv) + 0.15 * (incHr or 0) / 60 end
 
 -- deterministic "hot good" of the day for a city (+25% on top of demand)
 function T.HotGood(city, day)

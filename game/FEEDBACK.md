@@ -165,3 +165,11 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
     fit beat non-copyright.
 - NEW (18:44) LIVING PROPERTIES: competitor's property images have small animated details (lights flicker or pulse
   slowly, sparks from a broken car). Add subtle effects like this to our buildings.
+- NEW (18:47) RAID FIGHT SCREEN (like their FIGHT popup): both icons (my avatar + the target's), level badges,
+  attack (attacker) / defense (defender) power, equipped WEAPON image beside each (FISTS if none; AI/enemy show
+  theirs). Three exchanges: attacker hits, defender hits, x3. Usually on the third hit either the attacker finishes
+  them before the defender's 3rd hit, or the defender lands the killing 3rd hit. Crits rolled per hit. Damage
+  flashes the icon red, shows the number and an impact effect (bullet hole / slash). Each side shows a damage RANGE
+  (e.g. 225 to 337) with a marker for where each roll landed. TAP TO SKIP. End: VICTORY/DEFEAT + rewards + DONE.
+- BALANCE (18:47): the $4.7B in Studio was mostly my test money (I set cash to $5B), but I still halved convoy pay
+  (K .05/.055/.06, property share of trade value .25 -> .15): 6 convoys now ~30-40% of law+property income.
