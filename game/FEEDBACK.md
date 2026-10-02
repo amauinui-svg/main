@@ -122,3 +122,11 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
   * TICKETS come from a separate task currency: their CONTRACTS tab has Daily (easy/medium/hard + a bonus for all 5)
     and Weekly tasks (+ bonus for all 5) that pay SEALS + cash, a free REPLACE per task, and a CONTRACTS SHOP where
     seals buy tickets etc. Seals are separate from gold and are not tradable.
+- NEW (16:50) POLISH + MASTERY:
+  * Building a property shows a construction image (tarp-covered frame) that bobs up and down with image-based smoke
+    puffs and a BUILDING progress bar. Small detail, big feel. Copy this kind of polished animation everywhere.
+  * JOB MASTERY (copy for our LAWS): each law has Bronze/Silver/Gold medals (little metal medal icons, hover shows a
+    tooltip). Their numbers: Bronze ~ +5% cash; Silver (50 times) +10% cash, 5% less energy; Gold (100 times) +15% cash,
+    5% less energy, +1 SKILL POINT. A "Mastery 47/50 to Silver" bar under each job. Gives a reason to do every law.
+  * IMAGE GENERATION must be AUTONOMOUS: find an app/API so I generate, review, import and wire images myself,
+    instead of Kash generating by hand.
