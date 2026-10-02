@@ -35,3 +35,10 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
   pay more), each member's rate scaling from half to double the base by level within the alliance, never above 15%.
   Join fee is a flat amount shown on the alliance list. Both change at most once a day.
 - Q6 Daily login sheet: PAUSE, not reset. A missed day keeps your place; day 7 = big gold reward + free crate.
+- Q7 Crates: YES to collectible advisors/leaders/generals (name not decided). Details from Kash:
+  * Military tab soldiers stay as they are.
+  * SOLDIERS DIE after battles (attacking AND defending); losses depend on how the battle went
+    (close fight, sweep, loss or win).
+  * ADVISORS NEVER DIE in battle. Advisors give % boosts and can be equipped with WEAPONS and ARMOR.
+  * THE PLAYER IS ALSO AN ADVISOR (their own leader slot that can wear gear).
+  * Crates give advisors and gear (weapons, armor). Kash feels something else is missing that crates could give.
