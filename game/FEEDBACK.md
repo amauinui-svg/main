@@ -207,3 +207,8 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
   * NEW PASS (99 Robux), in the Country tab: CUSTOM FLAG: many more flag options, or import your own flag image.
   * AI nations must NOT be labeled "AI" anywhere (they should look like any other nation).
 - GROUP ID (20:35): 3735672 (wired into Config.Group: +10% cash, join popup).
+- NEW (2 Oct 10:56) ART QUALITY PASS NEEDED (logged only; Studio closed, no big changes now):
+  * People look inconsistent: enemy_general has no visible eyes; tiny people in country scenes (e.g. country_era1)
+    have animal-like faces. REWORK enemy_general and country_era1, and audit every image for the same problems.
+  * officer_founder and officer_megavip look good (keep that style as the reference for people).
+  * country_era5 (industrial): the steam train looks like it is morphing into the building. Rework.
