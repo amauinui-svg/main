@@ -67,6 +67,81 @@ function grant.MoveCapital(p, city)
 end
 function grant.GoldSmall(p) p.data.gold += Config.Products.GoldSmall.gold; return true end
 function grant.GoldBig(p) p.data.gold += Config.Products.GoldBig.gold; return true end
+function grant.GoldHuge(p) p.data.gold += Config.Products.GoldHuge.gold; return true end
+local function crates(n) return function(p)
+	p.data.crates.limited += n
+	PS.Note(p, { kind = "crates", n = n })
+	return true
+end end
+grant.Crate1 = crates(1)
+grant.Crate3 = crates(3)
+grant.Crate10 = crates(10)
+function grant.TreasuryGrant(p)
+	local R = require(game:GetService("ReplicatedStorage").Shared.Rules)
+	local amt = math.floor(R.MinuteValue(p.data.lv) * 120 + PS.IncHr(p) * 2)
+	p.data.cash += amt
+	PS.Note(p, { kind = "toast", text = "Treasury Grant: +" .. R.Money(amt), tone = "good" })
+	return true
+end
+function grant.InfluenceRefill(p)
+	local R = require(game:GetService("ReplicatedStorage").Shared.Rules)
+	p.data.inf = math.max(p.data.inf, R.MaxInfluence(p.data.lv, p.data.sk)); p.data.infT = 0
+	return true
+end
+function grant.SupplyRefill(p)
+	local R = require(game:GetService("ReplicatedStorage").Shared.Rules)
+	p.data.sup = math.max(p.data.sup, R.MaxSupply(p.data.lv, p.data.sk)); p.data.supT = 0
+	return true
+end
+function grant.RaidShield(p)
+	p.data.shield = math.max(os.time(), p.data.shield or 0) + Config.Products.RaidShield.hours * 3600
+	PS.Note(p, { kind = "toast", text = "Raid shield up for " .. Config.Products.RaidShield.hours .. " hours", tone = "good" })
+	return true
+end
+function grant.InstantArmy(p)
+	local M = require(game:GetService("ReplicatedStorage").Shared.Military)
+	local d = p.data
+	local best = 1
+	for i, u in ipairs(M.Units) do if u.lvl <= d.lv then best = i end end
+	local room = M.UnitCap(d.lv) - M.UnitCount(d.units)
+	if room <= 0 then
+		d.gold += 25
+		PS.Note(p, { kind = "toast", text = "Your army was already full. You got 25 gold instead.", tone = "good" })
+		return true
+	end
+	d.units[tostring(best)] = (d.units[tostring(best)] or 0) + room
+	PS.Note(p, { kind = "toast", text = "+" .. room .. " " .. M.Units[best].name .. " joined your army", tone = "good" })
+	return true
+end
+function grant.RevengeStrike(p, target)
+	local res = PS.Raids.Attack(p.player, p, target, true)
+	if not res.ok then
+		p.data.gold += 50
+		PS.Note(p, { kind = "toast", text = "Your target escaped. You got 50 gold instead.", tone = "good" })
+		return true
+	end
+	PS.Note(p, { kind = "raidResult", res = res })
+	return true
+end
+function grant.ChallengeRefresh(p, intent)
+	p.data.refresh.tokens = (p.data.refresh.tokens or 0) + 1
+	if type(intent) == "table" then PS.RefreshTask(p, intent.src == "weekly" and "weekly" or "daily", tonumber(intent.i)) end
+	return true
+end
+function grant.LimitedBundle(p)
+	local O = require(game:GetService("ReplicatedStorage").Shared.Officers)
+	local d = p.data
+	if d.bundle then
+		d.gold += 500
+		PS.Note(p, { kind = "toast", text = "You already own the Limited Bundle. You got 500 gold instead.", tone = "good" })
+		return true
+	end
+	d.bundle = true
+	PS.AddOfficer(p, O.BundleOfficer())
+	d.inv.gear["g_founder"] = O.BundleGear()
+	PS.Note(p, { kind = "bundle" })
+	return true
+end
 
 local byId = {}
 for key, prod in pairs(Config.Products) do if prod.id ~= 0 then byId[prod.id] = key end end

@@ -89,3 +89,5 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
   everything else: add VFX / auras (rarity glow, shimmer).
 - GO (1 Oct, 16:20): start the autonomous pass. Kash asked me to create ALL game passes and developer products in the
   Creator Dashboard via the built-in browser, and wire their ids into the game. Studio is open.
+- NEW (16:40): a COUNTRY tab. Shows a nice image of what your country looks like (changes with the ERA), your level and
+  a few other stats, and the stat upgrades (skill points) live here, so there is no separate Skills tab.

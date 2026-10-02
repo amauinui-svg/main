@@ -123,7 +123,8 @@ end
 
 ---------------------------------------------------------------- alliances
 local function summary(a)
-	return { name = a.name, tag = a.tag, color = a.color, members = a.count or 0, level = a.level or 1, open = a.open ~= false, leader = a.leaderName }
+	return { name = a.name, tag = a.tag, color = a.color, members = a.count or 0, level = a.level or 1, open = a.open ~= false, leader = a.leaderName,
+		fee = a.joinFee or 0, dues = a.dues and a.dues.pct or 0, style = a.dues and a.dues.style or "flat" }
 end
 -- returns record, readOk (readOk=false means the DataStore could not be reached: do not act on a missing record)
 function WS.LoadAlliance(id)
@@ -237,13 +238,15 @@ local function addLog(a, m)
 end
 WS.AddLog = addLog
 
-function WS.Join(plr, id, who)
+function WS.Join(plr, id, who, fee, lv)
 	return WS.MutateAlliance(id, function(a)
+		if (a.joinFee or 0) > (fee or 0) then return nil, "The join fee just went up. Check it and try again." end
 		local n = 0; for _ in pairs(a.members) do n += 1 end
 		if a.disbanded then return nil, "That alliance has disbanded" end
 		if n >= AC.MaxMembers then return nil, "That alliance is full" end
 		if a.open == false then return nil, "That alliance is invite only" end
-		a.members[tostring(plr.UserId)] = { name = who or plr.Name, role = "member", joined = now(), active = now() }
+		a.members[tostring(plr.UserId)] = { name = who or plr.Name, role = "member", joined = now(), active = now(), lv = lv }
+		if (fee or 0) > 0 then a.treasury = (a.treasury or 0) + fee end
 		addLog(a, (who or plr.Name) .. " joined")
 		return a, true
 	end)

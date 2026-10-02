@@ -143,16 +143,20 @@ function Map.build(host, App)
 			convoyIcons[i] = b
 			b.Activated:Connect(function() selConvoy = i; obj.select(c.to or c.at, true) end)
 			if c.to then
-				-- dotted route from origin to destination
+				-- animated dotted route (Kash 1 Oct): dots march from the convoy to the destination, the part already
+				-- travelled disappears, and the destination pulses. Green = paying load, white = empty move.
+				local A, B = W.Cities[c.from], W.Cities[c.to]
+				local dx = math.abs(B.px - A.px); if dx > 384 then dx = 768 - dx end
+				local distPx = math.sqrt(dx * dx + (B.py - A.py) ^ 2)
+				local n = math.clamp(math.floor(distPx / 4), 10, 140)
+				local col = c.load and C.good or C.ink
 				local dots = {}
-				local km = W.Km[c.from][c.to]
-				local n = math.clamp(math.floor(km / 250), 6, 60)
-				for k = 1, n - 1 do
-					local x, y = T.Lerp(c.from, c.to, k / n)
-					local d = UI.img(routeLayer, "dot_route", { sz = UDim2.fromOffset(5, 5), anchor = Vector2.new(0.5, 0.5), pos = at(x, y), z = 5, slice = false, color = C.manila, alpha = 0.15 })
-					dots[k] = { d, k / n }
+				for k = 0, n - 1 do
+					local d = UI.img(routeLayer, "dot_route", { sz = UDim2.fromOffset(7, 7), anchor = Vector2.new(0.5, 0.5), z = 5, slice = false, color = col })
+					dots[k + 1] = d
 				end
-				routeDots[i] = dots
+				local ring = UI.img(routeLayer, "ring", { sz = UDim2.fromOffset(26, 26), anchor = Vector2.new(0.5, 0.5), pos = at(B.px, B.py), z = 5, slice = false, color = col })
+				routeDots[i] = { dots = dots, n = n, ring = ring, c = c }
 			else
 				parked[c.at] = (parked[c.at] or 0) + 1
 				local k = parked[c.at]

@@ -10,6 +10,8 @@ local T = require(RS.Shared.Trade)
 local M = require(RS.Shared.Military)
 local World = require(RS.Shared.World)
 local Config = require(RS.Shared.Config)
+local O = require(RS.Shared.Officers)
+local TK = require(RS.Shared.Tasks)
 local Store = require(script.Parent.Store)
 local WS = require(script.Parent.WorldService)
 
@@ -29,8 +31,13 @@ function PS.Fresh()
 		cash = 500, gold = 20, lv = 1, xp = 0, inf = R.MaxInfluence(1, {}), infT = 0, sup = R.MaxSupply(1, {}), supT = 0,
 		passes = {}, lots = {}, sk = { inf = 0, sup = 0, atk = 0, def = 0, lot = 0 }, units = {},
 		convoys = {}, boss = nil, tasks = nil, loan = nil, alliance = nil,
-		stats = { laws = 0, trips = 0, earned = 0, wins = 0, battles = 0, bosses = 0, hits = 0, built = 0 },
-		receipts = {}, rivals = nil, stipendT = 0,
+		stats = { laws = 0, trips = 0, earned = 0, wins = 0, battles = 0, bosses = 0, hits = 0, built = 0, raided = 0, lost = 0, stolen = 0 },
+		receipts = {}, stipendT = 0,
+		-- 1 Oct (Kash feedback round 2)
+		bank = 0, shield = 0, revenge = nil,
+		inv = { gear = {}, officers = {} }, cab = { slots = {}, bought = 0, player = {} },
+		crates = { limited = 0, basic = 0 }, login = { idx = 1, last = 0 },
+		refresh = { day = 0, tokens = 0 }, weekly = nil, bundle = false,
 	}
 end
 
@@ -39,6 +46,10 @@ local function sanitize(d)
 	for k, v in pairs(f) do if d[k] == nil then d[k] = v end end
 	for k, v in pairs(f.sk) do if d.sk[k] == nil then d.sk[k] = v end end
 	for k, v in pairs(f.stats) do if d.stats[k] == nil then d.stats[k] = v end end
+	for _, k in ipairs({ "inv", "cab", "crates", "login", "refresh" }) do
+		for k2, v in pairs(f[k]) do if d[k][k2] == nil then d[k][k2] = v end end
+	end
+	d.rivals = nil
 	if not World.Cities[d.home] then d.home = 12 end
 	for _, c in ipairs(d.convoys) do if not World.Cities[c.at] then c.at = d.home end end
 	return d
@@ -68,11 +79,16 @@ function PS.Mods(p)
 	local perks = WS.Perks(d.alliance)
 	local a = d.alliance and WS.Alliances[d.alliance]
 	local war = a and a.up and a.up.war or 0
+	local b = O.Bonuses(d.cab, d.inv) -- slotted officers + worn gear
+	local vip = PS.Has(p, "VIP") and 0.10 or 0
 	return {
-		law = 1 + (ideo.law or 0) + perks.law, props = 1 + (ideo.props or 0) + perks.props,
-		convoy = 1 + (ideo.convoy or 0) + perks.convoy, regen = 1 + perks.regen,
-		attack = (ideo.attack or 0) + perks.attack, defense = (ideo.defense or 0) + perks.defense,
-		siege = (ideo.attack or 0) + perks.attack + 0.05 * war, countries = perks.countries,
+		law = 1 + (ideo.law or 0) + perks.law + b.law + vip, props = 1 + (ideo.props or 0) + perks.props + b.props + vip,
+		convoy = 1 + (ideo.convoy or 0) + perks.convoy + b.convoy + vip, regen = 1 + perks.regen + b.regen,
+		xp = 1 + b.xp + vip,
+		attack = (ideo.attack or 0) + perks.attack + b.attack + b.gearAtk, defense = (ideo.defense or 0) + perks.defense + b.defense + b.gearDef,
+		siege = (ideo.attack or 0) + perks.attack + 0.05 * war + b.siege, boss = b.boss,
+		loot = b.loot, losses = b.losses, interest = b.interest,
+		countries = perks.countries, bonus = b,
 	}
 end
 function PS.RegenSec(mods) return R.RegenSec / (mods and mods.regen or 1) end
@@ -100,14 +116,43 @@ function PS.Earn(p, amount, src)
 		d.loan.owed -= cut; amount -= cut
 		if d.loan.owed <= 0.5 then d.loan = nil; PS.Note(p, { kind = "toast", text = "Loan fully repaid", tone = "good" }) end
 	end
+	-- alliance dues: a % of everything you earn goes to your alliance's treasury
+	local rate = PS.DuesRate(p)
+	if rate > 0 then
+		local cut = amount * rate
+		amount -= cut
+		WS.Credit(d.alliance, cut)
+		p.duesPaid = (p.duesPaid or 0) + cut
+	end
 	d.cash += amount
 	d.stats.earned += amount
+	PS.TaskProgress(p, "earn", amount / math.max(1, R.MinuteValue(d.lv)))
 	return amount
+end
+
+-- Kash 1 Oct: dues are a % of earnings. Style: flat, prog (higher levels pay more), regr (lower levels pay more).
+-- Each member's rate scales from half to double the base by their level vs the alliance average.
+function PS.DuesRate(p)
+	local d = p.data
+	local a = d.alliance and WS.Alliances[d.alliance]
+	local dues = a and a.dues
+	if not dues or (dues.pct or 0) <= 0 then return 0 end
+	local base = dues.pct / 100
+	if dues.style == "prog" or dues.style == "regr" then
+		local sum, n = 0, 0
+		for _, m in pairs(a.members) do if m.lv then sum += m.lv; n += 1 end end
+		local avg = n > 0 and sum / n or d.lv
+		local ratio = d.lv / math.max(1, avg)
+		if dues.style == "regr" then ratio = 1 / math.max(0.01, ratio) end
+		base *= math.clamp(ratio, 0.5, 2)
+	end
+	return math.min(base, Config.Alliance.DuesCap / 100)
 end
 
 ---------------------------------------------------------------- XP and levels (a level-up refills Influence and Supply)
 function PS.AddXp(p, xp, quiet)
 	local d = p.data
+	xp = math.floor(xp * (p.xpMult or 1) + 0.5)
 	d.xp += xp
 	local levelled = false
 	while d.xp >= R.XpReq(d.lv) do
@@ -126,6 +171,8 @@ function PS.AddXp(p, xp, quiet)
 		end
 	end
 	if levelled then
+		PS.TaskProgress(p, "level", 1)
+		PS.MemberLevel(p)
 		d.inf = math.max(d.inf, R.MaxInfluence(d.lv, d.sk)); d.infT = 0
 		d.sup = math.max(d.sup, R.MaxSupply(d.lv, d.sk)); d.supT = 0
 		PS.EnsureConvoys(p)
@@ -243,36 +290,82 @@ function PS.AdvanceConvoys(p, t, quiet)
 	return n
 end
 
----------------------------------------------------------------- daily tasks
-PS.TaskPool = {
-	{ key = "laws", n = 40, text = "Pass 40 laws", icon = "icon_laws" },
-	{ key = "trips", n = 4, text = "Deliver 4 convoy loads", icon = "icon_package" },
-	{ key = "wins", n = 3, text = "Win 3 battles", icon = "icon_battle" },
-	{ key = "build", n = 2, text = "Build 2 properties", icon = "icon_properties" },
-	{ key = "hits", n = 8, text = "Hit a boss or city 8 times", icon = "icon_attack" },
-	{ key = "units", n = 5, text = "Recruit 5 units", icon = "icon_military" },
-}
+---------------------------------------------------------------- daily orders + weekly challenges (Tasks.lua)
+local function pickDistinct(rng, pool, count, exclude)
+	local idx = {}
+	for i in ipairs(pool) do if not (exclude and exclude[i]) then table.insert(idx, i) end end
+	local out = {}
+	while #out < count and #idx > 0 do table.insert(out, table.remove(idx, rng:NextInteger(1, #idx))) end
+	return out
+end
+local function makeTask(def, i, src)
+	return { src = src, i = i, key = def.key, n = def.n, have = 0, done = false, big = def.big, text = def.text, icon = def.icon }
+end
 function PS.EnsureTasks(p)
 	local d = p.data
 	local day = R.Day()
-	if d.tasks and d.tasks.day == day then return d.tasks end
-	local picks, used = {}, {}
-	local seed = (day * 31 + (p.userId or 0)) % 1000003
-	while #picks < 3 do
-		seed = (seed * 1103515245 + 12345) % 2147483648
-		local i = seed % #PS.TaskPool + 1
-		if not used[i] then used[i] = true; table.insert(picks, { key = PS.TaskPool[i].key, n = PS.TaskPool[i].n, have = 0, done = false }) end
+	if not (d.tasks and d.tasks.day == day and d.tasks.v == 2) then
+		local rng = Random.new(day * 7919 + (p.userId or 0))
+		local list = {}
+		local keys = {}
+		for _, i in ipairs(pickDistinct(rng, TK.Daily, #TK.Daily)) do
+			local def = TK.Daily[i]
+			if not keys[def.key] and #list < TK.DailyCount then keys[def.key] = true; table.insert(list, makeTask(def, i, "daily")) end
+		end
+		d.tasks = { v = 2, day = day, list = list, bonus = false }
 	end
-	d.tasks = { day = day, list = picks, bonus = false }
+	local week = TK.Week()
+	if not (d.weekly and d.weekly.week == week) then
+		local list = {}
+		for i, def in ipairs(TK.Weekly) do table.insert(list, makeTask(def, i, "weekly")) end
+		d.weekly = { week = week, list = list, chest = false }
+	end
+	if d.refresh.day ~= day then d.refresh.day = day; d.refresh.free = 1 end
 	return d.tasks
 end
 function PS.TaskProgress(p, key, amount)
-	local t = PS.EnsureTasks(p)
-	for _, task in ipairs(t.list) do
-		if task.key == key and not task.done then task.have = math.min(task.n, task.have + amount) end
+	local d = p.data
+	if not d.tasks then return end
+	for _, list in ipairs({ d.tasks.list, d.weekly and d.weekly.list or {} }) do
+		for _, task in ipairs(list) do
+			if task.key == key and not task.done then task.have = math.min(task.n, task.have + amount) end
+		end
 	end
 end
-function PS.TaskReward(p) return { gold = 2, cash = math.floor(R.MinuteValue(p.data.lv) * 15) } end
+-- swap one order for a new one (1 free a day, then Challenge Refresh tokens)
+function PS.RefreshTask(p, src, i)
+	local d = p.data
+	PS.EnsureTasks(p)
+	local list = src == "weekly" and d.weekly.list or d.tasks.list
+	local task = list[i]
+	if not task or task.done then return false, "Pick an unfinished order" end
+	local useFree = (d.refresh.free or 0) > 0
+	if not useFree and (d.refresh.tokens or 0) <= 0 then return false, "no_refresh" end
+	local pool = src == "weekly" and TK.WeeklyPool or TK.Daily
+	local used = {}
+	for _, t in ipairs(list) do if t.src == src or src == "daily" then used[t.key] = true end end
+	local options = {}
+	for j, def in ipairs(pool) do if not used[def.key] then table.insert(options, j) end end
+	if src == "weekly" then
+		options = {}
+		local have = {}
+		for _, t in ipairs(list) do have[t.text] = true end
+		for j, def in ipairs(TK.WeeklyPool) do if not have[def.text] then table.insert(options, j) end end
+		for j, def in ipairs(TK.Weekly) do if not have[def.text] then table.insert(options, -j) end end
+	end
+	if #options == 0 then return false, "No other orders available" end
+	local pick = options[math.random(1, #options)]
+	local def = pick < 0 and TK.Weekly[-pick] or pool[pick]
+	list[i] = makeTask(def, math.abs(pick), src)
+	if useFree then d.refresh.free -= 1 else d.refresh.tokens -= 1 end
+	return true
+end
+function PS.TaskReward(p, task)
+	local lv = p.data.lv
+	if task and task.src == "weekly" then return { gold = TK.WeeklyReward.gold, basicCrates = TK.WeeklyReward.basicCrates } end
+	local r = (task and task.big) and TK.DailyRewardBig or TK.DailyReward
+	return { gold = r.gold, cash = math.floor(R.MinuteValue(lv) * r.lawMinutes) }
+end
 
 ---------------------------------------------------------------- bosses
 function PS.EnsureBoss(p)
@@ -284,28 +377,45 @@ function PS.EnsureBoss(p)
 	return d.boss
 end
 
----------------------------------------------------------------- rival nations (Battle tab)
-local RIVAL_A = { "Varnia", "Ostrava", "Kelmar", "Duvessa", "Tarsis", "Morvane", "Belgrast", "Quellan", "Sorrow Isles", "Halvard",
-	"Zenthia", "Marrow Coast", "Ilyria", "Cordova", "Pellwick", "Ashgrove", "Norvik", "Saltreach", "Vey", "Brannock" }
-local RIVAL_B = { "Republic of", "Kingdom of", "Federation of", "Free State of", "Union of", "Empire of", "Duchy of", "Commonwealth of" }
-function PS.MakeRivals(p, mods)
+---------------------------------------------------------------- officers / gear helpers
+function PS.OfficerSlots(p)
+	return Config.Officers.StartSlots + (p.data.cab.bought or 0) + (PS.Has(p, "BonusOfficer") and 1 or 0)
+end
+function PS.NextSlotCost(p)
+	return Config.Officers.SlotCosts[(p.data.cab.bought or 0) + 1]
+end
+-- put a new officer in the first free slot, else on the bench
+function PS.AddOfficer(p, o)
 	local d = p.data
-	local atk = PS.Power(p, mods)
-	local list = {}
-	local rng = Random.new(now() + (p.userId or 0))
-	local names = table.clone(RIVAL_A)
-	for i = #names, 2, -1 do local j = rng:NextInteger(1, i); names[i], names[j] = names[j], names[i] end
-	for i = 1, 5 do
-		local strength = ({ 0.55, 0.75, 0.95, 1.15, 1.4 })[i] * rng:NextNumber(0.9, 1.1)
-		table.insert(list, {
-			name = RIVAL_B[(i + rng:NextInteger(0, 7)) % #RIVAL_B + 1] .. " " .. names[i],
-			lv = math.max(1, d.lv + rng:NextInteger(-3, 3)), def = math.max(5, math.floor(atk * strength)),
-			flag = { l = R.FlagLayouts[rng:NextInteger(1, #R.FlagLayouts)], c = { R.FlagColors[rng:NextInteger(1, 12)], R.FlagColors[rng:NextInteger(1, 12)], R.FlagColors[rng:NextInteger(1, 12)] } },
-			reward = math.floor(R.MinuteValue(d.lv) * 1.5 * (0.7 + strength * 0.5)),
-		})
+	d.inv.officers[o.id] = o
+	for i = 1, PS.OfficerSlots(p) do
+		if not d.cab.slots[i] then d.cab.slots[i] = o.id; return "slot" end
 	end
-	d.rivals = { list = list, t = now() }
-	return d.rivals
+	return "bench"
+end
+function PS.AddGear(p, g)
+	local n = 0
+	for _ in pairs(p.data.inv.gear) do n += 1 end
+	if n >= Config.InventoryMax then return false end
+	p.data.inv.gear[g.id] = g
+	return true
+end
+function PS.Rng(p) p.rng = p.rng or Random.new(os.clock() * 1e6 + (p.userId or 0)); return p.rng end
+-- record this member's level on the alliance (for Progressive/Regressive dues), at most every 5 minutes
+function PS.MemberLevel(p)
+	local d = p.data
+	if not d.alliance or (p.lvPush or 0) > os.clock() - 300 then return end
+	p.lvPush = os.clock()
+	local uid = tostring(p.userId)
+	task.spawn(function()
+		WS.MutateAlliance(d.alliance, function(x)
+			local m = x.members[uid]
+			if not m then return nil, "Not a member" end
+			if m.lv == d.lv then return nil, "same" end
+			m.lv = d.lv; m.active = os.time()
+			return x, true
+		end)
+	end)
 end
 
 ---------------------------------------------------------------- notes + sync
@@ -326,11 +436,19 @@ function PS.Snapshot(p)
 		passes = d.passes, lots = d.lots, lotsMax = PS.LotsMax(p), sk = d.sk, skillFree = PS.SkillFree(d), goldLaws = PS.GoldLaws(d),
 		units = d.units, atk = atk, def = def, siege = M.SiegeDamage(d.lv, d.sk, d.units, { attack = mods.siege }),
 		convoys = d.convoys, slots = PS.Slots(p), boss = boss, tasks = tasks, taskReward = PS.TaskReward(p), loan = d.loan,
-		loanMax = PS.LoanMax(p, mods), alliance = d.alliance, alliance_rec = a, stats = d.stats, rivals = d.rivals,
+		taskRewardBig = PS.TaskReward(p, { big = true }), weeklyReward = PS.TaskReward(p, { src = "weekly" }),
+		loanMax = PS.LoanMax(p, mods), alliance = d.alliance, alliance_rec = a, stats = d.stats,
 		gp = p.gp, mods = mods, incHr = PS.IncHr(p, mods), serverTime = now(), autoOff = d.autoOff, studio = Store.IsStudio,
 		online = Store.Online, capitalCredit = d.capitalCredit or 0,
+		bank = d.bank, bankRate = Config.Bank.InterestPerHour * (1 + (mods.interest or 0)), shield = d.shield, revenge = d.revenge,
+		inv = d.inv, cab = d.cab, officerSlots = PS.OfficerSlots(p), nextSlotCost = PS.NextSlotCost(p),
+		crates = d.crates, basicCratePrice = PS.BasicCratePrice(p), login = d.login, loginReady = PS.LoginReady(p),
+		weekly = d.weekly, refresh = d.refresh, bundle = d.bundle, duesRate = PS.DuesRate(p),
+		targets = PS.Raids and PS.Raids.Targets(p) or {},
 	}
 end
+function PS.BasicCratePrice(p) return math.floor(R.MinuteValue(p.data.lv) * Config.Crates.Basic.lawMinutes) end
+function PS.LoginReady(p) return (p.data.login.last or 0) < R.Day() end
 function PS.LoanMax(p, mods)
 	return math.floor(R.MinuteValue(p.data.lv) * 60 + PS.IncHr(p, mods) * 2)
 end
@@ -345,7 +463,7 @@ function PS.Tick(plr)
 	local p = PS.Profiles[plr]
 	if not p then return end
 	local d = p.data
-	Remotes.Sync:FireClient(plr, "tick", { cash = d.cash, gold = d.gold, inf = d.inf, infT = d.infT, sup = d.sup, supT = d.supT, t = now() })
+	Remotes.Sync:FireClient(plr, "tick", { cash = d.cash, gold = d.gold, bank = d.bank, inf = d.inf, infT = d.infT, sup = d.sup, supT = d.supT, t = now() })
 	if #p.notes > 0 then Remotes.Sync:FireClient(plr, "notes", p.notes); p.notes = {} end
 end
 
@@ -421,6 +539,9 @@ function PS.Load(plr)
 		if readOk and (not a or a.disbanded or not a.members[tostring(plr.UserId)]) then data.alliance = nil end
 	end
 	PS.Market.CheckPasses(plr, p)
+	p.xpMult = PS.Mods(p).xp
+	PS.EnsureTasks(p)
+	PS.MemberLevel(p)
 	PS.EnsureConvoys(p)
 	PS.CatchUp(p)
 	PS.Sync(plr)
@@ -456,7 +577,13 @@ function PS.CatchUp(p)
 	local trips = PS.AdvanceConvoys(p, now(), true)
 	local stipend = PS.StipendRate(p) * away * 0.5
 	if stipend > 0 then PS.Earn(p, stipend, "stipend") end
-	PS.Note(p, { kind = "offline", away = away, cash = d.cash - cash0, props = inc, trips = trips, levels = d.lv - lv0, stipend = stipend })
+	-- bank interest at half rate while away (simple interest over the capped window)
+	local interest = 0
+	if (d.bank or 0) > 0 then
+		interest = d.bank * Config.Bank.InterestPerHour * (1 + (mods.interest or 0)) * Config.Bank.OfflineShare * away / 3600
+		d.bank += interest
+	end
+	PS.Note(p, { kind = "offline", away = away, cash = d.cash - cash0, props = inc, trips = trips, levels = d.lv - lv0, stipend = stipend, interest = interest })
 end
 
 -- alliance stipend: (level) x 3% of a minute of law value per minute, per member. Active members (online) get it in full,
@@ -473,6 +600,8 @@ end
 function PS.Step(plr, p)
 	local d = p.data
 	local mods = PS.Mods(p)
+	p.xpMult = mods.xp
+	if (d.bank or 0) > 0 then d.bank += d.bank * Config.Bank.InterestPerHour * (1 + (mods.interest or 0)) / 3600 end
 	local regen = PS.RegenSec(mods)
 	local maxInf = R.MaxInfluence(d.lv, d.sk)
 	if d.inf < maxInf then

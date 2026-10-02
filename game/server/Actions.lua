@@ -7,10 +7,12 @@ local M = require(RS.Shared.Military)
 local World = require(RS.Shared.World)
 local Config = require(RS.Shared.Config)
 local WS = require(script.Parent.WorldService)
+local O = require(RS.Shared.Officers)
+local TK = require(RS.Shared.Tasks)
 
 local A = {}
-local PS, MK
-function A.Init(ps, mk) PS, MK = ps, mk end
+local PS, MK, RA
+function A.Init(ps, mk, ra) PS, MK, RA = ps, mk, ra end
 
 local function ok(t) t = t or {}; t.ok = true; return t end
 local function no(msg) return { ok = false, msg = msg } end
@@ -75,6 +77,7 @@ function act.passLaw(plr, p, a)
 	d.passes[key] = before + 1
 	d.stats.laws += 1
 	PS.TaskProgress(p, "laws", 1)
+	PS.TaskProgress(p, "influence", L.cost)
 	local tb, ta = R.MasteryTier(before), R.MasteryTier(before + 1)
 	if ta > tb then
 		PS.Note(p, { kind = "mastery", law = L.n, tier = ta, pct = R.MasteryPct[ta + 1], point = ta == 3 })
@@ -166,35 +169,9 @@ function act.disband(plr, p, a)
 	return ok()
 end
 
----------------------------------------------------------------- battle (rival nations; winning pays, losing only costs Supply)
-function act.rivals(plr, p, a)
-	local d = p.data
-	if a.refresh or not d.rivals or now() - d.rivals.t > 600 then PS.MakeRivals(p) end
-	return ok()
-end
-
-function act.battle(plr, p, a)
-	local d = p.data
-	if not d.rivals then PS.MakeRivals(p) end
-	local i = int(a.i, 1, #d.rivals.list)
-	if not i then return no("Pick a rival") end
-	local rv = d.rivals.list[i]
-	if rv.beaten then return no("Already defeated. Refresh for new rivals.") end
-	if d.sup < M.BattleSupply then return no("Not enough Supply (" .. M.BattleSupply .. " needed)") end
-	d.sup -= M.BattleSupply
-	local atk = PS.Power(p)
-	local chance = M.WinChance(atk, rv.def)
-	d.stats.battles += 1
-	if math.random() < chance then
-		rv.beaten = true
-		d.stats.wins += 1
-		local cash = PS.Earn(p, rv.reward, "battle")
-		local xp = math.max(1, math.floor(R.MinuteXp(d.lv) * 0.6 + 0.5))
-		PS.AddXp(p, xp)
-		PS.TaskProgress(p, "wins", 1)
-		return ok({ win = true, cash = cash, xp = xp, chance = chance })
-	end
-	return ok({ win = false, chance = chance })
+---------------------------------------------------------------- raids (Raids.lua): players in your server + 3 AI nations
+function act.raid(plr, p, a)
+	return RA.Attack(plr, p, a.id, false)
 end
 
 ---------------------------------------------------------------- bosses
@@ -205,8 +182,10 @@ function act.bossHit(plr, p, a)
 	local n = int(a.n or 1, 1, 50) or 1
 	n = math.min(n, d.sup)
 	if n <= 0 then return no("Not enough Supply") end
-	local atk = PS.Power(p)
+	local mods = PS.Mods(p)
+	local atk = PS.Power(p, mods) * (1 + (mods.boss or 0))
 	local dmg = 0
+	PS.TaskProgress(p, "supply", n)
 	for _ = 1, n do
 		if boss.hp <= 0 then break end
 		d.sup -= M.BossSupply
@@ -222,6 +201,7 @@ function act.bossHit(plr, p, a)
 		local xp = math.floor(R.MinuteXp(d.lv) * 5 + 0.5)
 		d.gold += gold
 		d.stats.bosses += 1
+		PS.TaskProgress(p, "boss", 1)
 		d.boss = { era = R.EraOf(d.lv), hp = M.BossHp(R.EraOf(d.lv)), next = now() + M.BossCooldown }
 		PS.AddXp(p, xp)
 		PS.Note(p, { kind = "boss", name = M.Bosses[e][1], gold = gold, cash = cash, xp = xp })
@@ -283,6 +263,8 @@ function act.send(plr, p, a)
 	local taxPct, owner = PS.TaxFor(p, b)
 	d.cash -= L.cost
 	PS.Dispatch(p, c, b, { good = L.good, cost = L.cost, pay = L.pay, tax = L.tax, xp = L.xp, owner = owner, taxPct = taxPct })
+	p.sentTo = p.sentTo or {}
+	if not p.sentTo[b] then p.sentTo[b] = true; PS.TaskProgress(p, "moves", 1) end
 	return ok()
 end
 
@@ -329,32 +311,102 @@ function act.toggleAuto(plr, p)
 	return ok()
 end
 
----------------------------------------------------------------- daily tasks
-function act.taskClaim(plr, p, a)
+---------------------------------------------------------------- daily orders + weekly challenges
+local function grantReward(p, r)
 	local d = p.data
-	local t = PS.EnsureTasks(p)
-	local i = int(a.i, 1, #t.list)
-	local task = i and t.list[i]
-	if not task then return no("Unknown task") end
+	if r.gold then d.gold += r.gold end
+	if r.cash then PS.Earn(p, r.cash, "task") end
+	if r.basicCrates then d.crates.basic += r.basicCrates end
+	if r.limitedCrates then d.crates.limited += r.limitedCrates end
+end
+function act.taskClaim(plr, p, a)
+	PS.EnsureTasks(p)
+	local d = p.data
+	local list = a.src == "weekly" and d.weekly.list or d.tasks.list
+	local i = int(a.i, 1, #list)
+	local task = i and list[i]
+	if not task then return no("Unknown order") end
 	if task.done then return no("Already claimed") end
 	if task.have < task.n then return no("Not finished yet") end
 	task.done = true
-	local r = PS.TaskReward(p)
-	d.gold += r.gold
-	PS.Earn(p, r.cash, "task")
+	local r = PS.TaskReward(p, task)
+	grantReward(p, r)
 	return ok(r)
 end
 function act.taskBonus(plr, p)
 	local d = p.data
 	local t = PS.EnsureTasks(p)
 	if t.bonus then return no("Already claimed") end
-	for _, task in ipairs(t.list) do if not task.done then return no("Claim all three tasks first") end end
+	for _, task in ipairs(t.list) do if not task.done then return no("Claim all of today's orders first") end end
 	t.bonus = true
-	d.gold += 5
-	return ok({ gold = 5 })
+	d.gold += TK.DailyBonus.gold
+	return ok({ gold = TK.DailyBonus.gold })
+end
+function act.weeklyChest(plr, p)
+	local d = p.data
+	PS.EnsureTasks(p)
+	if d.weekly.chest then return no("Already opened this week") end
+	for _, task in ipairs(d.weekly.list) do if not task.done then return no("Claim all 5 weekly challenges first") end end
+	d.weekly.chest = true
+	d.crates.limited += TK.WeeklyChest.limitedCrates
+	local rng = PS.Rng(p)
+	local g = O.NewGear(rng, math.max(TK.WeeklyChest.gearMinRarity, O.Roll(rng, O.GearOdds.limited, PS.Has(p, "CrateLuck"))))
+	PS.AddGear(p, g)
+	return ok({ gear = g })
+end
+function act.taskRefresh(plr, p, a)
+	local okR, err = PS.RefreshTask(p, a.src == "weekly" and "weekly" or "daily", int(a.i, 1, 10))
+	if not okR then
+		if err == "no_refresh" then
+			-- no free refresh left today: offer the 19 Robux Challenge Refresh
+			return MK.PromptProduct(plr, "ChallengeRefresh", { src = a.src, i = a.i })
+		end
+		return no(err)
+	end
+	return ok()
 end
 
----------------------------------------------------------------- bank
+---------------------------------------------------------------- login sheet (pauses, never resets)
+function act.loginClaim(plr, p)
+	local d = p.data
+	if not PS.LoginReady(p) then return no("Come back tomorrow for the next reward") end
+	local idx = math.clamp(d.login.idx or 1, 1, #TK.Login)
+	local r = TK.Login[idx]
+	if r.lawMinutes then PS.Earn(p, R.MinuteValue(d.lv) * r.lawMinutes, "login") end
+	if r.gold then d.gold += r.gold end
+	if r.refill then d.inf = math.max(d.inf, R.MaxInfluence(d.lv, d.sk)); d.sup = math.max(d.sup, R.MaxSupply(d.lv, d.sk)) end
+	if r.basicCrates then d.crates.basic += r.basicCrates end
+	if r.limitedCrates then d.crates.limited += r.limitedCrates end
+	d.login.last = R.Day()
+	d.login.idx = idx % #TK.Login + 1
+	d.login.streak = (d.login.streak or 0) + 1
+	return ok({ idx = idx })
+end
+
+---------------------------------------------------------------- bank (deposits cost 10%, withdrawals free, 1.5%/h interest)
+local function amountArg(x, max)
+	x = tonumber(x)
+	if not x or x ~= x or x == math.huge then return nil end
+	return math.floor(math.min(x, max))
+end
+function act.deposit(plr, p, a)
+	local d = p.data
+	local amt = amountArg(a.amount, d.cash)
+	if not amt or amt <= 0 then return no("No cash to deposit") end
+	local fee = math.floor(amt * Config.Bank.DepositFee)
+	d.cash -= amt
+	d.bank += amt - fee
+	PS.TaskProgress(p, "deposit", 1)
+	return ok({ deposited = amt - fee, fee = fee })
+end
+function act.withdraw(plr, p, a)
+	local d = p.data
+	local amt = amountArg(a.amount, d.bank)
+	if not amt or amt <= 0 then return no("Nothing in the bank") end
+	d.bank -= amt
+	d.cash += amt
+	return ok({ withdrawn = amt })
+end
 function act.loanTake(plr, p)
 	local d = p.data
 	if d.loan then return no("Repay your current loan first") end
@@ -376,9 +428,26 @@ end
 
 ---------------------------------------------------------------- Robux
 function act.buyPass(plr, p, a) return MK.PromptPass(plr, a.key) end
-function act.buyGold(plr, p, a)
-	if a.key ~= "GoldSmall" and a.key ~= "GoldBig" then return no("Unknown pack") end
+local BUYABLE = { GoldSmall = true, GoldBig = true, GoldHuge = true, Crate1 = true, Crate3 = true, Crate10 = true,
+	TreasuryGrant = true, InfluenceRefill = true, SupplyRefill = true, RaidShield = true, InstantArmy = true,
+	ChallengeRefresh = true, LimitedBundle = true }
+function act.buyProduct(plr, p, a)
+	if not BUYABLE[a.key] then return no("Unknown item") end
+	if a.key == "LimitedBundle" and p.data.bundle then return no("You already own the Limited Bundle") end
 	return MK.PromptProduct(plr, a.key)
+end
+act.buyGold = act.buyProduct
+function act.revengeStrike(plr, p, a)
+	local r = p.data.revenge
+	if not r then return no("Nobody has raided you yet") end
+	local q, ai = nil, nil
+	for _, x in ipairs(RA.AI) do if x.id == r.id then ai = x end end
+	if not ai then
+		local uid = tonumber(tostring(r.id):match("^u(%d+)$"))
+		q = uid and game:GetService("Players"):GetPlayerByUserId(uid)
+	end
+	if not ai and not q then return no(r.name .. " has left this server") end
+	return MK.PromptProduct(plr, "RevengeStrike", r.id)
 end
 function act.moveCapital(plr, p, a)
 	local b = int(a.city, 1, #World.Cities)
@@ -390,6 +459,135 @@ function act.moveCapital(plr, p, a)
 		return ok({ moved = true })
 	end
 	return MK.PromptProduct(plr, "MoveCapital", b)
+end
+
+---------------------------------------------------------------- officers (Kash 1 Oct): panels, slots for cash, 3 hire tiers
+function act.buySlot(plr, p)
+	local d = p.data
+	local cost = PS.NextSlotCost(p)
+	if not cost then return no("All officer slots are open") end
+	if d.cash < cost then return no("A new slot costs " .. R.Money(cost)) end
+	d.cash -= cost
+	d.cab.bought = (d.cab.bought or 0) + 1
+	return ok({ cost = cost })
+end
+function act.hire(plr, p, a)
+	local d = p.data
+	local tier
+	for _, h in ipairs(Config.Officers.Hire) do if h.key == a.tier then tier = h end end
+	if not tier then return no("Pick a hiring office") end
+	local benched = 0
+	for id in pairs(d.inv.officers) do if not table.find(d.cab.slots, id) then benched += 1 end end
+	if benched >= Config.Officers.BenchMax then return no("Your bench is full. Fire someone first.") end
+	if d.cash < tier.cost then return no(tier.name .. " costs " .. R.Money(tier.cost)) end
+	d.cash -= tier.cost
+	local rng = PS.Rng(p)
+	local o = O.NewOfficer(rng, O.Roll(rng, O.HireOdds[tier.key], PS.Has(p, "CrateLuck")), d.lastHireTrait)
+	d.lastHireTrait = o.traits[1].k
+	local where = PS.AddOfficer(p, o)
+	PS.TaskProgress(p, "hire", 1)
+	return ok({ officer = o, where = where })
+end
+local function officerSlotIndex(d, id) for i = 1, 20 do if d.cab.slots[i] == id then return i end end end
+function act.fire(plr, p, a)
+	local d = p.data
+	local o = type(a.id) == "string" and d.inv.officers[a.id]
+	if not o then return no("Unknown officer") end
+	-- their gear goes back to the inventory
+	o.weapon, o.armor = nil, nil
+	local i = officerSlotIndex(d, a.id)
+	if i then d.cab.slots[i] = false end
+	d.inv.officers[a.id] = nil
+	return ok()
+end
+-- move an officer into slot i (swapping with whoever is there), or to the bench (slot 0)
+function act.seat(plr, p, a)
+	local d = p.data
+	local o = type(a.id) == "string" and d.inv.officers[a.id]
+	if not o then return no("Unknown officer") end
+	local target = int(a.slot, 0, PS.OfficerSlots(p))
+	if not target then return no("That slot is locked") end
+	local from = officerSlotIndex(d, a.id)
+	if target == 0 then if from then d.cab.slots[from] = false end; return ok() end
+	local other = d.cab.slots[target]
+	d.cab.slots[target] = a.id
+	if from then d.cab.slots[from] = other or false end
+	for i = 1, 20 do if i > PS.OfficerSlots(p) and d.cab.slots[i] then d.cab.slots[i] = false end end
+	return ok()
+end
+-- gear onto the player ("player") or an officer id; slot = "weapon" / "armor"
+function act.equip(plr, p, a)
+	local d = p.data
+	local g = type(a.gear) == "string" and d.inv.gear[a.gear]
+	if not g then return no("Unknown gear") end
+	local holder = a.holder == "player" and d.cab.player or (type(a.holder) == "string" and d.inv.officers[a.holder])
+	if not holder then return no("Pick who wears it") end
+	-- take it off whoever wears it now
+	local function strip(h) if h.weapon == g.id then h.weapon = nil end; if h.armor == g.id then h.armor = nil end end
+	strip(d.cab.player)
+	for _, o in pairs(d.inv.officers) do strip(o) end
+	holder[g.kind] = g.id
+	return ok()
+end
+function act.unequip(plr, p, a)
+	local d = p.data
+	local holder = a.holder == "player" and d.cab.player or (type(a.holder) == "string" and d.inv.officers[a.holder])
+	if not holder or (a.slot ~= "weapon" and a.slot ~= "armor") then return no("Bad request") end
+	holder[a.slot] = nil
+	return ok()
+end
+function act.discard(plr, p, a)
+	local d = p.data
+	local g = type(a.gear) == "string" and d.inv.gear[a.gear]
+	if not g then return no("Unknown gear") end
+	if g.limited then return no("Limited items cannot be thrown away") end
+	local function strip(h) if h.weapon == g.id then h.weapon = nil end; if h.armor == g.id then h.armor = nil end end
+	strip(d.cab.player)
+	for _, o in pairs(d.inv.officers) do strip(o) end
+	d.inv.gear[a.gear] = nil
+	return ok()
+end
+
+---------------------------------------------------------------- crates (one crate, two prices: gold or Robux; basic crate for cash)
+function A.OpenCrates(p, kind, n)
+	local d = p.data
+	local rng = PS.Rng(p)
+	local results = {}
+	local luck = PS.Has(p, "CrateLuck")
+	local gotEpic = false
+	for k = 1, n do
+		-- a 10-pack guarantees at least one Epic or better
+		local force = (kind == "limited" and n >= 10 and k == n and not gotEpic)
+		local r = O.OpenCrate(rng, kind, luck, force)
+		if O.RarityByKey[r.item.rarity].index >= 3 then gotEpic = true end
+		if r.type == "officer" then r.where = PS.AddOfficer(p, r.item)
+		elseif not PS.AddGear(p, r.item) then r.lost = true end
+		table.insert(results, r)
+	end
+	PS.TaskProgress(p, "crate", n)
+	return results
+end
+function act.openCrate(plr, p, a)
+	local d = p.data
+	local kind = a.kind == "basic" and "basic" or "limited"
+	local n = int(a.n or 1, 1, 10) or 1
+	if (d.crates[kind] or 0) < n then return no("You have no " .. (kind == "basic" and "Supply" or "Founder's") .. " crates to open") end
+	d.crates[kind] -= n
+	return ok({ results = A.OpenCrates(p, kind, n), kind = kind })
+end
+function act.buyCrate(plr, p, a)
+	local d = p.data
+	if a.kind == "basic" then
+		local price = PS.BasicCratePrice(p)
+		if d.cash < price then return no("A Supply Crate costs " .. R.Money(price)) end
+		d.cash -= price
+		return ok({ results = A.OpenCrates(p, "basic", 1), kind = "basic" })
+	end
+	local L = Config.Crates.Limited
+	if os.time() > L.ends then return no("This crate has left the shop") end
+	if d.gold < L.gold then return no("The " .. L.name .. " costs " .. L.gold .. " gold") end
+	d.gold -= L.gold
+	return ok({ results = A.OpenCrates(p, "limited", 1), kind = "limited" })
 end
 
 ---------------------------------------------------------------- alliances
@@ -405,7 +603,8 @@ function act.allyList(plr, p)
 	for id, s in pairs(WS.Index) do
 		local cities = 0
 		for _, c in pairs(WS.Cities) do if c.owner == id then cities += 1 end end
-		table.insert(list, { id = id, name = s.name, tag = s.tag, color = s.color, members = s.members, open = s.open, cities = cities })
+		table.insert(list, { id = id, name = s.name, tag = s.tag, color = s.color, members = s.members, open = s.open, cities = cities,
+			fee = s.fee or 0, dues = s.dues or 0, style = s.style or "flat" })
 	end
 	table.sort(list, function(x, y) if x.cities ~= y.cities then return x.cities > y.cities end; return (x.members or 0) > (y.members or 0) end)
 	return ok({ list = list })
@@ -427,10 +626,13 @@ function act.allyJoin(plr, p, a)
 	if d.alliance then return no("Leave your alliance first") end
 	if type(a.id) ~= "string" or not WS.Index[a.id] then return no("Alliance not found") end
 	if not WS.Alliances[a.id] then WS.LoadAlliance(a.id) end
-	local rec, err = WS.Join(plr, a.id, d.name)
+	local fee = (WS.Alliances[a.id] and WS.Alliances[a.id].joinFee) or 0
+	if d.cash < fee then return no("Joining costs " .. R.Money(fee)) end
+	local rec, err = WS.Join(plr, a.id, d.name, fee, d.lv)
 	if not rec then return no(err) end
+	d.cash -= fee
 	d.alliance = a.id
-	return ok()
+	return ok({ fee = fee })
 end
 function act.allyLeave(plr, p)
 	local d = p.data
@@ -458,6 +660,7 @@ function act.allyDonate(plr, p, a)
 	end)
 	if not rec then return no(err) end
 	d.cash -= amt
+	PS.TaskProgress(p, "donate", 1)
 	return ok({ amount = amt })
 end
 function act.allyUpgrade(plr, p, a)
@@ -536,6 +739,31 @@ function act.allyOpen(plr, p, a)
 	return ok()
 end
 
+-- leader sets the join fee and dues (once a day)
+function act.allySettings(plr, p, a)
+	local rec, id = myAlliance(p)
+	if not id then return no("You are not in an alliance") end
+	local fee = tonumber(a.fee) or 0
+	local pct = tonumber(a.pct) or 0
+	if fee ~= fee or pct ~= pct then return no("Bad numbers") end
+	fee = math.clamp(math.floor(fee), 0, AC.FeeMax)
+	pct = math.clamp(math.floor(pct), 0, AC.DuesMax)
+	local style = (a.style == "prog" or a.style == "regr") and a.style or "flat"
+	local rec2, err = WS.MutateAlliance(id, function(x)
+		if WS.Role(x, plr.UserId) ~= "leader" then return nil, "Only the leader can set fees and dues" end
+		if (x.settingsT or 0) + AC.SettingsCooldown > os.time() then
+			return nil, "Fees and dues can change once a day. Next change in " .. R.Duration(x.settingsT + AC.SettingsCooldown - os.time())
+		end
+		x.joinFee = fee
+		x.dues = { pct = pct, style = style }
+		x.settingsT = os.time()
+		WS.AddLog(x, "Join fee " .. R.Money(fee) .. ", dues " .. pct .. "% (" .. style .. ")")
+		return x, true
+	end)
+	if not rec2 then return no(err) end
+	return ok()
+end
+
 ---------------------------------------------------------------- sieges (Supply is the energy)
 function act.siege(plr, p, a)
 	local d = p.data
@@ -552,6 +780,8 @@ function act.siege(plr, p, a)
 	d.sup -= n
 	d.stats.hits += n
 	PS.TaskProgress(p, "hits", n)
+	PS.TaskProgress(p, "siege", n)
+	PS.TaskProgress(p, "supply", n)
 	PS.AddXp(p, math.max(1, math.floor(R.MinuteXp(d.lv) * 0.25 * n + 0.5)))
 	if res.captured then
 		PS.Note(p, { kind = "toast", text = res.winner == id and ("Your alliance captured " .. World.Cities[i].name .. "!") or (World.Cities[i].name .. " fell to another alliance"), tone = "good" })
