@@ -136,7 +136,7 @@ function O.BundleOfficer()
 	return {
 		id = "o_founder", name = "Empress Valeria Thorne", rarity = "limited", title = "Founder",
 		traits = { { k = "law", v = 25 }, { k = "attack", v = 25 }, { k = "loot", v = 20 }, { k = "losses", v = 20 } },
-		portrait = 0, hired = os.time(), limited = true,
+		portrait = 0, img = "officer_founder", hired = os.time(), limited = true,
 	}
 end
 -- the Mega VIP pass officer (Kash 16:54): unique, limited
@@ -144,7 +144,7 @@ function O.VIPOfficer()
 	return {
 		id = "o_megavip", name = "Marshal Aurelio Vance", rarity = "limited", title = "Mega VIP",
 		traits = { { k = "law", v = 20 }, { k = "props", v = 20 }, { k = "defense", v = 20 }, { k = "regen", v = 15 } },
-		portrait = 1, hired = os.time(), limited = true,
+		portrait = 1, img = "officer_megavip", hired = os.time(), limited = true,
 	}
 end
 function O.BundleGear()

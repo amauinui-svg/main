@@ -55,7 +55,10 @@ local function pct(v)
 	s = (s:gsub("%.$", ""))
 	return s .. "%"
 end
+local function painted(o) return o and ((o.img and Assets[o.img]) or (o.portrait == 0 and Assets.officer_founder)) and true or false end
+local function tintFor(o, rc) if painted(o) then return Color3.new(1, 1, 1) end return rc end
 local function portraitKey(o)
+	if o and o.img and Assets[o.img] then return o.img end
 	local n = o and o.portrait or 1
 	if n == 0 then return Assets.officer_founder and "officer_founder" or "officer_1" end
 	return "officer_" .. math.clamp(n, 1, O.Portraits)
@@ -221,7 +224,7 @@ local function portrait(parent, o, size, pos, z, p)
 	local wash = mk("Frame", { BackgroundColor3 = rc, BackgroundTransparency = 0.55, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ZIndex = z }, tile)
 	corner(wash, 6)
 	mk("UIGradient", { Rotation = -90, Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(0.7, 1), NumberSequenceKeypoint.new(1, 1) }) }, wash)
-	UI.img(tile, portraitKey(o), { sz = UDim2.fromScale(0.92, 0.92), pos = UDim2.fromScale(0.5, 1), anchor = Vector2.new(0.5, 1), color = rc, z = z + 1, slice = false, fit = true })
+	UI.img(tile, portraitKey(o), { sz = UDim2.fromScale(0.92, 0.92), pos = UDim2.fromScale(0.5, 1), anchor = Vector2.new(0.5, 1), color = tintFor(o, rc), z = z + 1, slice = false, fit = true })
 	return tile
 end
 local function playerPortrait(parent, size, pos, z)
@@ -1050,7 +1053,7 @@ S.inventory = { build = function(host, App)
 		local rc = rcol(o.rarity)
 		local c, well = card(order, rc, "OFFICER")
 		if ridx(o.rarity) >= 4 then glow(well, rc, 1.1, 8, math.min(1, 0.1 * ridx(o.rarity))) end
-		UI.img(well, portraitKey(o), { sz = UDim2.fromScale(0.86, 0.9), pos = UDim2.fromScale(0.5, 1), anchor = Vector2.new(0.5, 1), color = rc, z = 10, slice = false, fit = true })
+		UI.img(well, portraitKey(o), { sz = UDim2.fromScale(0.86, 0.9), pos = UDim2.fromScale(0.5, 1), anchor = Vector2.new(0.5, 1), color = tintFor(o, rc), z = 10, slice = false, fit = true })
 		tagChip(well, seated[o.id] and ("SLOT " .. seated[o.id]) or "BENCH", seated[o.id] and C.good or C.muted)
 		nameLine(c, o.name)
 		local t = {}
