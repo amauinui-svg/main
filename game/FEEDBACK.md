@@ -62,3 +62,5 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
   guaranteed Rare+ for all 5; daily pool grows to ~20).
   NEW monetization: REFRESH a challenge. One FREE refresh per day (swap one task you don't want); extra refreshes
   cost a small repeatable product (~25 Robux).
+- Q13 Soldier losses APPROVED: sweep winner ~2% / loser ~20%; clear win 5% / 15%; close fight 10% / 12%.
+  Defenders lose too. Cheapest soldiers die first. Losses shown on the result screen and raid notice with REBUILD.
