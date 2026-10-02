@@ -151,3 +151,5 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
     max once per session, never if already in the group/favorited.
   * SETTINGS button top-right: many quality-of-life settings, a CHANGELOG (date + version per entry) and a GAME
     INFO/mechanics guide that uses images and colors as much as possible. All polished and clean.
+- NEW (18:33) MAP: the Capitol world map must LOOP horizontally like a globe: scroll past the left edge and you see
+  the right side, and routes (dotted paths) that cross the edge continue across it (moving left works too).
