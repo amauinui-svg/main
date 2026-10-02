@@ -10248,4 +10248,20 @@ task.spawn(function()
 end)
 
 App.req("sync")
+
+-- Studio-only test hook: tools set LocalPlayer attribute IC_Cmd = "open:<screen>" | "close" | "login" | "settings"
+if game:GetService("RunService"):IsStudio() then
+	plr:GetAttributeChangedSignal("IC_Cmd"):Connect(function()
+		local cmd = plr:GetAttribute("IC_Cmd")
+		if type(cmd) ~= "string" then return end
+		local k, arg = cmd:match("^(%w+):?(.*)$")
+		pcall(function()
+			if k == "open" then App.closeModal(); App.open(arg)
+			elseif k == "close" then App.closeModal()
+			elseif k == "login" and App.showLogin then App.showLogin()
+			elseif k == "settings" and App.openSettings then App.openSettings(arg ~= "" and arg or nil)
+			elseif k == "emit" then App.emit(arg) end
+		end)
+	end)
+end
 ]]></ProtectedString></Properties></Item></Item></roblox>
