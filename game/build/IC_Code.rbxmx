@@ -1018,6 +1018,17 @@ C.StudioGrantsPasses = true
 -- Roblox Premium members: +5% cash. Group members: +10% cash (GroupId 0 = no group yet; Kash to provide).
 C.PremiumBonus = 0.05
 C.Group = { Id = 3735672, Bonus = 0.10 }
+-- FREE GIFT button (Kash 2 Oct): stays on the Laws screen until the player is in the group. One time gift on claim.
+C.GroupGift = { gold = 100, limitedCrates = 1 }
+-- Watch an ad to refill Influence (rewarded video ads; the reward is the 9 R$ refill product, within Roblox's 3-10 R$ rule)
+C.AdRefill = { product = "InfluenceRefillFirst", cooldown = 300 }
+-- purchase shout-outs in chat (Kash 2 Oct)
+C.ProductNames = { Crate1 = "a Founder's Crate", Crate3 = "3 Founder's Crates", Crate10 = "10 Founder's Crates", StarterPack = "the Starter Pack",
+	GoldSmall = "50 Gold", GoldBig = "250 Gold", GoldHuge = "1,000 Gold", TreasuryGrant = "a Treasury Grant", InfluenceRefill = "an Influence Refill",
+	InfluenceRefillFirst = "an Influence Refill", SupplyRefill = "a Supply Refill", RaidShield = "a Raid Shield", InstantArmy = "an Instant Army",
+	RevengeStrike = "a Revenge Strike", FinishConvoy1 = "an instant convoy", FinishConvoy2 = "an instant convoy", FinishConvoy3 = "an instant convoy",
+	FinishConvoy4 = "an instant convoy", ChallengeRefresh = "a Challenge Refresh", MoveCapital = "a Capital Move", LimitedBundle = "the Limited Bundle",
+	ChangeGovernment = "a new Government" }
 
 -- Rent (Kash 18:49): the alliance holding a capital may charge its residents this % of their property income.
 -- Max by city tier (city, capital, major capital, global city). New players pay nothing for 48 hours. Silent.
@@ -3392,7 +3403,7 @@ function PS.Snapshot(p)
 		bank = d.bank, bankRate = Config.Bank.InterestPerHour * (1 + (mods.interest or 0)), bankCap = R.MinuteValue(d.lv) * R.BankCapMinutes, shield = d.shield, revenge = d.revenge,
 		inv = d.inv, cab = d.cab, officerSlots = PS.OfficerSlots(p), nextSlotCost = PS.NextSlotCost(p),
 		crates = d.crates, basicCratePrice = PS.BasicCratePrice(p), login = d.login, loginReady = PS.LoginReady(p),
-		weekly = d.weekly, refresh = d.refresh, bundle = d.bundle, starter = d.starter, wev = d.wev, wonder = d.wonder or 0, admin = PS.Admin and PS.Admin.IsAdmin(p.player) or nil, title = d.title, created = d.created, elite = d.elite, govCredit = d.govCredit, pity = d.pity or {}, tut = d.tut, duesRate = PS.DuesRate(p),
+		weekly = d.weekly, refresh = d.refresh, bundle = d.bundle, starter = d.starter, wev = d.wev, wonder = d.wonder or 0, admin = PS.Admin and PS.Admin.IsAdmin(p.player) or nil, title = d.title, created = d.created, elite = d.elite, govCredit = d.govCredit, pity = d.pity or {}, tut = d.tut, groupGift = d.groupGift or false, duesRate = PS.DuesRate(p),
 		targets = PS.Raids and PS.Raids.Targets(p) or {},
 		firstRefill = d.firstRefill or false, settings = d.settings or {}, meta = d.meta or {}, inGroup = p.inGroup or false, premium = p.premium or false, groupId = Config.Group.Id,
 		vip = (PS.VipTier(p) or {}).tag, version = Config.Version,
@@ -3860,7 +3871,9 @@ function grant.InfluenceRefill(p)
 	return true
 end
 function grant.InfluenceRefillFirst(p)
-	p.data.firstRefill = true
+	-- the same product is the rewarded-ad prize; watching an ad must not use up the cheap first refill
+	if not (p.adAt and os.clock() - p.adAt < 600) then p.data.firstRefill = true end
+	p.adAt = nil
 	return grant.InfluenceRefill(p)
 end
 function grant.SupplyRefill(p)
@@ -3973,6 +3986,15 @@ function MK.ProcessReceipt(info)
 	if not okR then warn("[Idle Country] receipt " .. tostring(info.PurchaseId) .. " failed: " .. tostring(res)); return Enum.ProductPurchaseDecision.NotProcessedYet end
 	return res
 end
+-- purchase shout-out to everyone in the server (Kash 2 Oct): shown in chat with stars
+function MK.Announce(plr, what, robux)
+	local Sync = game:GetService("ReplicatedStorage"):FindFirstChild("Remotes") and game:GetService("ReplicatedStorage").Remotes:FindFirstChild("Sync")
+	if not Sync then return end
+	local p = PS.Profiles[plr]
+	local who = (p and p.data and p.data.name ~= "" and p.data.name) or plr.DisplayName
+	Sync:FireAllClients("chat", { who = who, user = plr.Name, what = what, robux = robux })
+end
+
 function MK._receipt(plr, p, info)
 	local d = p.data
 	d.receipts = d.receipts or {}
@@ -3990,6 +4012,7 @@ function MK._receipt(plr, p, info)
 		end
 		d.pending[key] = nil
 		table.insert(d.receipts, info.PurchaseId)
+		if (info.CurrencySpent or 0) > 0 then MK.Announce(plr, Config.ProductNames[key] or key, info.CurrencySpent) end
 		while #d.receipts > 50 do table.remove(d.receipts, 1) end
 	end
 	-- only tell Roblox it is granted once the profile (with the receipt id) is safely saved
@@ -4031,6 +4054,7 @@ function MK.Start()
 				p.data.ownedPasses = type(p.data.ownedPasses) == "table" and p.data.ownedPasses or {}
 				p.data.ownedPasses[key] = true
 				PS.Note(p, { kind = "toast", text = pass.name .. " unlocked!", tone = "good" })
+				MK.Announce(plr, pass.name, pass.price)
 			end
 		end
 		PS.EnsureConvoys(p)
@@ -6008,6 +6032,49 @@ function act.rankings(plr, p, a)
 end
 
 -- requests that return data the client shows, without needing a full resync
+-- FREE GIFT (Kash 2 Oct): join the group, claim once. Checked fresh with GroupService (IsInGroup caches per session).
+function act.groupGift(plr, p)
+	local d = p.data
+	if d.groupGift then return no("You already claimed your gift") end
+	local cd = allyCd(p, "gift", 3); if cd then return no(cd) end
+	local gid = Config.Group.Id
+	local inGroup = false
+	local okG, groups = pcall(function() return game:GetService("GroupService"):GetGroupsAsync(plr.UserId) end)
+	if okG and type(groups) == "table" then for _, g in ipairs(groups) do if g.Id == gid then inGroup = true end end end
+	if not inGroup then local okI, r = pcall(plr.IsInGroup, plr, gid); inGroup = okI and r or false end
+	if not inGroup then return no("Join the group first, then claim") end
+	p.inGroup = true
+	d.groupGift = true
+	d.gold += Config.GroupGift.gold
+	d.crates.limited += Config.GroupGift.limitedCrates
+	return ok({ gold = Config.GroupGift.gold, crates = Config.GroupGift.limitedCrates })
+end
+
+-- watch an ad to refill Influence. The reward arrives through ProcessReceipt (rewarded video ads).
+function act.adRefill(plr, p)
+	local d = p.data
+	if d.inf >= R.MaxInfluence(d.lv, d.sk) then return no("Influence is already full") end
+	if (p.adNext or 0) > os.clock() then return no("Next ad in " .. math.ceil(p.adNext - os.clock()) .. "s") end
+	local prod = Config.Products[Config.AdRefill.product]
+	if not prod or prod.id == 0 then return no("Ads are not available") end
+	p.adNext = os.clock() + Config.AdRefill.cooldown
+	p.adAt = os.clock()
+	task.spawn(function()
+		local AdService = game:GetService("AdService")
+		local okA, err = pcall(function()
+			local reward = AdService:CreateAdRewardFromDevProductId(prod.id)
+			return AdService:ShowRewardedVideoAdAsync(plr, reward)
+		end)
+		if not okA then
+			p.adNext = 0
+			warn("[Idle Country] rewarded ad failed: " .. tostring(err))
+			PS.Note(p, { kind = "toast", text = "No ad available right now. Try again later.", tone = "bad" })
+			PS.Sync(plr)
+		end
+	end)
+	return ok()
+end
+
 -- tutorial progress (Kash 2 Oct): step number, or -1 when skipped or finished
 function act.tutorial(plr, p, a)
 	local step = tonumber(a and a.step)
@@ -6042,7 +6109,7 @@ function act.adminList(plr, p)
 	return ok({ list = AD.List() })
 end
 
-A.NoSync = { tutorial = true, allyList = true, rankings = true, profile = true, adminList = true }
+A.NoSync = { tutorial = true, adRefill = true, allyList = true, rankings = true, profile = true, adminList = true }
 -- requests allowed before onboarding finishes
 A.PreOnboard = { sync = true, onboard = true, rankings = true, admin = true, adminList = true }
 return A
@@ -7788,7 +7855,19 @@ local function showRefill(App)
 		local rs = UI.mk("UIScale", {}, rib)
 		TweenService:Create(rs, TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Scale = 1.08 }):Play()
 	end
-	UI.button(body, "slate", "WAIT", function() close() end, { pos = UDim2.new(0.5, 0, 1, -2), anchor = Vector2.new(0.5, 1), sz = UDim2.fromOffset(170, 42), z = 74 })
+	local waitB = UI.button(body, "slate", "WAIT", function() close() end, { pos = UDim2.new(0.5, 0, 1, -2), anchor = Vector2.new(0.5, 1), sz = UDim2.fromOffset(170, 42), z = 74 })
+	-- WATCH AD (Kash 2 Oct): rewarded video ad refills Influence for free. Only shown when Roblox has an ad for this player.
+	task.spawn(function()
+		local okA, res = pcall(function() return game:GetService("AdService"):GetAdAvailabilityNowAsync(Enum.AdFormat.RewardedVideo) end)
+		local available = okA and res and res.AdAvailabilityResult == Enum.AdAvailabilityResult.IsAvailable
+		if not available or closed or not panel.Parent then return end
+		waitB.Inst.Position = UDim2.new(1, 0, 1, -2); waitB.Inst.AnchorPoint = Vector2.new(1, 1)
+		waitB.Inst.Size = UDim2.new(0.5, -6, 0, 42)
+		UI.button(body, "blue", "WATCH AD · FREE", function(btn)
+			local r = App.req("adRefill", {}, btn)
+			if r.ok then close() end
+		end, { pos = UDim2.new(0, 0, 1, -2), anchor = Vector2.new(0, 1), sz = UDim2.new(0.5, -6, 0, 42), z = 74, icon = "icon_tv", textSize = 15 })
+	end)
 
 	-- live timer; closes itself when Influence is full again (a Robux refill lands through a full sync)
 	local startInf = st.inf or 0
@@ -7815,6 +7894,18 @@ S.laws = { build = function(host, App)
 	local obj = { era = nil, cards = {} }
 	local tabs
 	local grid = UI.list(body, { pos = UDim2.fromOffset(0, 44), sz = UDim2.new(1, 0, 1, -44), grid = UDim2.new(1 / 3, -8, 0, 138), gap = 10, z = 6 })
+
+	-- FREE GIFT (Kash 2 Oct): like the game + join the group. Lives on Laws (the most visited tab) until claimed.
+	local giftBtn = UI.button(body, "gold", "FREE GIFT", function() if App.showGroupGift then App.showGroupGift() end end,
+		{ pos = UDim2.new(1, -4, 0, 2), anchor = Vector2.new(1, 0), sz = UDim2.fromOffset(170, 38), z = 9, icon = "icon_gift", textSize = 17 })
+	giftBtn.Inst.Visible = false
+	do
+		local gs = UI.mk("UIScale", {}, giftBtn.Inst)
+		game:GetService("TweenService"):Create(gs, TweenInfo.new(0.7, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Scale = 1.07 }):Play()
+	end
+	local function giftVis(st) giftBtn.Inst.Visible = st and st.onboarded and not st.groupGift and (st.groupId or 0) ~= 0 or false end
+	App.on("full", giftVis)
+	giftVis(App.state)
 
 	local function holdRepeat(btn, fn)
 		local holding = false
@@ -15141,6 +15232,37 @@ function App.confirm(title, body, okLabel, kind, fn)
 	return panel
 end
 function App.closeModal() modalHost.Visible = false end
+
+-- FREE GIFT popup (Kash 2 Oct): like the game + join the group, then claim once
+function App.showGroupGift()
+	local st = App.state
+	if not st then return end
+	local gift = Config.GroupGift or { gold = 100, limitedCrates = 1 }
+	local bonus = math.floor(((Config.Group and Config.Group.Bonus) or 0.1) * 100 + 0.5)
+	UI.clear(modalHost)
+	modalHost.Visible = true
+	local _, b = UI.panel(modalHost, "FREE GIFT", { sz = UDim2.fromOffset(520, 360), pos = UDim2.fromScale(0.5, 0.5), anchor = Vector2.new(0.5, 0.5), z = 71 })
+	UI.button(b, "slate", "X", function() modalHost.Visible = false end, { pos = UDim2.new(1, 0, 0, -40), anchor = Vector2.new(1, 0), sz = UDim2.fromOffset(40, 36), z = 75, textSize = 16 })
+	UI.icon(b, "icon_gift", 64, C.gold, UDim2.fromOffset(0, 4), { z = 73 })
+	text(b, "Like the game and join our group!", { font = "heavy", size = 20, pos = UDim2.fromOffset(80, 6), sz = UDim2.new(1, -80, 0, 26), z = 73 })
+	text(b, "<font color='#f0c75a'><b>+" .. gift.gold .. " GOLD</b></font>  ·  <font color='#f0c75a'><b>" .. gift.limitedCrates .. " FOUNDER'S CRATE</b></font>  ·  <font color='#8fd07a'><b>+" .. bonus .. "% CASH FOREVER</b></font>",
+		{ size = 16, rich = true, wrap = true, pos = UDim2.fromOffset(80, 38), sz = UDim2.new(1, -80, 0, 44), z = 73 })
+	local gid = st.groupId or (Config.Group and Config.Group.Id) or 0
+	UI.button(b, "blue", "1. LIKE THE GAME", function()
+		pcall(function() game:GetService("AvatarEditorService"):PromptSetFavorite(game.PlaceId, Enum.AvatarItemType.Asset, true) end)
+	end, { pos = UDim2.fromOffset(0, 104), sz = UDim2.new(0.5, -6, 0, 50), z = 73, icon = "icon_sparkles", textSize = 15 })
+	UI.button(b, "green", "2. JOIN GROUP", function()
+		pcall(function() game:GetService("GroupService"):PromptJoinAsync(gid) end)
+	end, { pos = UDim2.new(0.5, 6, 0, 104), sz = UDim2.new(0.5, -6, 0, 50), z = 73, icon = "icon_alliance", textSize = 15 })
+	UI.button(b, "gold", "3. CLAIM GIFT", function(btn)
+		local res = App.req("groupGift", {}, btn)
+		if res.ok then
+			modalHost.Visible = false
+			App.toast("FREE GIFT CLAIMED!", "+" .. (res.gold or gift.gold) .. " gold · " .. (res.crates or gift.limitedCrates) .. " Founder's Crate · +" .. bonus .. "% cash", "gold")
+			App.play("purchase", { volume = 0.5 })
+		end
+	end, { pos = UDim2.new(0.5, 0, 1, -4), anchor = Vector2.new(0.5, 1), sz = UDim2.new(1, 0, 0, 56), z = 73, textSize = 20 })
+end
 App.modalHost = modalHost
 
 ---------------------------------------------------------------- top bar
@@ -15557,6 +15679,17 @@ Remotes.Sync.OnClientEvent:Connect(function(kind, data)
 		App.emit("tick", st)
 	elseif kind == "notes" then
 		handleNotes(data)
+	elseif kind == "chat" then
+		-- purchase shout-out (Kash 2 Oct): a starred system message in chat
+		pcall(function()
+			local d = data or {}
+			local TCS = game:GetService("TextChatService")
+			local ch = TCS:FindFirstChild("TextChannels") and TCS.TextChannels:FindFirstChild("RBXGeneral")
+			local function esc(x) return (tostring(x or ""):gsub("&", "&amp;"):gsub("<", "&lt;"):gsub(">", "&gt;")) end
+			local star = utf8.char(0x2B50)
+			local msg = "<font color='#f0c75a'><b>" .. star .. " " .. esc(d.who) .. " bought " .. esc(d.what) .. " for R$" .. esc(d.robux) .. "! " .. star .. "</b></font>"
+			if ch then ch:DisplaySystemMessage(msg) end
+		end)
 	elseif kind == "world" then
 		App.world = data
 		App.emit("world", data)
