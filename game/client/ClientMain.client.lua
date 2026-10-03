@@ -267,6 +267,7 @@ local NAV = {
 	{ key = "map", label = "WORLD", icon = "icon_map" },
 	{ key = "laws", label = "LAWS", icon = "icon_laws" },
 	{ key = "properties", label = "PROPERTIES", icon = "icon_properties" },
+	{ key = "shop", label = "SHOP", icon = "icon_shop" }, -- Kash 3 Oct: shop sits high in the list
 	{ key = "inventory", label = "INVENTORY", icon = "icon_boxes" },
 	{ key = "military", label = "MILITARY", icon = "icon_military" },
 	{ key = "battle", label = "RAIDS", icon = "icon_battle" },
@@ -275,7 +276,6 @@ local NAV = {
 	{ key = "tasks", label = "ORDERS", icon = "icon_tasks" },
 	{ key = "bank", label = "BANK", icon = "icon_bank" },
 	{ key = "rankings", label = "RANKINGS", icon = "icon_rankings" },
-	{ key = "shop", label = "SHOP", icon = "icon_shop" },
 }
 local nav = UI.list(root, { name = "Nav", pos = UDim2.fromOffset(0, TOP + 4), sz = UDim2.new(0, NAVW, 1, -TOP - 4), gap = 3, z = 15 })
 nav.ScrollBarThickness = 0
@@ -482,6 +482,8 @@ for parentKey, kids in pairs(COMPOSITE) do
 			obj.select(i)
 		end, { pos = UDim2.fromOffset(SUBTAB_X, SUBTAB_Y), sz = UDim2.fromOffset(tabsW, 36), w = SUBTAB_W, textSize = 16, z = 40 })
 		tabs:Set(1)
+		App.subTabs = App.subTabs or {}
+		App.subTabs[parentKey] = { tabs = tabs, obj = obj }
 		function obj:Refresh(st)
 			local kid = obj.kids[obj.cur]
 			if kid and kid.obj and kid.obj.Refresh then kid.obj.Refresh(kid.obj, st) end
@@ -496,6 +498,38 @@ for parentKey, kids in pairs(COMPOSITE) do
 		end
 		return obj
 	end }
+end
+-- red ! on a sub tab (e.g. GEAR SHOP inside SHOP)
+local subBadges = {}
+function App.subBadge(parentKey, i, on)
+	local id = parentKey .. ":" .. i
+	if subBadges[id] then subBadges[id]:Destroy(); subBadges[id] = nil end
+	local st = App.subTabs and App.subTabs[parentKey]
+	local b = st and st.tabs.buttons[i]
+	if on and b then subBadges[id] = UI.badge(b.Inst, "!", UDim2.new(1, -6, 0, 6), 45) end
+end
+-- GEAR SHOP restock alert (Kash 3 Oct): every restock puts a red ! on SHOP and on the GEAR SHOP tab until the player looks
+do
+	local seenW, shownW = nil, nil
+	task.spawn(function()
+		while true do
+			task.wait(1)
+			local st = App.state
+			local gs = Config.GearShop
+			if st and st.onboarded and gs and (st.lv or 1) >= ((Config.NavUnlock and Config.NavUnlock.shop) or 1) then
+				local w = math.floor(App.now() / gs.Restock)
+				local sub = App.subTabs and App.subTabs.shop
+				local looking = App.current == "shop" and sub and sub.obj.cur == 2
+				if looking then seenW = w end
+				local alert = seenW ~= w
+				if alert ~= shownW then
+					shownW = alert
+					pcall(App.navBadge, "shop", alert and true or nil)
+					pcall(App.subBadge, "shop", 2, alert)
+				end
+			end
+		end
+	end)
 end
 local initsDone = false
 local function runInits()

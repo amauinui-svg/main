@@ -19,13 +19,7 @@ local function protectedLv() return math.max(RC.AIMinTargetLevel or 1, (Config.N
 -- Kash 3 Oct 08:42 (12 people in a server, none raidable): players can raid each other as soon as both have the RAIDS tab;
 -- the AI nations still leave new countries alone until AIMinTargetLevel
 local function playerProtectedLv() return (Config.NavUnlock and Config.NavUnlock.battle) or 1 end
-function RA.ProtectedCount(p)
-	local n = 0
-	for _, q in pairs(PS.Profiles) do
-		if q ~= p and q.data.onboarded and not q.loading and not q.leaving and q.data.lv < playerProtectedLv() then n += 1 end
-	end
-	return n, playerProtectedLv()
-end
+
 
 local O = require(RS.Shared.Officers)
 local RA = {}
@@ -34,6 +28,13 @@ local remoteUid -- set below (audit H3: was a nil global inside RA.Spy)
 local PS
 local lastHit = {} -- [targetId] = os.time() of the last successful raid on it
 RA.AI = {}
+function RA.ProtectedCount(p)
+	local n = 0
+	for _, q in pairs(PS.Profiles) do
+		if q ~= p and q.data.onboarded and not q.loading and not q.leaving and q.data.lv < playerProtectedLv() then n += 1 end
+	end
+	return n, playerProtectedLv()
+end
 
 function RA.Init(ps) PS = ps; PS.Raids = RA end
 

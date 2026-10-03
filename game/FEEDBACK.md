@@ -403,3 +403,6 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 
 ## 3 Oct 08:43 (Kash)
 - Raid history: every raid you made and every raid on you (last 40, saved). RAIDS tab > HISTORY chip opens it: who, VICTORY/DEFEAT or DEFENDED/RAIDED, cash won/lost, soldiers lost, how long ago; tap a player row for their profile.
+
+## 3 Oct 08:45 (Kash)
+- SHOP moved up the nav (right after PROPERTIES). Every GEAR SHOP restock (5 min) puts a red ! on SHOP and on the GEAR SHOP tab until the player opens the Gear Shop.
