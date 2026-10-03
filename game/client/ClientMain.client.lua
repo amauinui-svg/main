@@ -563,6 +563,24 @@ do
 		end
 	end)
 end
+-- CONFETTI (purchases): paper pieces fall from the top of the screen, spin and fade
+function App.confetti(n)
+	local TS = game:GetService("TweenService")
+	local W, H = sg.AbsoluteSize.X, sg.AbsoluteSize.Y
+	local cols = { "f0c75a", "e2695f", "7fb0e6", "8fd07a", "b06ef0", "ff9a2e", "ffffff" }
+	local layer = mk("Frame", { Name = "Confetti", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 200 }, sg)
+	for _ = 1, n do
+		local w, h = math.random(6, 12), math.random(10, 18)
+		local x = math.random() * W
+		local piece = mk("Frame", { BackgroundColor3 = Color3.fromHex(cols[math.random(1, #cols)]), BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromOffset(x, -20 - math.random() * H * 0.4), Size = UDim2.fromOffset(w, h), Rotation = math.random(0, 360), ZIndex = 200 }, layer)
+		local t = 1.8 + math.random() * 1.6
+		TS:Create(piece, TweenInfo.new(t, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+			Position = UDim2.fromOffset(x + math.random(-160, 160), H + 40), Rotation = piece.Rotation + math.random(-540, 540) }):Play()
+		TS:Create(piece, TweenInfo.new(0.6, Enum.EasingStyle.Linear, Enum.EasingDirection.In, 0, false, t - 0.6), { BackgroundTransparency = 1 }):Play()
+	end
+	task.delay(4, function() layer:Destroy() end)
+end
 local initsDone = false
 local function runInits()
 	if initsDone or not (App.state and App.state.onboarded) then return end
@@ -818,6 +836,8 @@ Remotes.Sync.OnClientEvent:Connect(function(kind, data)
 			local star = utf8.char(0x2B50)
 			local msg = "<font color='#f0c75a'><b>" .. star .. " " .. esc(d.who) .. " bought " .. esc(d.what) .. " for R$" .. esc(d.robux) .. "! " .. star .. "</b></font>"
 			if ch then ch:DisplaySystemMessage(msg) end
+			-- confetti: a full burst for the buyer, a small one for everyone else in the server (Kash 3 Oct)
+			if App.confetti then App.confetti(d.uid == plr.UserId and 140 or 40) end
 		end)
 	elseif kind == "world" then
 		App.world = data
@@ -932,6 +952,7 @@ if game:GetService("RunService"):IsStudio() then
 			elseif k == "afk" and App.openAfk then App.openAfk()
 			elseif k == "sounds" and App.soundBoard then App.soundBoard()
 			elseif k == "profile" and App.showProfile then App.showProfile(tonumber(arg) or plr.UserId)
+			elseif k == "confetti" and App.confetti then App.confetti(tonumber(arg) or 140)
 			elseif k == "emit" then App.emit(arg)
 			elseif k == "vp" then
 				local w, h = arg:match("(%d+)x(%d+)")

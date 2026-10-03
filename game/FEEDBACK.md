@@ -428,3 +428,6 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 ## 3 Oct 09:03 (Kash)
 - Asked whether the group reward still works if the game isn't owned by the group: yes, it checks membership of the configured group, ownership doesn't matter.
 - Nano Banana Pro hit its usage limit: switched Flow to Nano Banana 2.
+
+## 3 Oct 09:07 (Kash)
+- Purchase shout-out showed the country name: now the Roblox name (Display (@user)). Purchases now rain confetti: a full burst for the buyer, a small one for everyone else in the server.

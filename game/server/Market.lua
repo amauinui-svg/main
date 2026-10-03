@@ -260,9 +260,9 @@ end
 function MK.Announce(plr, what, robux)
 	local Sync = game:GetService("ReplicatedStorage"):FindFirstChild("Remotes") and game:GetService("ReplicatedStorage").Remotes:FindFirstChild("Sync")
 	if not Sync then return end
-	local p = PS.Profiles[plr]
-	local who = (p and p.data and p.data.name ~= "" and p.data.name) or plr.DisplayName
-	Sync:FireAllClients("chat", { who = who, user = plr.Name, what = what, robux = robux })
+	-- Kash 3 Oct: the Roblox name, not the country
+	local who = (plr.DisplayName ~= plr.Name) and (plr.DisplayName .. " (@" .. plr.Name .. ")") or plr.Name
+	Sync:FireAllClients("chat", { who = who, user = plr.Name, uid = plr.UserId, what = what, robux = robux })
 end
 
 function MK._receipt(plr, p, info)
