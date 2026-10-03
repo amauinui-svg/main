@@ -1015,6 +1015,15 @@ C.Afk = {
 	Rarity = { 75, 20, 4.9, 0.09, 0.009, 0.0009, 0.00009, 0.000009 },
 }
 
+-- gold prices = the Robux price of the same thing (1 gold = 1 R$, Kash 3 Oct)
+C.GoldPrices = { inf = 19, sup = 19, boss = 9 }
+-- finishing a convoy with gold costs the same as the Robux tier for the time left
+function C.FinishGold(secondsLeft)
+	local m = math.max(0, secondsLeft) / 60
+	if m <= 10 then return 9 elseif m <= 60 then return 19 elseif m <= 240 then return 29 end
+	return 49
+end
+
 C.Products = {
 	-- Founder's Crate: 49 R$ each (Kash 2 Oct), bulk cheaper per crate
 	Crate1 = { id = 3716173429, robux = 49, crates = 1 },
@@ -1022,9 +1031,10 @@ C.Products = {
 	Crate10 = { id = 3716173495, robux = 399, crates = 10 },
 	-- Starter Pack (Kash 2 Oct): one time, new players only. A strong property for your era + elite troops + gold.
 	StarterPack = { id = 3716173499, robux = 99, gold = 100, troops = 4, maxLevel = 40 },
-	GoldSmall = { id = 3716173503, robux = 49, gold = 50 },
-	GoldBig = { id = 3716173507, robux = 199, gold = 250 },
-	GoldHuge = { id = 3716173510, robux = 699, gold = 1000 },
+	-- Gold is 1:1 with Robux (Kash 3 Oct): 1 gold = 1 R$
+	GoldSmall = { id = 3716173503, robux = 49, gold = 49 },
+	GoldBig = { id = 3716173507, robux = 199, gold = 199 },
+	GoldHuge = { id = 3716173510, robux = 699, gold = 699 },
 	TreasuryGrant = { id = 3716173516, robux = 49 },
 	InfluenceRefill = { id = 3716173520, robux = 19 },
 	InfluenceRefillFirst = { id = 3716173525, robux = 9 }, -- first refill ever is cheap (Kash 19:19)
@@ -1056,7 +1066,7 @@ C.GroupGift = { gold = 100, limitedCrates = 1 }
 C.AdRefill = { product = "InfluenceRefillFirst", cooldown = 300 }
 -- purchase shout-outs in chat (Kash 2 Oct)
 C.ProductNames = { Crate1 = "a Founder's Crate", Crate3 = "3 Founder's Crates", Crate10 = "10 Founder's Crates", StarterPack = "the Starter Pack",
-	GoldSmall = "50 Gold", GoldBig = "250 Gold", GoldHuge = "1,000 Gold", TreasuryGrant = "a Treasury Grant", InfluenceRefill = "an Influence Refill",
+	GoldSmall = "49 Gold", GoldBig = "199 Gold", GoldHuge = "699 Gold", TreasuryGrant = "a Treasury Grant", InfluenceRefill = "an Influence Refill",
 	InfluenceRefillFirst = "an Influence Refill", SupplyRefill = "a Supply Refill", RaidShield = "a Raid Shield", InstantArmy = "an Instant Army",
 	RevengeStrike = "a Revenge Strike", FinishConvoy1 = "an instant convoy", FinishConvoy2 = "an instant convoy", FinishConvoy3 = "an instant convoy",
 	FinishConvoy4 = "an instant convoy", ChallengeRefresh = "a Challenge Refresh", MoveCapital = "a Capital Move", LimitedBundle = "the Limited Bundle",
@@ -1123,7 +1133,7 @@ C.Officers = {
 
 C.Crates = {
 	-- the first limited crate (rotates later). Same crate, two prices: gold or Robux.
-	Limited = { key = "limited", name = "FOUNDER'S CRATE", gold = 150, ends = 1791522000 }, -- 7 days (Kash 19:19): 2026-10-09 05:00 UTC
+	Limited = { key = "limited", name = "FOUNDER'S CRATE", gold = 49, ends = 1791522000 }, -- 7 days (Kash 19:19): 2026-10-09 05:00 UTC
 	-- free-to-play crate bought with in-game cash: price is this many minutes of law income at your level
 	Basic = { key = "basic", name = "SUPPLY CRATE", lawMinutes = 30 },
 }
@@ -5514,7 +5524,7 @@ function act.bossHit(plr, p, a)
 end
 
 ---------------------------------------------------------------- gold
-A.GoldPrices = { inf = 10, sup = 5, boss = 3 }
+A.GoldPrices = Config.GoldPrices
 function act.goldInf(plr, p)
 	local d = p.data
 	if d.gold < A.GoldPrices.inf then return no("Not enough gold") end
@@ -5586,7 +5596,7 @@ function act.move(plr, p, a)
 	return ok({ fee = fee })
 end
 
-function A.FinishGold(c) return math.max(1, math.ceil((c.t1 - now()) / 600)) end
+function A.FinishGold(c) return Config.FinishGold(c.t1 - now()) end
 function act.finishGold(plr, p, a)
 	local d = p.data
 	local c = getConvoy(p, a)
@@ -8056,7 +8066,7 @@ function Map.build(host, App)
 				local bar = UI.bar(brow, C.good, { sz = UDim2.new(1, 0, 1, 0), z = 28, textSize = 13 })
 				obj.panelBars.trip = { bar = bar, c = c }
 				local fin = row(40, nx())
-				local gold = math.max(1, math.ceil((c.t1 - App.now()) / 600))
+				local gold = Config.FinishGold(c.t1 - App.now())
 				UI.button(fin, st.gold >= gold and "gold" or "locked", "FINISH · " .. gold .. " GOLD", function(btn) App.req("finishGold", { c = selConvoy }, btn) end, { sz = UDim2.new(0.5, -4, 1, 0), z = 29, textSize = 14, icon = "icon_gold" })
 				local mins = (c.t1 - App.now()) / 60
 				local robux
@@ -8326,7 +8336,7 @@ end
 
 ---------------------------------------------------------------- OUT OF INFLUENCE popup (Kash 19:19)
 -- Influence bar with the regen timer, REFILL with gold, REFILL with Robux (first refill ever is cheap), or WAIT.
-local GOLD_REFILL = 10 -- matches A.GoldPrices.inf in server/Actions.lua
+local GOLD_REFILL = require(RS.Shared.Config).GoldPrices.inf
 local function showRefill(App)
 	local UI = App.UI
 	local C = UI.C
@@ -9347,7 +9357,7 @@ S.bosses = { build = function(host, App)
 	local b1 = UI.button(btns, "red", "HIT · 1 SUPPLY", hit(1), { sz = UDim2.new(0.4, -6, 1, 0), z = 8, icon = "icon_attack" })
 	local b5 = UI.button(btns, "red", "x5", hit(5), { sz = UDim2.new(0.2, -6, 1, 0), pos = UDim2.new(0.4, 0, 0, 0), z = 8 })
 	local bm = UI.button(btns, "red", "ALL SUPPLY", hit(50), { sz = UDim2.new(0.4, 0, 1, 0), pos = UDim2.new(0.6, 0, 0, 0), z = 8 })
-	local skip = UI.button(btns, "gold", "SKIP WAIT · 3 GOLD", function(btn) App.req("bossSkip", {}, btn) end, { sz = UDim2.fromScale(1, 1), z = 9, icon = "icon_gold" })
+	local skip = UI.button(btns, "gold", "SKIP WAIT · " .. require(game:GetService("ReplicatedStorage").Shared.Config).GoldPrices.boss .. " GOLD", function(btn) App.req("bossSkip", {}, btn) end, { sz = UDim2.fromScale(1, 1), z = 9, icon = "icon_gold" })
 	local list = UI.list(body, { pos = UDim2.fromOffset(0, 344), sz = UDim2.new(1, 0, 1, -344), gap = 6, z = 6 })
 	function obj:Refresh(st)
 		local boss = st.boss
@@ -10104,8 +10114,8 @@ S.shop = { build = function(host, App)
 		UI.clear(list)
 		sub.Text = "You have <font color='#f0c75a'><b>" .. R.Commas(st.gold) .. " gold</b></font> · earn it from bosses and daily orders"
 		header("SPEND GOLD", 1)
-		item(2, "icon_influence", C.inf, "REFILL INFLUENCE", "Fill your Influence bar right now", st.gold >= 10 and "gold" or "locked", "10 GOLD", function(btn) local r = App.req("goldInf", {}, btn); if r.ok then App.toast("INFLUENCE REFILLED", nil, "gold") end end)
-		item(3, "icon_supply", C.sup, "REFILL SUPPLY", "Fill your Supply bar for battles, bosses and sieges", st.gold >= 5 and "gold" or "locked", "5 GOLD", function(btn) local r = App.req("goldSup", {}, btn); if r.ok then App.toast("SUPPLY REFILLED", nil, "gold") end end)
+		item(2, "icon_influence", C.inf, "REFILL INFLUENCE", "Fill your Influence bar right now", st.gold >= Config.GoldPrices.inf and "gold" or "locked", Config.GoldPrices.inf .. " GOLD", function(btn) local r = App.req("goldInf", {}, btn); if r.ok then App.toast("INFLUENCE REFILLED", nil, "gold") end end)
+		item(3, "icon_supply", C.sup, "REFILL SUPPLY", "Fill your Supply bar for battles, bosses and sieges", st.gold >= Config.GoldPrices.sup and "gold" or "locked", Config.GoldPrices.sup .. " GOLD", function(btn) local r = App.req("goldSup", {}, btn); if r.ok then App.toast("SUPPLY REFILLED", nil, "gold") end end)
 		header("GOLD PACKS", 10)
 		for k, key in ipairs({ "GoldSmall", "GoldBig" }) do
 			local p = Config.Products[key]
@@ -14705,8 +14715,7 @@ function FX.beams(UI, parent, color, size, pos, z, strength)
 	return root
 end
 
--- gold spend prices mirror server/Actions.lua A.GoldPrices (inf = 10, sup = 5); not in Config yet
-local GOLD_INF, GOLD_SUP = 10, 5
+local GOLD_INF, GOLD_SUP = Config.GoldPrices.inf, Config.GoldPrices.sup
 local ROBUX = Color3.fromHex("3fd27a")
 local TEAL = Color3.fromHex("3fe0d0")
 local PINK = Color3.fromHex(Config.VIP.MegaVIP.color)
