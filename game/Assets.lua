@@ -131,7 +131,7 @@ local A = {
 	-- RULE: no tobacco, alcohol, drugs, real-world extremist symbols or armbands in any uploaded image.
 	["boss_4"] = "rbxassetid://127288730006626",
 	["boss_7"] = "rbxassetid://119123100044901", ["boss_8"] = "rbxassetid://85854489349266",
-	["map_world"] = "rbxassetid://131032198234520", -- v2 3 Oct: country borders, full coverage (v1 115782743034253)
+	["map_world"] = "rbxassetid://114973255343938", -- v2 3 Oct, 1536x584 (2x): country borders, full coverage (v1 115782743034253; 131032198234520 never loaded)
 	["nav_off"] = "rbxassetid://111653649833653",
 	["nav_on"] = "rbxassetid://107619694527367",
 	["panel"] = "rbxassetid://128939720610370",
