@@ -1033,8 +1033,8 @@ C.Products = {
 	StarterPack = { id = 3716173499, robux = 99, gold = 100, troops = 4, maxLevel = 40 },
 	-- Gold is 1:1 with Robux (Kash 3 Oct): 1 gold = 1 R$
 	GoldSmall = { id = 3716173503, robux = 49, gold = 49 },
-	GoldBig = { id = 3716173507, robux = 199, gold = 199 },
-	GoldHuge = { id = 3716173510, robux = 699, gold = 699 },
+	GoldBig = { id = 3716173507, robux = 199, gold = 210 }, -- bulk bonus (Kash 00:23)
+	GoldHuge = { id = 3716173510, robux = 699, gold = 775 },
 	TreasuryGrant = { id = 3716173516, robux = 49 },
 	InfluenceRefill = { id = 3716173520, robux = 19 },
 	InfluenceRefillFirst = { id = 3716173525, robux = 9 }, -- first refill ever is cheap (Kash 19:19)
@@ -1066,7 +1066,7 @@ C.GroupGift = { gold = 100, limitedCrates = 1 }
 C.AdRefill = { product = "InfluenceRefillFirst", cooldown = 300 }
 -- purchase shout-outs in chat (Kash 2 Oct)
 C.ProductNames = { Crate1 = "a Founder's Crate", Crate3 = "3 Founder's Crates", Crate10 = "10 Founder's Crates", StarterPack = "the Starter Pack",
-	GoldSmall = "49 Gold", GoldBig = "199 Gold", GoldHuge = "699 Gold", TreasuryGrant = "a Treasury Grant", InfluenceRefill = "an Influence Refill",
+	GoldSmall = "49 Gold", GoldBig = "210 Gold", GoldHuge = "775 Gold", TreasuryGrant = "a Treasury Grant", InfluenceRefill = "an Influence Refill",
 	InfluenceRefillFirst = "an Influence Refill", SupplyRefill = "a Supply Refill", RaidShield = "a Raid Shield", InstantArmy = "an Instant Army",
 	RevengeStrike = "a Revenge Strike", FinishConvoy1 = "an instant convoy", FinishConvoy2 = "an instant convoy", FinishConvoy3 = "an instant convoy",
 	FinishConvoy4 = "an instant convoy", ChallengeRefresh = "a Challenge Refresh", MoveCapital = "a Capital Move", LimitedBundle = "the Limited Bundle",
@@ -1133,7 +1133,7 @@ C.Officers = {
 
 C.Crates = {
 	-- the first limited crate (rotates later). Same crate, two prices: gold or Robux.
-	Limited = { key = "limited", name = "FOUNDER'S CRATE", gold = 49, ends = 1791522000 }, -- 7 days (Kash 19:19): 2026-10-09 05:00 UTC
+	Limited = { key = "limited", name = "FOUNDER'S CRATE", gold = 49, ends = 1791627808 }, -- 7 days from the 3 Oct 2026 launch reset (Kash 00:23): 2026-10-10 10:23 UTC
 	-- free-to-play crate bought with in-game cash: price is this many minutes of law income at your level
 	Basic = { key = "basic", name = "SUPPLY CRATE", lawMinutes = 30 },
 }

@@ -348,3 +348,8 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 - Gold is 1:1 with Robux: gold packs give 49/199/699 gold for R$49/199/699; Founder's Crate 49 gold; Influence and Supply refills 19 gold (same as Robux); finishing a convoy 9/19/29/49 gold by time left (same tiers as Robux); boss skip 9 gold. All gold prices live in Config.GoldPrices / Config.FinishGold.
 - New icon: Kash's no-text Flow image (crowned bacon hair), uploaded.
 - Wants a list of every gold source to decide how strong the currency is (sent in chat).
+
+## 3 Oct 00:23 (Kash)
+- Bulk bonus approved: R$49 = 49 gold, R$199 = 210 gold, R$699 = 775 gold.
+- Fine that a casual player can afford a Founder's Crate with gold; it is a launch-only crate.
+- Launch timers reset to 7 days from now: Founder's Crate and Limited Bundle end 10 Oct 2026 10:23 UTC (Config.Limited.ends = 1791627808).
