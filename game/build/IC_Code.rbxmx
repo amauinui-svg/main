@@ -983,6 +983,20 @@ C.PopularMinPlayers = 30
 C.NavUnlock = { map = 1, laws = 1, properties = 2, shop = 3, country = 4, tasks = 5, military = 6, inventory = 7, bank = 8,
 	battle = 10, bosses = 12, rankings = 12, alliance = 15 }
 
+-- BADGES (Kash 2 Oct): one easy welcome badge, the rest are very hard goals. id 0 = not created yet (skipped).
+C.Badges = {
+	{ key = "welcome", id = 0, name = "Founding Father", desc = "Found your own country." },
+	{ key = "wonder", id = 0, name = "Wonder of the World", desc = "Complete every stage of your Wonder." },
+	{ key = "stars", id = 0, name = "To the Stars", desc = "Advance your nation to the Space Age." },
+	{ key = "warlord", id = 0, name = "Warlord", desc = "Win 1,000 raids." },
+	{ key = "trade", id = 0, name = "Trade Empire", desc = "Deliver 10,000 convoys." },
+	{ key = "quadrillion", id = 0, name = "Richest Nation on Earth", desc = "Earn $1 Quadrillion in total." },
+	{ key = "lawgiver", id = 0, name = "Supreme Lawgiver", desc = "Reach Gold mastery on 100 laws." },
+	{ key = "slayer", id = 0, name = "Tyrant Slayer", desc = "Defeat 500 bosses." },
+	{ key = "alliance", id = 0, name = "Legendary Alliance", desc = "Be in an alliance that reaches level 30." },
+	{ key = "forbidden", id = 0, name = "Forbidden Power", desc = "Own a FORBIDDEN officer." },
+}
+
 C.Products = {
 	-- Founder's Crate: 49 R$ each (Kash 2 Oct), bulk cheaper per crate
 	Crate1 = { id = 3716173429, robux = 49, crates = 1 },
@@ -3084,6 +3098,7 @@ function PS.AddXp(p, xp, quiet)
 			local era, eraCost
 			for e, E in ipairs(D.Eras) do if E.start == d.lv and d.lv > 1 then era = E.name; eraCost = R.EraCost(e) end end
 			local slot = table.find(R.ConvoySlotLevels, d.lv) and d.lv > 1
+			if PS.AN then pcall(PS.AN.Level, p, d.lv) end
 			PS.Note(p, { kind = "level", lv = d.lv, laws = laws, props = props, units = units, era = era, eraCost = eraCost, slot = slot, points = R.SkillPerLevel })
 		end
 	end
@@ -3139,6 +3154,7 @@ function PS.Arrive(p, c, when, quiet)
 		if load.owner and load.tax > 0 then WS.Credit(load.owner, load.tax) end
 		PS.AddXp(p, load.xp, quiet)
 		d.stats.trips += 1
+		if PS.AN and d.stats.trips == 1 then pcall(PS.AN.Step, p, "First convoy") end
 		PS.TaskProgress(p, "trips", 1)
 		if not quiet then
 			PS.Note(p, { kind = "arrive", city = c.at, cash = got, xp = load.xp, good = load.good, tax = load.tax })
@@ -3533,6 +3549,7 @@ function PS._load(plr)
 		end
 	end
 	PS.MigrateOfficers(p)
+	if PS.AN then pcall(PS.AN.Step, p, "Joined") end
 	PS.Market.CheckPasses(plr, p)
 	p.xpMult = PS.Mods(p).xp
 	PS.EnsureTasks(p)
@@ -3792,6 +3809,8 @@ function MK.PromptPass(plr, key)
 	local pass = Config.Passes[key]
 	if not pass then return { ok = false, msg = "Unknown pass" } end
 	if pass.id == 0 then return { ok = false, msg = "Coming soon" } end
+	local p = PS.Profiles[plr]
+	if p and PS.AN then pcall(PS.AN.ShopStep, p, key, 1, "Prompted") end
 	MarketplaceService:PromptGamePassPurchase(plr, pass.id)
 	return { ok = true }
 end
@@ -3803,6 +3822,7 @@ function MK.PromptProduct(plr, key, intent)
 	local p = PS.Profiles[plr]
 	-- intents are saved with the profile so a receipt processed in a later session still knows what to do
 	if p then p.data.pending = p.data.pending or {}; p.data.pending[key] = intent end
+	if p and PS.AN then pcall(PS.AN.ShopStep, p, key, 1, "Prompted") end
 	MarketplaceService:PromptProductPurchase(plr, prod.id)
 	return { ok = true }
 end
@@ -4003,6 +4023,7 @@ function MK._receipt(plr, p, info)
 		local key = byId[info.ProductId]
 		if not key or not grant[key] then return Enum.ProductPurchaseDecision.NotProcessedYet end
 		local intent = d.pending[key]
+		local snap = PS.AN and PS.AN.Before(p)
 		if key == "MoveCapital" and type(intent) ~= "number" then
 			-- the target city was lost (very rare): keep a free move to use from the map
 			d.capitalCredit = (d.capitalCredit or 0) + 1
@@ -4013,6 +4034,7 @@ function MK._receipt(plr, p, info)
 		d.pending[key] = nil
 		table.insert(d.receipts, info.PurchaseId)
 		if (info.CurrencySpent or 0) > 0 then MK.Announce(plr, Config.ProductNames[key] or key, info.CurrencySpent) end
+		if PS.AN then pcall(PS.AN.Purchase, p, snap, key, info.CurrencySpent or 0) end
 		while #d.receipts > 50 do table.remove(d.receipts, 1) end
 	end
 	-- only tell Roblox it is granted once the profile (with the receipt id) is safely saved
@@ -4055,6 +4077,7 @@ function MK.Start()
 				p.data.ownedPasses[key] = true
 				PS.Note(p, { kind = "toast", text = pass.name .. " unlocked!", tone = "good" })
 				MK.Announce(plr, pass.name, pass.price)
+				if PS.AN then pcall(PS.AN.Purchase, p, nil, key, pass.price) end
 			end
 		end
 		PS.EnsureConvoys(p)
@@ -4729,7 +4752,161 @@ function RA.Start()
 	end)
 end
 return RA
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX17"><Properties><string name="Name">ServerScriptService.Server|Admin|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- TESTER PANEL (Kash 2 Oct): owner-only commands. Every command goes through act.admin, which checks IsAdmin first.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX17"><Properties><string name="Name">ServerScriptService.Server|Analytics|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- Analytics (Kash 2 Oct): Roblox Creator Analytics funnels and events so we can see where new players drop off.
+-- Every call is wrapped in pcall: analytics must never break gameplay.
+local AnalyticsService = game:GetService("AnalyticsService")
+local AN = {}
+
+-- ONBOARDING FUNNEL: each step is logged once per player, in order (earlier steps are filled in if skipped).
+AN.Steps = {
+	"Joined", "Named country", "Designed flag", "Chose government", "Founded country", "Answered tutorial",
+	"First law", "Reached level 2", "First property", "First convoy", "Reached level 5", "Reached level 10",
+	"Joined an alliance", "Reached level 20",
+}
+AN.StepIndex = {}
+for i, n in ipairs(AN.Steps) do AN.StepIndex[n] = i end
+
+function AN.Step(p, name)
+	local i = AN.StepIndex[name]
+	if not i or not p or not p.data or not p.player then return end
+	local d = p.data
+	local done = tonumber(d.funnel) or 0
+	if i <= done then return end
+	for k = done + 1, i do
+		pcall(AnalyticsService.LogOnboardingFunnelStepEvent, AnalyticsService, p.player, k, AN.Steps[k])
+	end
+	d.funnel = i
+end
+
+-- progression: levels and eras
+function AN.Level(p, lv)
+	if not p or not p.player then return end
+	pcall(AnalyticsService.LogProgressionCompleteEvent, AnalyticsService, p.player, "Level", lv, "Level " .. lv)
+	if lv == 2 then AN.Step(p, "Reached level 2") elseif lv == 5 then AN.Step(p, "Reached level 5")
+	elseif lv == 10 then AN.Step(p, "Reached level 10") elseif lv == 20 then AN.Step(p, "Reached level 20") end
+end
+function AN.Era(p, era, name)
+	if not p or not p.player then return end
+	pcall(AnalyticsService.LogProgressionCompleteEvent, AnalyticsService, p.player, "Era", era, name)
+end
+
+-- economy: gold and Merits (the two premium-style currencies), logged from before/after balances
+local TX = {
+	loginClaim = "TimedReward", groupGift = "Onboarding",
+	buyCrate = "Shop", goldInf = "Shop", goldSup = "Shop", finishGold = "Shop", bossSkip = "Shop", sealBuy = "Shop",
+	refillInfluence = "Shop", openCrate = "Gameplay",
+}
+local function txName(kind)
+	local ok, e = pcall(function() return Enum.AnalyticsEconomyTransactionType[kind].Name end)
+	return ok and e or kind
+end
+local function econ(p, currency, before, after, tx, sku)
+	local delta = (after or 0) - (before or 0)
+	if delta == 0 or delta ~= delta then return end
+	local flow = delta > 0 and Enum.AnalyticsEconomyFlowType.Source or Enum.AnalyticsEconomyFlowType.Sink
+	pcall(AnalyticsService.LogEconomyEvent, AnalyticsService, p.player, flow, currency, math.abs(delta), math.max(0, after or 0), txName(tx), sku or "")
+end
+-- snapshot before an action, log the difference after
+function AN.Before(p) return { gold = p.data.gold or 0, merits = p.data.seals or 0 } end
+function AN.After(p, snap, action)
+	if not snap or not p or not p.player then return end
+	local tx = TX[action] or "Gameplay"
+	econ(p, "Gold", snap.gold, p.data.gold, tx, action)
+	econ(p, "Merits", snap.merits, p.data.seals, tx, action)
+end
+function AN.Purchase(p, snap, key, robux)
+	if not p or not p.player then return end
+	if snap then
+		econ(p, "Gold", snap.gold, p.data.gold, "IAP", key)
+		econ(p, "Merits", snap.merits, p.data.seals, "IAP", key)
+	end
+	pcall(AnalyticsService.LogCustomEvent, AnalyticsService, p.player, "RobuxSpent", robux or 0)
+	AN.ShopStep(p, key, 2, "Purchased")
+end
+
+-- SHOP FUNNEL per item: 1 prompt shown, 2 purchased
+function AN.ShopStep(p, key, step, name)
+	if not p or not p.player then return end
+	p.shopSession = p.shopSession or {}
+	if step == 1 then p.shopSession[key] = tostring(p.player.UserId) .. "-" .. tostring(os.time()) end
+	local sid = p.shopSession[key]
+	if not sid then return end
+	pcall(AnalyticsService.LogFunnelStepEvent, AnalyticsService, p.player, "Shop " .. tostring(key), sid, step, name)
+end
+
+function AN.Custom(p, name, value)
+	if not p or not p.player then return end
+	pcall(AnalyticsService.LogCustomEvent, AnalyticsService, p.player, name, value or 1)
+end
+
+return AN
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX18"><Properties><string name="Name">ServerScriptService.Server|Badges|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- BADGES (Kash 2 Oct): awarded from a check every 30 seconds (and on join). d.badges remembers what was given
+-- so BadgeService is only called once per badge per player.
+local BadgeService = game:GetService("BadgeService")
+local RS = game:GetService("ReplicatedStorage")
+local Config = require(RS.Shared.Config)
+local R = require(RS.Shared.Rules)
+local BG = {}
+local PS, WS
+
+local function forbidden(d)
+	for _, o in pairs(d.inv and d.inv.officers or {}) do if o.rarity == "forbidden" then return true end end
+	return false
+end
+
+BG.Check = {
+	welcome = function(d) return d.onboarded == true end,
+	wonder = function(d) return (d.wonder or 0) >= R.WonderMax(#require(RS.Shared.GameData).Eras) end,
+	stars = function(d) return R.PlayerEra(d) >= 8 end,
+	warlord = function(d) return (d.stats.wins or 0) >= 1000 end,
+	trade = function(d) return (d.stats.trips or 0) >= 10000 end,
+	quadrillion = function(d) return (d.stats.earned or 0) >= 1e15 end,
+	lawgiver = function(d) return PS.GoldLaws(d) >= 100 end,
+	slayer = function(d) return (d.stats.bosses or 0) >= 500 end,
+	alliance = function(d) local a = d.alliance and WS.Alliances[d.alliance]; return a ~= nil and (a.level or 1) >= 30 end,
+	forbidden = forbidden,
+}
+
+function BG.Run(plr, p)
+	local d = p and p.data
+	if not d or not d.onboarded or not p.canSave then return end
+	d.badges = type(d.badges) == "table" and d.badges or {}
+	for _, b in ipairs(Config.Badges or {}) do
+		if b.id ~= 0 and not d.badges[b.key] then
+			local okC, has = pcall(BG.Check[b.key] or function() return false end, d)
+			if okC and has then
+				local okA, res = pcall(BadgeService.AwardBadge, BadgeService, plr.UserId, b.id)
+				if okA and res then
+					d.badges[b.key] = os.time()
+					if PS.AN then PS.AN.Custom(p, "Badge_" .. b.key) end
+				elseif okA then
+					-- false: already owned or badge disabled; remember owned ones so we stop asking
+					local okH, owns = pcall(BadgeService.UserHasBadgeAsync, BadgeService, plr.UserId, b.id)
+					if okH and owns then d.badges[b.key] = os.time() end
+				end
+			end
+		end
+	end
+end
+
+function BG.Start(ps, ws)
+	PS, WS = ps, ws
+	local Players = game:GetService("Players")
+	task.spawn(function()
+		while true do
+			task.wait(30)
+			for plr, p in pairs(PS.Profiles) do
+				if plr.Parent and not p.loading then task.spawn(BG.Run, plr, p) end
+			end
+		end
+	end)
+	Players.PlayerAdded:Connect(function(plr)
+		task.delay(15, function() local p = PS.Profiles[plr]; if p then BG.Run(plr, p) end end)
+	end)
+end
+
+return BG
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX19"><Properties><string name="Name">ServerScriptService.Server|Admin|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- TESTER PANEL (Kash 2 Oct): owner-only commands. Every command goes through act.admin, which checks IsAdmin first.
 -- Typed as "/reset", "/cash 1m", "/level 50" etc. The client panel buttons send the same strings.
 local RS = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -4963,7 +5140,7 @@ function AD.Run(plr, p, line)
 end
 
 return AD
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX18"><Properties><string name="Name">ServerScriptService.Server|Actions|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- Actions: every request a client can make. Each one re-checks the rules; the client is never trusted.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX20"><Properties><string name="Name">ServerScriptService.Server|Actions|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- Actions: every request a client can make. Each one re-checks the rules; the client is never trusted.
 local RS = game:GetService("ReplicatedStorage")
 local D = require(RS.Shared.GameData)
 local R = require(RS.Shared.Rules)
@@ -5017,6 +5194,7 @@ function act.onboard(plr, p, a)
 	local home = int(a.home, 1, #World.Cities)
 	if not home then return no("Pick a home capital") end
 	WS.HomeMoved(nil, home)
+	if PS.AN then PS.AN.Step(p, "Founded country") end
 	d.name, d.flag, d.ideo, d.home, d.onboarded = name, { l = layout, c = cols }, ideo, home, true
 	for _, c in ipairs(d.convoys) do if not c.to then c.at = home end end
 	PS.EnsureConvoys(p)
@@ -5039,6 +5217,7 @@ function act.eraUp(plr, p)
 	local cost = R.EraCost(nxt)
 	if not PS.Spend(p, cost) then return no("Need " .. R.Money(cost) .. " to advance") end
 	d.era = nxt
+	if PS.AN then PS.AN.Era(p, nxt, E.name) end
 	PS.Note(p, { kind = "toast", text = "Welcome to the " .. E.name .. " Era! New laws, properties and units unlocked", tone = "gold" })
 	return ok({ era = nxt })
 end
@@ -5083,6 +5262,7 @@ function act.passLaw(plr, p, a)
 	local xp = R.LawXp(i, before)
 	d.passes[key] = before + 1
 	d.stats.laws += 1
+	if d.stats.laws == 1 and PS.AN then PS.AN.Step(p, "First law") end
 	PS.TaskProgress(p, "laws", 1)
 	PS.TaskProgress(p, "influence", L.cost)
 	local tb, ta = R.MasteryTier(before), R.MasteryTier(before + 1)
@@ -5114,6 +5294,7 @@ function act.build(plr, p, a)
 	for k = #d.lots + 1, lot - 1 do d.lots[k] = 0 end
 	d.lots[lot] = i
 	d.stats.built += 1
+	if d.stats.built == 1 and PS.AN then PS.AN.Step(p, "First property") end
 	PS.TaskProgress(p, "build", 1)
 	return ok({ cost = cost, lot = lot })
 end
@@ -5779,6 +5960,7 @@ function act.allyCreate(plr, p, a)
 	if gone(plr, p) then WS.Leave(plr, rec.id, d.name); return no("Left") end
 	d.alliance = rec.id
 	startClaims(p, rec)
+	if PS.AN then PS.AN.Step(p, "Joined an alliance") end
 	return ok()
 end
 function act.allyJoin(plr, p, a)
@@ -5796,6 +5978,7 @@ function act.allyJoin(plr, p, a)
 	if gone(plr, p) then WS.Leave(plr, a.id, d.name); return no("Left") end
 	d.alliance = a.id
 	startClaims(p, rec)
+	if PS.AN then PS.AN.Step(p, "Joined an alliance") end
 	return ok({ fee = charged })
 end
 function act.allyLeave(plr, p)
@@ -6075,10 +6258,22 @@ function act.adRefill(plr, p)
 	return ok()
 end
 
+-- onboarding funnel steps reported by the onboarding screens (analytics only)
+local FUNNEL_UI = { name = "Named country", flag = "Designed flag", gov = "Chose government" }
+function act.funnel(plr, p, a)
+	local s = FUNNEL_UI[a and a.step]
+	if s and PS.AN and not p.data.onboarded then PS.AN.Step(p, s) end
+	return ok()
+end
+
 -- tutorial progress (Kash 2 Oct): step number, or -1 when skipped or finished
 function act.tutorial(plr, p, a)
 	local step = tonumber(a and a.step)
 	if not step or step ~= step or step < -1 or step > 50 then return no("Bad step") end
+	if PS.AN then
+		if step == 0 or (step == -1 and p.data.tut == nil) then PS.AN.Step(p, "Answered tutorial"); PS.AN.Custom(p, step == 0 and "TutorialYes" or "TutorialNo") end
+		if step == -1 and type(p.data.tut) == "number" and p.data.tut >= 0 then PS.AN.Custom(p, "TutorialEnded", p.data.tut) end
+	end
 	p.data.tut = math.floor(step)
 	return ok()
 end
@@ -6109,11 +6304,11 @@ function act.adminList(plr, p)
 	return ok({ list = AD.List() })
 end
 
-A.NoSync = { tutorial = true, adRefill = true, allyList = true, rankings = true, profile = true, adminList = true }
+A.NoSync = { funnel = true, tutorial = true, adRefill = true, allyList = true, rankings = true, profile = true, adminList = true }
 -- requests allowed before onboarding finishes
-A.PreOnboard = { sync = true, onboard = true, rankings = true, admin = true, adminList = true }
+A.PreOnboard = { sync = true, onboard = true, rankings = true, admin = true, adminList = true, funnel = true }
 return A
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX19"><Properties><string name="Name">ServerScriptService|GameServer|Script</string><ProtectedString name="Source"><![CDATA[-- GameServer: wires the services together. All game rules live in ServerScriptService.Server and ReplicatedStorage.Shared.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX21"><Properties><string name="Name">ServerScriptService|GameServer|Script</string><ProtectedString name="Source"><![CDATA[-- GameServer: wires the services together. All game rules live in ServerScriptService.Server and ReplicatedStorage.Shared.
 local Players = game:GetService("Players")
 local RS = game:GetService("ReplicatedStorage")
 local Server = script.Parent:WaitForChild("Server")
@@ -6138,10 +6333,14 @@ local MK = require(Server.Market)
 local A = require(Server.Actions)
 local RA = require(Server.Raids)
 local AD = require(Server.Admin)
+local AN = require(Server.Analytics)
+local BG = require(Server.Badges)
 MK.Init(PS)
 RA.Init(PS)
 AD.Init(PS, WS, RA)
 PS.Admin = AD
+PS.AN = AN
+BG.Start(PS, WS)
 A.Init(PS, MK, RA, AD)
 
 -- flood guard (audit M7): a token bucket per player, 8 requests a second with bursts of 15
@@ -6166,8 +6365,10 @@ Request.OnServerInvoke = function(plr, action, args)
 	if p.busy then return { ok = false, msg = "Busy, try again" } end
 	if PS.Profiles[plr] ~= p or p.leaving then return { ok = false, msg = "Left" } end -- audit M3
 	p.busy = true
+	local snap = AN.Before(p)
 	local okCall, res = pcall(fn, plr, p, args)
 	p.busy = false
+	if okCall and type(res) == "table" and res.ok then pcall(AN.After, p, snap, action) end
 	if not okCall then
 		warn("[Idle Country] action " .. action .. " failed: " .. tostring(res))
 		res = { ok = false, msg = "Something went wrong. Try again." }
@@ -6288,7 +6489,7 @@ if game:GetService("RunService"):IsStudio() then
 		end
 	end
 end
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX20"><Properties><string name="Name">ReplicatedStorage.Client|UI|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- UI: the State Dossier kit built from the rendered images in Shared.Assets (no Luau-drawn plates).
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX22"><Properties><string name="Name">ReplicatedStorage.Client|UI|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- UI: the State Dossier kit built from the rendered images in Shared.Assets (no Luau-drawn plates).
 -- Every plate is a 9-slice ImageLabel; text is always a TextLabel (never baked into an image).
 local TweenService = game:GetService("TweenService")
 local RS = game:GetService("ReplicatedStorage")
@@ -6609,7 +6810,7 @@ UI.Short = R.Short
 UI.Clock = R.Clock
 UI.Duration = R.Duration
 return UI
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX21"><Properties><string name="Name">ReplicatedStorage.Client|Sound|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- Sound: every sound effect and the background music for Idle Country.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX23"><Properties><string name="Name">ReplicatedStorage.Client|Sound|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- Sound: every sound effect and the background music for Idle Country.
 -- ClientMain calls _sound.init(App) once after the first full sync (same pattern as Settings). No build field on purpose.
 --
 -- Other code plays sounds with:   if App.sfx then App.sfx("purchase") end
@@ -6941,7 +7142,7 @@ M._sound = { init = function(App)
 end }
 
 return M
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX22"><Properties><string name="Name">ReplicatedStorage.Client|Map|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- Map: the CAPITOL screen. One shared pixel-art world map (Kash, 1 Oct 2026): 41 real capitals, territory tints for
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX24"><Properties><string name="Name">ReplicatedStorage.Client|Map|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- Map: the CAPITOL screen. One shared pixel-art world map (Kash, 1 Oct 2026): 41 real capitals, territory tints for
 -- alliance-held cities, your convoys visibly travelling (Fleet Simulator style), a convoy dock and a city dossier panel
 -- listing every load with cost, pay, tax, distance and time. Convoys never fail; they stay where they arrive.
 local RS = game:GetService("ReplicatedStorage")
@@ -7759,7 +7960,7 @@ function Map.build(host, App)
 end
 
 return { map = { build = Map.build } }
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX23"><Properties><string name="Name">ReplicatedStorage.Client|Economy|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- Economy screens: LAWS, PROPERTIES (Your Block + Build, Idle Mafia rework), SKILLS, BANK, TASKS.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX25"><Properties><string name="Name">ReplicatedStorage.Client|Economy|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- Economy screens: LAWS, PROPERTIES (Your Block + Build, Idle Mafia rework), SKILLS, BANK, TASKS.
 local RS = game:GetService("ReplicatedStorage")
 local Shared = RS:WaitForChild("Shared")
 local D = require(Shared.GameData)
@@ -8634,7 +8835,7 @@ S.tasks = { build = function(host, App)
 end }
 
 return S
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX24"><Properties><string name="Name">ReplicatedStorage.Client|War|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- War screens: MILITARY (recruit units), BATTLE (rival nations), BOSSES.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX26"><Properties><string name="Name">ReplicatedStorage.Client|War|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- War screens: MILITARY (recruit units), BATTLE (rival nations), BOSSES.
 local RS = game:GetService("ReplicatedStorage")
 local Shared = RS:WaitForChild("Shared")
 local D = require(Shared.GameData)
@@ -8814,7 +9015,7 @@ S.bosses = { build = function(host, App)
 end }
 
 return S
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX25"><Properties><string name="Name">ReplicatedStorage.Client|Social|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- Social screens: ALLIANCE (clans are alliances, Kash Q11), RANKINGS, SHOP, and the PLAYER PROFILE popup.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX27"><Properties><string name="Name">ReplicatedStorage.Client|Social|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- Social screens: ALLIANCE (clans are alliances, Kash Q11), RANKINGS, SHOP, and the PLAYER PROFILE popup.
 local RS = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -9559,7 +9760,7 @@ end }
 
 S.input = nil
 return S
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX26"><Properties><string name="Name">ReplicatedStorage.Client|Onboard|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- Onboard: found your country. Name (filtered by Roblox), flag, form of government, home capital.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX28"><Properties><string name="Name">ReplicatedStorage.Client|Onboard|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- Onboard: found your country. Name (filtered by Roblox), flag, form of government, home capital.
 local RS = game:GetService("ReplicatedStorage")
 local Shared = RS:WaitForChild("Shared")
 local R = require(Shared.Rules)
@@ -9700,6 +9901,8 @@ function O.show(App)
 	end
 	nextB.Inst.Activated:Connect(function()
 		if not check() then return end
+		local FUN = { "name", "flag", "gov" }
+		if FUN[step] then task.spawn(function() App.req("funnel", { step = FUN[step] }) end) end
 		if step < 4 then step += 1; draw(); return end
 		local res = App.req("onboard", form, nextB)
 		if res.ok then
@@ -9720,7 +9923,7 @@ function O.show(App)
 	App.on("full", function(st) if st.onboarded and cover.Parent then cover:Destroy(); App.open("laws") end end)
 end
 return O
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX27"><Properties><string name="Name">ReplicatedStorage.Client|Warfare|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- Warfare screens: RAIDS (key "battle", replaces the old rival list in War.lua: Kash 1 Oct 2026, raid only players in your server
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX29"><Properties><string name="Name">ReplicatedStorage.Client|Warfare|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- Warfare screens: RAIDS (key "battle", replaces the old rival list in War.lua: Kash 1 Oct 2026, raid only players in your server
 -- plus 3 AI nations, no refresh, 10% of cash on hand capped at ~1 h of law income, 1 minute cooldown, soldiers die).
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -10715,7 +10918,7 @@ S.battle = { build = function(host, App)
 end }
 
 return S
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX28"><Properties><string name="Name">ReplicatedStorage.Client|Cabinet|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- Cabinet screens: OFFICERS (you, LIMITED slots, seated officers, gear slots, hiring, slots) and INVENTORY (gear,
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX30"><Properties><string name="Name">ReplicatedStorage.Client|Cabinet|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- Cabinet screens: OFFICERS (you, LIMITED slots, seated officers, gear slots, hiring, slots) and INVENTORY (gear,
 -- officers, crates, elite troops). Layouts copied from the reference game's CREW and INVENTORY tabs (Kash 1 Oct 16:45).
 -- NO BENCH (Kash 2 Oct): officers only join into an open slot; limited officers live in their own slots (cab.ltd).
 -- Also owns the crate / hire REVEAL popup, exposed as App.crateReveal(App, result, opts) for other screens (Shop),
@@ -12114,7 +12317,7 @@ end }
 S._cabinetHooks = { init = function(App) installReveal(App) end }
 
 return S
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX29"><Properties><string name="Name">ReplicatedStorage.Client|Country|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- Country screen (Kash 1 Oct 16:40/16:45): modelled on Idle Mafia's SAFEHOUSE tab.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX31"><Properties><string name="Name">ReplicatedStorage.Client|Country|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- Country screen (Kash 1 Oct 16:40/16:45): modelled on Idle Mafia's SAFEHOUSE tab.
 -- A big era scene, the era title bar (ERA n OF 8, LEVEL, NEXT ERA), the 7-day login sheet, then YOUR STATS and
 -- YOUR UPGRADES (the skill point upgrades live here, so there is no separate Skills tab).
 -- Also exports the login sheet POPUP: App.showLogin() (set by _init.init at load and again inside build).
@@ -12892,7 +13095,7 @@ S._init = { init = function(App)
 end }
 
 return S
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX30"><Properties><string name="Name">ReplicatedStorage.Client|Contracts|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- CONTRACTS (screen key "tasks"), modelled on Idle Mafia's CONTRACTS tab (Kash 1 Oct 16:47):
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX32"><Properties><string name="Name">ReplicatedStorage.Client|Contracts|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- CONTRACTS (screen key "tasks"), modelled on Idle Mafia's CONTRACTS tab (Kash 1 Oct 16:47):
 -- daily orders (easy/medium/hard + a bonus for all 5) and weekly challenges (+ a bonus chest for all 5) that pay SEALS
 -- and cash, a REPLACE per order (1 free a day, then 19 R$), and the SEALS SHOP where seals buy tickets, refills, crates.
 local RS = game:GetService("ReplicatedStorage")
@@ -13270,7 +13473,7 @@ S.tasks = { build = function(host, App)
 end }
 
 return S
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX31"><Properties><string name="Name">ReplicatedStorage.Client|Settings|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- Settings: the top-right gear button and its big modal (SETTINGS / GAME GUIDE / CHANGELOG), plus the
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX33"><Properties><string name="Name">ReplicatedStorage.Client|Settings|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- Settings: the top-right gear button and its big modal (SETTINGS / GAME GUIDE / CHANGELOG), plus the
 -- favorite + group prompts after big moments (Kash 1 Oct 17:22: max once per session, never if already favorited,
 -- shown behind the scenes after a big achievement; our own polished join-group popup with the +10% cash bonus).
 -- ClientMain calls _settings.init(App) once after the first full sync. This entry has no build field on purpose.
@@ -13855,7 +14058,7 @@ M._settings = { init = function(App)
 end }
 
 return M
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX32"><Properties><string name="Name">ReplicatedStorage.Client|Shop|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- Shop: the store screen (key "shop", replaces the old list in Social.lua because this module loads later) and the
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX34"><Properties><string name="Name">ReplicatedStorage.Client|Shop|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- Shop: the store screen (key "shop", replaces the old list in Social.lua because this module loads later) and the
 -- VIP / MEGA VIP chat tags (_vipTags init). Layout: STARTER PACK (new players only), LIMITED hero row (Limited Bundle +
 -- Founder's Crate), Supply Crate, VIP passes, game passes, gold packs + gold spends, repeatable boosts. Built once per
 -- width, then Refresh/Tick only update owned states, prices and timers so hover/shine animations keep running.
@@ -14841,7 +15044,7 @@ S._vipTags = { init = function(App)
 end }
 
 return S
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX33"><Properties><string name="Name">ReplicatedStorage.Client|Tester|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- TESTER PANEL (Kash 2 Oct): owner only. A TEST button (and F2) opens a panel of quick buttons plus a command line.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX35"><Properties><string name="Name">ReplicatedStorage.Client|Tester|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- TESTER PANEL (Kash 2 Oct): owner only. A TEST button (and F2) opens a panel of quick buttons plus a command line.
 -- Every button just sends the same text you could type, e.g. "/cash 1m". The server checks the owner again.
 local UIS = game:GetService("UserInputService")
 
@@ -14970,7 +15173,7 @@ S._tester = { init = function(App)
 end }
 
 return S
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX34"><Properties><string name="Name">ReplicatedStorage.Client|Tutorial|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- TUTORIAL (Kash 2 Oct): offered at the end of onboarding. A small guide card at the bottom of the screen and a
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX36"><Properties><string name="Name">ReplicatedStorage.Client|Tutorial|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- TUTORIAL (Kash 2 Oct): offered at the end of onboarding. A small guide card at the bottom of the screen and a
 -- pulsing frame on the tab to open. It never blocks the game and can be skipped any time.
 -- Progress is saved on the server (App.state.tut: step number, -1 = skipped or finished, nil = never offered).
 local TweenService = game:GetService("TweenService")
@@ -15096,7 +15299,7 @@ S._tutorial = { init = function(App)
 end }
 
 return S
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX35"><Properties><string name="Name">StarterPlayer.StarterPlayerScripts|ClientMain|LocalScript</string><ProtectedString name="Source"><![CDATA[-- ClientMain: the shell. Top bar, the left nav (flush with the screen's left edge, Kash 26 Sep), the screen host,
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX37"><Properties><string name="Name">StarterPlayer.StarterPlayerScripts|ClientMain|LocalScript</string><ProtectedString name="Source"><![CDATA[-- ClientMain: the shell. Top bar, the left nav (flush with the screen's left edge, Kash 26 Sep), the screen host,
 -- toasts and level-up banners. The Capitol world map is the home screen (Kash, 1 Oct 2026, Q12).
 -- Everything is laid out in design pixels on a top-left anchored root scaled by ONE UIScale
 -- (LESSONS: a UIScale scales about the AnchorPoint; read TopbarInset lazily).
@@ -15733,7 +15936,7 @@ if game:GetService("RunService"):IsStudio() then
 		end)
 	end)
 end
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX36"><Properties><string name="Name">ReplicatedFirst|IC_Loading|LocalScript</string><ProtectedString name="Source"><![CDATA[-- Loading screen (ReplicatedFirst): war-room art, the IDLE COUNTRY logo, a shimmering bar, version and disclaimer.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX38"><Properties><string name="Name">ReplicatedFirst|IC_Loading|LocalScript</string><ProtectedString name="Source"><![CDATA[-- Loading screen (ReplicatedFirst): war-room art, the IDLE COUNTRY logo, a shimmering bar, version and disclaimer.
 -- Modelled on the reference game's loading screen (Kash 1 Oct 16:45). Hides once the HUD exists and the save is in.
 local Players = game:GetService("Players")
 local ReplicatedFirst = game:GetService("ReplicatedFirst")
