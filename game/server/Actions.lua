@@ -256,7 +256,7 @@ function act.bossHit(plr, p, a)
 end
 
 ---------------------------------------------------------------- gold
-A.GoldPrices = { inf = 10, sup = 5, boss = 3 }
+A.GoldPrices = Config.GoldPrices
 function act.goldInf(plr, p)
 	local d = p.data
 	if d.gold < A.GoldPrices.inf then return no("Not enough gold") end
@@ -328,7 +328,7 @@ function act.move(plr, p, a)
 	return ok({ fee = fee })
 end
 
-function A.FinishGold(c) return math.max(1, math.ceil((c.t1 - now()) / 600)) end
+function A.FinishGold(c) return Config.FinishGold(c.t1 - now()) end
 function act.finishGold(plr, p, a)
 	local d = p.data
 	local c = getConvoy(p, a)

@@ -570,7 +570,7 @@ function Map.build(host, App)
 				local bar = UI.bar(brow, C.good, { sz = UDim2.new(1, 0, 1, 0), z = 28, textSize = 13 })
 				obj.panelBars.trip = { bar = bar, c = c }
 				local fin = row(40, nx())
-				local gold = math.max(1, math.ceil((c.t1 - App.now()) / 600))
+				local gold = Config.FinishGold(c.t1 - App.now())
 				UI.button(fin, st.gold >= gold and "gold" or "locked", "FINISH · " .. gold .. " GOLD", function(btn) App.req("finishGold", { c = selConvoy }, btn) end, { sz = UDim2.new(0.5, -4, 1, 0), z = 29, textSize = 14, icon = "icon_gold" })
 				local mins = (c.t1 - App.now()) / 60
 				local robux

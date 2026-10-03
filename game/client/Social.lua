@@ -717,8 +717,8 @@ S.shop = { build = function(host, App)
 		UI.clear(list)
 		sub.Text = "You have <font color='#f0c75a'><b>" .. R.Commas(st.gold) .. " gold</b></font> · earn it from bosses and daily orders"
 		header("SPEND GOLD", 1)
-		item(2, "icon_influence", C.inf, "REFILL INFLUENCE", "Fill your Influence bar right now", st.gold >= 10 and "gold" or "locked", "10 GOLD", function(btn) local r = App.req("goldInf", {}, btn); if r.ok then App.toast("INFLUENCE REFILLED", nil, "gold") end end)
-		item(3, "icon_supply", C.sup, "REFILL SUPPLY", "Fill your Supply bar for battles, bosses and sieges", st.gold >= 5 and "gold" or "locked", "5 GOLD", function(btn) local r = App.req("goldSup", {}, btn); if r.ok then App.toast("SUPPLY REFILLED", nil, "gold") end end)
+		item(2, "icon_influence", C.inf, "REFILL INFLUENCE", "Fill your Influence bar right now", st.gold >= Config.GoldPrices.inf and "gold" or "locked", Config.GoldPrices.inf .. " GOLD", function(btn) local r = App.req("goldInf", {}, btn); if r.ok then App.toast("INFLUENCE REFILLED", nil, "gold") end end)
+		item(3, "icon_supply", C.sup, "REFILL SUPPLY", "Fill your Supply bar for battles, bosses and sieges", st.gold >= Config.GoldPrices.sup and "gold" or "locked", Config.GoldPrices.sup .. " GOLD", function(btn) local r = App.req("goldSup", {}, btn); if r.ok then App.toast("SUPPLY REFILLED", nil, "gold") end end)
 		header("GOLD PACKS", 10)
 		for k, key in ipairs({ "GoldSmall", "GoldBig" }) do
 			local p = Config.Products[key]

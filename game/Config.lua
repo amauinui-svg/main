@@ -59,6 +59,15 @@ C.Afk = {
 	Rarity = { 75, 20, 4.9, 0.09, 0.009, 0.0009, 0.00009, 0.000009 },
 }
 
+-- gold prices = the Robux price of the same thing (1 gold = 1 R$, Kash 3 Oct)
+C.GoldPrices = { inf = 19, sup = 19, boss = 9 }
+-- finishing a convoy with gold costs the same as the Robux tier for the time left
+function C.FinishGold(secondsLeft)
+	local m = math.max(0, secondsLeft) / 60
+	if m <= 10 then return 9 elseif m <= 60 then return 19 elseif m <= 240 then return 29 end
+	return 49
+end
+
 C.Products = {
 	-- Founder's Crate: 49 R$ each (Kash 2 Oct), bulk cheaper per crate
 	Crate1 = { id = 3716173429, robux = 49, crates = 1 },
@@ -66,9 +75,10 @@ C.Products = {
 	Crate10 = { id = 3716173495, robux = 399, crates = 10 },
 	-- Starter Pack (Kash 2 Oct): one time, new players only. A strong property for your era + elite troops + gold.
 	StarterPack = { id = 3716173499, robux = 99, gold = 100, troops = 4, maxLevel = 40 },
-	GoldSmall = { id = 3716173503, robux = 49, gold = 50 },
-	GoldBig = { id = 3716173507, robux = 199, gold = 250 },
-	GoldHuge = { id = 3716173510, robux = 699, gold = 1000 },
+	-- Gold is 1:1 with Robux (Kash 3 Oct): 1 gold = 1 R$
+	GoldSmall = { id = 3716173503, robux = 49, gold = 49 },
+	GoldBig = { id = 3716173507, robux = 199, gold = 199 },
+	GoldHuge = { id = 3716173510, robux = 699, gold = 699 },
 	TreasuryGrant = { id = 3716173516, robux = 49 },
 	InfluenceRefill = { id = 3716173520, robux = 19 },
 	InfluenceRefillFirst = { id = 3716173525, robux = 9 }, -- first refill ever is cheap (Kash 19:19)
@@ -100,7 +110,7 @@ C.GroupGift = { gold = 100, limitedCrates = 1 }
 C.AdRefill = { product = "InfluenceRefillFirst", cooldown = 300 }
 -- purchase shout-outs in chat (Kash 2 Oct)
 C.ProductNames = { Crate1 = "a Founder's Crate", Crate3 = "3 Founder's Crates", Crate10 = "10 Founder's Crates", StarterPack = "the Starter Pack",
-	GoldSmall = "50 Gold", GoldBig = "250 Gold", GoldHuge = "1,000 Gold", TreasuryGrant = "a Treasury Grant", InfluenceRefill = "an Influence Refill",
+	GoldSmall = "49 Gold", GoldBig = "199 Gold", GoldHuge = "699 Gold", TreasuryGrant = "a Treasury Grant", InfluenceRefill = "an Influence Refill",
 	InfluenceRefillFirst = "an Influence Refill", SupplyRefill = "a Supply Refill", RaidShield = "a Raid Shield", InstantArmy = "an Instant Army",
 	RevengeStrike = "a Revenge Strike", FinishConvoy1 = "an instant convoy", FinishConvoy2 = "an instant convoy", FinishConvoy3 = "an instant convoy",
 	FinishConvoy4 = "an instant convoy", ChallengeRefresh = "a Challenge Refresh", MoveCapital = "a Capital Move", LimitedBundle = "the Limited Bundle",
@@ -167,7 +177,7 @@ C.Officers = {
 
 C.Crates = {
 	-- the first limited crate (rotates later). Same crate, two prices: gold or Robux.
-	Limited = { key = "limited", name = "FOUNDER'S CRATE", gold = 150, ends = 1791522000 }, -- 7 days (Kash 19:19): 2026-10-09 05:00 UTC
+	Limited = { key = "limited", name = "FOUNDER'S CRATE", gold = 49, ends = 1791522000 }, -- 7 days (Kash 19:19): 2026-10-09 05:00 UTC
 	-- free-to-play crate bought with in-game cash: price is this many minutes of law income at your level
 	Basic = { key = "basic", name = "SUPPLY CRATE", lawMinutes = 30 },
 }

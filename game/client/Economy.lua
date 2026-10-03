@@ -18,7 +18,7 @@ end
 
 ---------------------------------------------------------------- OUT OF INFLUENCE popup (Kash 19:19)
 -- Influence bar with the regen timer, REFILL with gold, REFILL with Robux (first refill ever is cheap), or WAIT.
-local GOLD_REFILL = 10 -- matches A.GoldPrices.inf in server/Actions.lua
+local GOLD_REFILL = require(RS.Shared.Config).GoldPrices.inf
 local function showRefill(App)
 	local UI = App.UI
 	local C = UI.C

@@ -343,3 +343,8 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 - Progress too fast: levels need about twice the XP (XpFirst 1.0, XpBase 2.5, XpStep 0.4, XpCap 10).
 - Laws: every era tab is shown; eras you don't have show only a lock and the level (no name).
 - AFK CHAMBER: idle 15 min -> full-screen chamber with the world map, income, earnings while away, time away, and finds; every 60 s an 8% chance to find gear (rare+ lottery-low); RETURN goes back; prevents the 20 min idle kick.
+
+## 3 Oct 00:16 (Kash)
+- Gold is 1:1 with Robux: gold packs give 49/199/699 gold for R$49/199/699; Founder's Crate 49 gold; Influence and Supply refills 19 gold (same as Robux); finishing a convoy 9/19/29/49 gold by time left (same tiers as Robux); boss skip 9 gold. All gold prices live in Config.GoldPrices / Config.FinishGold.
+- New icon: Kash's no-text Flow image (crowned bacon hair), uploaded.
+- Wants a list of every gold source to decide how strong the currency is (sent in chat).

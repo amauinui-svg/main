@@ -81,8 +81,7 @@ function FX.beams(UI, parent, color, size, pos, z, strength)
 	return root
 end
 
--- gold spend prices mirror server/Actions.lua A.GoldPrices (inf = 10, sup = 5); not in Config yet
-local GOLD_INF, GOLD_SUP = 10, 5
+local GOLD_INF, GOLD_SUP = Config.GoldPrices.inf, Config.GoldPrices.sup
 local ROBUX = Color3.fromHex("3fd27a")
 local TEAL = Color3.fromHex("3fe0d0")
 local PINK = Color3.fromHex(Config.VIP.MegaVIP.color)

@@ -142,7 +142,7 @@ S.bosses = { build = function(host, App)
 	local b1 = UI.button(btns, "red", "HIT · 1 SUPPLY", hit(1), { sz = UDim2.new(0.4, -6, 1, 0), z = 8, icon = "icon_attack" })
 	local b5 = UI.button(btns, "red", "x5", hit(5), { sz = UDim2.new(0.2, -6, 1, 0), pos = UDim2.new(0.4, 0, 0, 0), z = 8 })
 	local bm = UI.button(btns, "red", "ALL SUPPLY", hit(50), { sz = UDim2.new(0.4, 0, 1, 0), pos = UDim2.new(0.6, 0, 0, 0), z = 8 })
-	local skip = UI.button(btns, "gold", "SKIP WAIT · 3 GOLD", function(btn) App.req("bossSkip", {}, btn) end, { sz = UDim2.fromScale(1, 1), z = 9, icon = "icon_gold" })
+	local skip = UI.button(btns, "gold", "SKIP WAIT · " .. require(game:GetService("ReplicatedStorage").Shared.Config).GoldPrices.boss .. " GOLD", function(btn) App.req("bossSkip", {}, btn) end, { sz = UDim2.fromScale(1, 1), z = 9, icon = "icon_gold" })
 	local list = UI.list(body, { pos = UDim2.fromOffset(0, 344), sz = UDim2.new(1, 0, 1, -344), gap = 6, z = 6 })
 	function obj:Refresh(st)
 		local boss = st.boss
