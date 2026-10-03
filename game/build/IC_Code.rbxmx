@@ -125,6 +125,10 @@ local A = {
 	["icon_xp"] = "rbxassetid://128065649248339",
 	["input"] = "rbxassetid://123746516275334",
 	["inset"] = "rbxassetid://106245626007088",
+	-- boss portraits, one per era (Kash 3 Oct, Nano Banana 2)
+	["boss_1"] = "rbxassetid://79643217062561", ["boss_2"] = "rbxassetid://123415271395714", ["boss_3"] = "rbxassetid://88536653696741",
+	["boss_4"] = "rbxassetid://127288730006626", ["boss_5"] = "rbxassetid://117230554201741", ["boss_6"] = "rbxassetid://103274986913008",
+	["boss_7"] = "rbxassetid://119123100044901", ["boss_8"] = "rbxassetid://85854489349266",
 	["map_world"] = "rbxassetid://131032198234520", -- v2 3 Oct: country borders, full coverage (v1 115782743034253)
 	["nav_off"] = "rbxassetid://111653649833653",
 	["nav_on"] = "rbxassetid://107619694527367",
@@ -9646,11 +9650,15 @@ S.bosses = { build = function(host, App)
 	local _, body, sub = frame(host, App, "BOSSES")
 	local obj = {}
 	local card = UI.card(body, { sz = UDim2.new(1, 0, 0, 330), z = 6 })
-	local name = text(card, "", { font = "display", size = 34, color = C.manila, pos = UDim2.fromOffset(24, 18), sz = UDim2.new(1, -48, 0, 40), z = 7 })
-	local desc = text(card, "", { size = 17, color = C.muted, pos = UDim2.fromOffset(24, 62), sz = UDim2.new(1, -48, 0, 22), z = 7 })
-	UI.icon(card, "icon_bosses", 90, C.bad, UDim2.new(1, -120, 0, 20), { z = 7 })
-	local hp = UI.bar(card, C.bad, { pos = UDim2.fromOffset(24, 110), sz = UDim2.new(1, -160, 0, 34), z = 7, textSize = 17 })
-	local info = text(card, "", { size = 16, rich = true, pos = UDim2.fromOffset(24, 156), sz = UDim2.new(1, -48, 0, 50), z = 7, wrap = true, valign = Enum.TextYAlignment.Top })
+	-- boss portrait on the right (Kash 3 Oct); the text column leaves room for it
+	local PW = 228
+	local portrait = UI.mk("ImageLabel", { Name = "Portrait", BackgroundColor3 = C.black, BorderSizePixel = 0, Position = UDim2.new(1, -PW - 18, 0, 16), Size = UDim2.fromOffset(PW, PW), ZIndex = 7, ScaleType = Enum.ScaleType.Crop }, card)
+	UI.mk("UICorner", { CornerRadius = UDim.new(0, 10) }, portrait)
+	UI.mk("UIStroke", { Color = C.bad, Thickness = 3 }, portrait)
+	local name = text(card, "", { font = "display", size = 34, color = C.manila, pos = UDim2.fromOffset(24, 18), sz = UDim2.new(1, -PW - 60, 0, 40), z = 7, scaled = true })
+	local desc = text(card, "", { size = 17, color = C.muted, pos = UDim2.fromOffset(24, 62), sz = UDim2.new(1, -PW - 60, 0, 22), z = 7, truncate = true })
+	local hp = UI.bar(card, C.bad, { pos = UDim2.fromOffset(24, 110), sz = UDim2.new(1, -PW - 60, 0, 34), z = 7, textSize = 17 })
+	local info = text(card, "", { size = 16, rich = true, pos = UDim2.fromOffset(24, 156), sz = UDim2.new(1, -PW - 60, 0, 70), z = 7, wrap = true, valign = Enum.TextYAlignment.Top })
 	local btns = UI.mk("Frame", { BackgroundTransparency = 1, Position = UDim2.new(0, 24, 1, -76), Size = UDim2.new(1, -48, 0, 54), ZIndex = 7 }, card)
 	local function hit(n) return function(btn)
 		local res = App.req("bossHit", { n = n }, btn)
@@ -9666,6 +9674,7 @@ S.bosses = { build = function(host, App)
 		if not boss then return end
 		local B = M.Bosses[boss.era]
 		name.Text = string.upper(B[1])
+		portrait.Image = UI.asset("boss_" .. boss.era)
 		desc.Text = B[2] .. " · " .. D.Eras[boss.era].name .. " era"
 		local max = M.BossHp(boss.era)
 		hp:Set(boss.hp / max, R.Short(boss.hp) .. " / " .. R.Short(max) .. " HP", "")
@@ -9675,8 +9684,10 @@ S.bosses = { build = function(host, App)
 		sub.Text = "Supply <font color='#6fb3c8'><b>" .. st.sup .. "/" .. st.supMax .. "</b></font> · Bosses defeated <b>" .. st.stats.bosses .. "</b>"
 		UI.clear(list)
 		for e, Bx in ipairs(M.Bosses) do
-			local row = UI.card(list, { sz = UDim2.new(1, 0, 0, 34), z = 7, order = e })
-			text(row, (e == boss.era and "▶ " or "") .. Bx[1], { font = "heavy", size = 15, color = e <= R.PlayerEra(st) and C.ink or C.dim, pos = UDim2.fromOffset(12, 0), sz = UDim2.new(0.5, 0, 1, 0), z = 8 })
+			local row = UI.card(list, { sz = UDim2.new(1, 0, 0, 40), z = 7, order = e, hot = e == boss.era })
+			local th = UI.mk("ImageLabel", { BackgroundTransparency = 1, Position = UDim2.fromOffset(6, 4), Size = UDim2.fromOffset(32, 32), ZIndex = 8, Image = UI.asset("boss_" .. e), ImageTransparency = e <= R.PlayerEra(st) and 0 or 0.6 }, row)
+			UI.mk("UICorner", { CornerRadius = UDim.new(0, 6) }, th)
+			text(row, (e == boss.era and "▶ " or "") .. Bx[1], { font = "heavy", size = 15, color = e <= R.PlayerEra(st) and C.ink or C.dim, pos = UDim2.fromOffset(46, 0), sz = UDim2.new(0.5, -34, 1, 0), z = 8 })
 			text(row, D.Eras[e].name .. " · " .. R.Short(M.BossHp(e)) .. " HP · " .. M.BossGold[e] .. " gold", { size = 14, color = C.muted, pos = UDim2.new(0.5, 0, 0, 0), sz = UDim2.new(0.5, -12, 1, 0), z = 8, align = Enum.TextXAlignment.Right })
 		end
 		obj:Tick(st)

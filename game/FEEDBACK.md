@@ -445,7 +445,7 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 - Alliance target capital: leader/officers tap SET AS ALLIANCE TARGET on a city's map panel; every member sees a red banner on OVERVIEW (ATTACK IT jumps to the city) and a pulsing red ring on the map. Clears itself when the alliance captures it.
 - New MEMBERS tab (everyone): strongest member card, sort by strength / XP this week / all time / last active, avatar, online dot, level, power (attack + defense), contribution, donations. Leader promotes, demotes, removes, hands over leadership; officers remove members if allowed. Moved out of OVERVIEW and MANAGE.
 - Favorite popup: only shows if the game isn't already favorited (GetFavoriteAsync), and at most once per player.
-- Boss images for all 8 bosses (in progress).
+- Boss images for all 8 bosses: made in Nano Banana 2 (square, live thumbnails as style refs, art/bosses), uploaded as boss_1..8 and shown as a big portrait on the BOSSES screen plus small ones in the boss list.
 
 ## 3 Oct 10:21 (Kash)
 - Chat tips label "[Tip]" instead of "[Kash]".
