@@ -1193,9 +1193,10 @@ R.WonderPct = 0.02
 function R.WonderMax(era) return R.WonderStagesPerEra * math.max(0, (era or 1) - 1) end
 function R.WonderEra(k) return math.clamp(1 + math.ceil((k or 0) / R.WonderStagesPerEra), 2, #D.Eras) end
 function R.WonderName(k) return R.WonderNames[R.WonderEra(math.max(1, k or 1))] end
-function R.WonderCost(k)
+-- priced on your level (never below the era's start) so a stage always costs 1 to 3 hours of law income
+function R.WonderCost(k, lv)
 	local E = D.Eras[R.WonderEra(k)]
-	return math.floor(R.MinuteValue(E.start) * 60 * (1 + 0.5 * ((k - 1) % R.WonderStagesPerEra)) / 100 + 0.5) * 100
+	return math.floor(R.MinuteValue(math.max(E.start, lv or 1)) * 60 * (1 + 0.5 * ((k - 1) % R.WonderStagesPerEra)) / 100 + 0.5) * 100
 end
 function R.WonderBonus(k) return R.WonderPct * (k or 0) end
 -- ACHIEVEMENTS and TITLES (Kash 2 Oct: another way to feel progress). Worked out from lifetime stats, so nothing
@@ -3059,12 +3060,13 @@ function PS.TaxFor(p, b)
 	if c.owner == p.data.alliance and WS.IsMember(p.data.alliance, p.userId) then return 0, nil end
 	return c.tax or 0, c.owner
 end
-function PS.LoadsFor(p, a, b, mods)
+-- withEvent: only a convoy the player sends by hand can claim a world event bonus (not Auto Dispatch)
+function PS.LoadsFor(p, a, b, mods, withEvent)
 	local ctx = PS.TradeCtx(p, mods)
 	ctx.taxPct = PS.TaxFor(p, b)
 	ctx.wants = WS.WantsOf(b)
 	local ev = Events.Active(os.time())
-	if ev and ev.city == b and p.data.wev ~= ev.id then ctx.event = ev end
+	if withEvent and ev and ev.city == b and p.data.wev ~= ev.id then ctx.event = ev end
 	return T.Loads(a, b, ctx)
 end
 
@@ -4772,7 +4774,7 @@ cmd("officer", "/officer legendary  add an officer (needs a free slot). common..
 	local r = O.RarityByKey[tostring(a[1] or "legendary"):lower()]
 	if not r or r.key == "limited" then return "Unknown rarity" end
 	local res = PS.AddOfficer(p, O.NewOfficer(PS.Rng(p), r.index))
-	return res and ("Added a " .. r.name .. " officer") or "No free officer slot. /slot first."
+	return res and ("Added officer: " .. r.name) or "No free officer slot. /slot first."
 end)
 cmd("gear", "/gear mythic  add a gear item", function(_, p, a)
 	local r = O.RarityByKey[tostring(a[1] or "epic"):lower()]
@@ -4960,7 +4962,7 @@ function act.wonderBuild(plr, p)
 	if era < 2 then return no("Advance to the " .. D.Eras[2].name .. " Era to unlock your Wonder") end
 	local k = (d.wonder or 0) + 1
 	if k > R.WonderMax(era) then return no("Advance to the next era to keep building") end
-	local cost = R.WonderCost(k)
+	local cost = R.WonderCost(k, d.lv)
 	if not PS.Spend(p, cost) then return no("Need " .. R.Money(cost)) end
 	d.wonder = k
 	PS.AddXp(p, math.floor(R.MinuteXp(d.lv) * 10))
@@ -5171,7 +5173,7 @@ function act.send(plr, p, a)
 	if not c or not b then return no("Bad request") end
 	if c.to then return no("That convoy is on the road") end
 	if c.at == b then return no("The convoy is already here") end
-	local loads = PS.LoadsFor(p, c.at, b)
+	local loads = PS.LoadsFor(p, c.at, b, nil, true)
 	local L
 	for _, x in ipairs(loads) do if x.good == a.good then L = x end end
 	if not L then return no("That load is gone. Pick another.") end
@@ -8169,7 +8171,7 @@ S.properties = { build = function(host, App)
 			return card
 		end
 		local nextK = stage + 1
-		local cost = R.WonderCost(nextK)
+		local cost = R.WonderCost(nextK, st.lv)
 		local nextName = R.WonderName(nextK)
 		local note = "Next stage <b>" .. R.Money(cost) .. "</b>"
 		if nextName ~= R.WonderName(math.max(1, stage)) or stage == 0 then note ..= "<br/><font color='#9a9fa6'>Begins the " .. nextName .. "</font>" end
@@ -14678,7 +14680,7 @@ S._tester = { init = function(App)
 
 	local function ensureButton()
 		if btn or not (App.state and App.state.admin) then return end
-		btn = UI.button(App.root, "red", "TEST", toggle, { pos = UDim2.new(0, 8, 1, -46), sz = UDim2.fromOffset(72, 38), z = 89, textSize = 15, name = "TesterButton" })
+		btn = UI.button(App.root, "red", "TEST", toggle, { pos = UDim2.new(1, -86, 1, -48), sz = UDim2.fromOffset(72, 38), z = 89, textSize = 15, name = "TesterButton" })
 	end
 	App.on("full", function() ensureButton() end)
 	ensureButton()
@@ -15240,6 +15242,8 @@ if game:GetService("RunService"):IsStudio() then
 			elseif k == "close" then App.closeModal()
 			elseif k == "login" and App.showLogin then App.showLogin()
 			elseif k == "settings" and App.openSettings then App.openSettings(arg ~= "" and arg or nil)
+			elseif k == "tester" and App.toggleTester then App.toggleTester()
+			elseif k == "profile" and App.showProfile then App.showProfile(tonumber(arg) or plr.UserId)
 			elseif k == "emit" then App.emit(arg) end
 		end)
 	end)
