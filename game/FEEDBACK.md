@@ -392,3 +392,6 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 
 ## 3 Oct 08:14 (Kash)
 - Rankings show players, not countries: Roblox avatar headshot + display name and @username (fetched in one batch on the server, cached). Country, flag and the rest stay on the profile, which now also shows the @username.
+
+## 3 Oct 08:17 (Kash)
+- His own profile must not appear on the leaderboards: Config.HiddenFromRankings (his user id) is filtered out of the Level and Wealth boards.

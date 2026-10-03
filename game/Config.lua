@@ -108,6 +108,7 @@ C.StudioGrantsPasses = true
 C.PremiumBonus = 0.05
 C.Group = { Id = 3735672, Bonus = 0.10 }
 -- FREE GIFT button (Kash 2 Oct): stays on the Laws screen until the player is in the group. One time gift on claim.
+C.HiddenFromRankings = { [250229074] = true } -- Kash 3 Oct: the owner never appears on the leaderboards
 C.GroupGift = { gold = 100, limitedCrates = 1 }
 -- Watch an ad to refill Influence (rewarded video ads; the reward is the 9 R$ refill product, within Roblox's 3-10 R$ rule)
 C.AdRefill = { product = "InfluenceRefillFirst", cooldown = 300 }
