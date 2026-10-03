@@ -135,7 +135,7 @@ end
 
 ---------------------------------------------------------------- alliances
 local function summary(a)
-	return { name = a.name, tag = a.tag, color = a.color, members = a.count or 0, level = a.level or 1, cap = WS.MemberCap(a), open = a.open ~= false, leader = a.leaderName,
+	return { name = a.name, tag = a.tag, color = a.color, emblem = a.emblem, emblemImg = a.emblemImg, members = a.count or 0, level = a.level or 1, cap = WS.MemberCap(a), open = a.open ~= false, leader = a.leaderName,
 		fee = a.joinFee or 0, dues = a.dues and a.dues.pct or 0, style = a.dues and a.dues.style or "flat", minLv = a.minLv or 0 }
 end
 -- returns record, readOk (readOk=false means the DataStore could not be reached: do not act on a missing record)
@@ -311,7 +311,7 @@ function WS.Join(plr, id, who, maxFee, lv)
 		if a.open == false then return nil, "That alliance is invite only" end
 		if (a.minLv or 0) > (lv or 1) then return nil, "That alliance needs level " .. a.minLv .. " to join" end
 		a.members[key] = { name = who or plr.Name, role = "member", joined = now(), active = now(), lv = lv, wk = 0, tot = 0 }
-		if fee > 0 then a.treasury = (a.treasury or 0) + fee end
+		if fee > 0 then a.treasury = (a.treasury or 0) + fee; WS.Ledger(a, "fees", fee); WS.TLog(a, "fee", fee, who or plr.Name) end
 		charged = fee
 		addLog(a, (who or plr.Name) .. " joined")
 		return a, true
@@ -328,10 +328,10 @@ function WS.Leave(plr, id, who)
 		a.members[key] = nil
 		addLog(a, (who or plr.Name) .. " left")
 		if me.role == "leader" then
-			-- hand leadership to the longest-serving officer, else the longest-serving member
+			-- hand leadership to the longest-serving officer, then elder, else the longest-serving member
 			local best, bestKey
 			for k, m in pairs(a.members) do
-				local score = (m.role == "officer" and 0 or 1e12) + (m.joined or 0)
+				local score = (m.role == "officer" and 0 or m.role == "elder" and 1e12 or 2e12) + (m.joined or 0)
 				if not best or score < best then best, bestKey = score, k end
 			end
 			if bestKey then
@@ -402,10 +402,33 @@ function WS.EnsureWeek(a)
 end
 
 local pendingTreasury = {} -- [aid] = amount
+local pendingKinds = {} -- [aid] = { [kind] = amount } for the treasury ledger
+-- TREASURY LEDGER (Kash 3 Oct): daily totals per kind for the last 7 days (income positive, spending negative) plus
+-- the last 40 big entries (donations, join fees, upgrades). Shown on the TREASURY tab to elders and up.
+WS.LedgerDays = 7
+function WS.Ledger(a, kind, amt)
+	if not a or amt ~= amt or amt == 0 then return end
+	a.ledger = type(a.ledger) == "table" and a.ledger or {}
+	local day = tostring(math.floor(os.time() / 86400))
+	local b = a.ledger[day] or {}
+	a.ledger[day] = b
+	b[kind] = (b[kind] or 0) + amt
+	local cutoff = math.floor(os.time() / 86400) - WS.LedgerDays
+	for k in pairs(a.ledger) do if (tonumber(k) or 0) <= cutoff then a.ledger[k] = nil end end
+end
+function WS.TLog(a, kind, amt, who)
+	a.tlog = type(a.tlog) == "table" and a.tlog or {}
+	table.insert(a.tlog, 1, { t = os.time(), k = kind, a = math.floor(amt), w = who })
+	while #a.tlog > 40 do table.remove(a.tlog) end
+end
 local pendingProg = {} -- [aid] = { xp = n, mem = { [uid] = pts }, q = { [kind] = { n = n, by = { [uid] = n } } } }
-function WS.Credit(aid, amount)
+function WS.Credit(aid, amount, kind)
 	if not aid or amount ~= amount or amount <= 0 or amount == math.huge then return end
 	pendingTreasury[aid] = (pendingTreasury[aid] or 0) + amount
+	local pk = pendingKinds[aid] or {}
+	pendingKinds[aid] = pk
+	kind = kind or "other"
+	pk[kind] = (pk[kind] or 0) + amount
 end
 function WS.AddProgress(aid, uid, kind, n)
 	n = tonumber(n) or 0
@@ -457,8 +480,8 @@ local function applyProg(a, pp)
 end
 
 function WS.FlushTreasury()
-	local batch, prog = pendingTreasury, pendingProg
-	pendingTreasury, pendingProg = {}, {}
+	local batch, prog, kinds = pendingTreasury, pendingProg, pendingKinds
+	pendingTreasury, pendingProg, pendingKinds = {}, {}, {}
 	local ids = {}
 	for aid in pairs(batch) do ids[aid] = true end
 	for aid in pairs(prog) do ids[aid] = true end
@@ -468,10 +491,12 @@ function WS.FlushTreasury()
 		local rec, err = WS.MutateAlliance(aid, function(a)
 			loud = false
 			a.treasury = (a.treasury or 0) + amt
+			for kk, v in pairs(kinds[aid] or {}) do WS.Ledger(a, kk, v) end
 			if pp then loud = applyProg(a, pp) else WS.EnsureWeek(a) end
 			return a, true
 		end, true)
 		if not rec and err ~= "Alliance not found" then
+			if kinds[aid] then local pk = pendingKinds[aid] or {}; pendingKinds[aid] = pk; for kk, v in pairs(kinds[aid]) do pk[kk] = (pk[kk] or 0) + v end end
 			if amt > 0 then pendingTreasury[aid] = (pendingTreasury[aid] or 0) + amt end
 			if pp then
 				local cur = pendingProg[aid]

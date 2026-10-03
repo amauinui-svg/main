@@ -269,10 +269,10 @@ S.alliance = { build = function(host, App)
 		else
 			for i, a in ipairs(obj.list) do
 				local card = UI.card(left, { sz = UDim2.new(1, 0, 0, 58), z = 8, order = i })
-				UI.mk("Frame", { BackgroundColor3 = Color3.fromHex(a.color), BorderSizePixel = 0, Position = UDim2.fromOffset(12, 14), Size = UDim2.fromOffset(28, 28), ZIndex = 9 }, card)
+				UI.allyBadge(card, a, 34, { pos = UDim2.fromOffset(10, 12), z = 9 })
 				text(card, "[" .. a.tag .. "] " .. a.name, { font = "heavy", size = 17, pos = UDim2.fromOffset(52, 6), sz = UDim2.new(1, -180, 0, 24), z = 9, truncate = true })
-				text(card, (a.members or 0) .. "/" .. AC.MaxMembers .. " members · " .. a.cities .. " cities" .. (a.open == false and " · invite only" or ""), { size = 13, color = C.muted, pos = UDim2.fromOffset(52, 30), sz = UDim2.new(1, -180, 0, 18), z = 9 })
-				local full = (a.members or 0) >= AC.MaxMembers or a.open == false
+				text(card, (a.members or 0) .. "/" .. (a.cap or AC.MaxMembers) .. " members · " .. a.cities .. " cities" .. (a.open == false and " · invite only" or ""), { size = 13, color = C.muted, pos = UDim2.fromOffset(52, 30), sz = UDim2.new(1, -180, 0, 18), z = 9 })
+				local full = (a.members or 0) >= (a.cap or AC.MaxMembers) or a.open == false
 				UI.button(card, full and "locked" or "green", full and "CLOSED" or "JOIN", function(btn)
 					local res = App.req("allyJoin", { id = a.id }, btn)
 					if res.ok then App.toast("WELCOME TO [" .. a.tag .. "]", a.name, "good"); obj.list = nil end
@@ -357,8 +357,7 @@ S.alliance = { build = function(host, App)
 		local nowT = App.now()
 		-- header
 		local head = UI.card(list, { sz = UDim2.new(1, 0, 0, 96), z = 8, order = 1 })
-		UI.mk("Frame", { BackgroundColor3 = Color3.fromHex(a.color or "546e7a"), BorderSizePixel = 0, Position = UDim2.fromOffset(16, 16), Size = UDim2.fromOffset(64, 64), ZIndex = 9 }, head)
-		text(head, a.tag, { font = "display", size = 22, color = C.white, align = Enum.TextXAlignment.Center, pos = UDim2.fromOffset(16, 16), sz = UDim2.fromOffset(64, 64), z = 10, stroke = 1.5 })
+		UI.allyBadge(head, a, 64, { pos = UDim2.fromOffset(16, 16), z = 9 })
 		text(head, a.name, { font = "display", size = 26, pos = UDim2.fromOffset(96, 12), sz = UDim2.new(0.6, -96, 0, 32), z = 9, truncate = true })
 		text(head, "Led by " .. (a.leaderName or "?") .. " · " .. nMembers .. "/" .. cap .. " members · you are " .. (myRole or "member"), { size = 14, color = C.muted, pos = UDim2.fromOffset(96, 48), sz = UDim2.new(0.6, -96, 0, 20), z = 9, truncate = true })
 		text(head, "TREASURY", { font = "heavy", size = 13, color = C.muted, pos = UDim2.new(0.62, 0, 0, 14), sz = UDim2.new(0.38, -16, 0, 18), z = 9, align = Enum.TextXAlignment.Right })
@@ -619,6 +618,41 @@ S.alliance = { build = function(host, App)
 					sw.Activated:Connect(function() App.req("allyManage", { kind = "color", color = col }) end)
 				end
 			end
+			-- emblem (Kash 3 Oct): pick an icon, or use your own image with the Custom Flag pass
+			section(list, "ALLIANCE EMBLEM", nextOrder(), "Shown on your badge everywhere")
+			do
+				local perRow = 16
+				local rows = math.ceil(#AC.Emblems / perRow)
+				local c = row(76 + rows * 50)
+				UI.allyBadge(c, a, 64, { pos = UDim2.fromOffset(16, 6), z = 9 })
+				text(c, "Your badge", { font = "heavy", size = 14, color = C.muted, pos = UDim2.fromOffset(92, 22), sz = UDim2.fromOffset(200, 20), z = 9 })
+				for k, key in ipairs(AC.Emblems) do
+					local col, rw = (k - 1) % perRow, math.floor((k - 1) / perRow)
+					local cell = UI.mk("TextButton", { Text = "", AutoButtonColor = true, BackgroundColor3 = Color3.fromHex(a.color or "546e7a"), BorderSizePixel = 0,
+						Position = UDim2.fromOffset(16 + col * 50, 80 + rw * 50), Size = UDim2.fromOffset(42, 42), ZIndex = 9 }, c)
+					UI.mk("UICorner", { CornerRadius = UDim.new(0, 8) }, cell)
+					if a.emblem == key and not a.emblemImg then UI.mk("UIStroke", { Color = C.white, Thickness = 3, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, cell) end
+					UI.icon(cell, key, 28, C.white, UDim2.fromScale(0.5, 0.5), { z = 10, anchor = Vector2.new(0.5, 0.5) })
+					cell.Activated:Connect(function() App.req("allyManage", { kind = "emblem", emblem = key }) end)
+				end
+				-- own image
+				local pass = st.gp and st.gp.CustomFlag
+				local box = UI.mk("TextBox", { Text = a.emblemImg and tostring(a.emblemImg) or "", PlaceholderText = pass and "Your own image: paste an image or decal ID" or "Custom Flag pass: use your own image",
+					ClearTextOnFocus = false, Font = Enum.Font.GothamMedium, TextSize = 14, TextColor3 = C.ink, PlaceholderColor3 = C.muted, BackgroundColor3 = C.black, BackgroundTransparency = 0.3,
+					BorderSizePixel = 0, Position = UDim2.new(0, 320, 0, 18), Size = UDim2.new(1, -620, 0, 40), ZIndex = 9, TextEditable = pass and true or false, TextXAlignment = Enum.TextXAlignment.Left }, c)
+				UI.mk("UICorner", { CornerRadius = UDim.new(0, 6) }, box)
+				UI.mk("UIPadding", { PaddingLeft = UDim.new(0, 10) }, box)
+				if pass then
+					UI.button(c, "gold", "USE IMAGE", function(btn)
+						local id = box.Text:match("%d+")
+						if not id then App.toast("Paste an image or decal ID", nil, "bad"); return end
+						App.req("allyManage", { kind = "emblemImg", img = id }, btn)
+					end, { sz = UDim2.fromOffset(130, 40), pos = UDim2.new(1, -290, 0, 18), z = 9, textSize = 14 })
+					UI.button(c, "slate", "CLEAR", function(btn) App.req("allyManage", { kind = "emblemImg", img = "" }, btn) end, { sz = UDim2.fromOffset(130, 40), pos = UDim2.new(1, -146, 0, 18), z = 9, textSize = 14 })
+				else
+					UI.button(c, "green", "GET CUSTOM FLAG", function(btn) App.req("buyPass", { key = "CustomFlag" }, btn) end, { sz = UDim2.fromOffset(260, 40), pos = UDim2.new(1, -276, 0, 18), z = 9, textSize = 14, icon = "icon_flag" })
+				end
+			end
 			-- officer permissions
 			section(list, "OFFICER PERMISSIONS", nextOrder())
 			do
@@ -699,10 +733,13 @@ S.alliance = { build = function(host, App)
 				local function kick(btn) App.confirm("REMOVE " .. (m.name or "?") .. "?", "They leave the alliance right away.", "REMOVE", "red", function() App.req("allyKick", { uid = r.uid }, btn) end) end
 				if isLeader then
 					act("REMOVE", "red", kick)
-					if m.role == "member" then act("PROMOTE", "slate", function(btn) App.req("allyRole", { uid = r.uid, role = "officer" }, btn) end)
-					else act("DEMOTE", "slate", function(btn) App.req("allyRole", { uid = r.uid, role = "member" }, btn) end) end
+					-- ranks (Kash 3 Oct): member -> elder -> officer -> leader
+					local up = ({ member = "elder", elder = "officer" })[m.role or "member"]
+					local down = ({ officer = "elder", elder = "member" })[m.role or "member"]
+					if down then act("DEMOTE", "slate", function(btn) App.req("allyRole", { uid = r.uid, role = down }, btn) end) end
+					if up then act(up == "elder" and "MAKE ELDER" or "MAKE OFFICER", "slate", function(btn) App.req("allyRole", { uid = r.uid, role = up }, btn) end) end
 					act("MAKE LEADER", "gold", function(btn) App.confirm("HAND OVER LEADERSHIP?", (m.name or "?") .. " becomes leader and you become an officer.", "HAND OVER", "gold", function() App.req("allyRole", { uid = r.uid, role = "leader" }, btn) end) end)
-				elseif canKick and m.role == "member" then
+				elseif canKick and (m.role == "member" or m.role == "elder") then
 					act("REMOVE", "red", kick)
 				end
 			end
@@ -716,7 +753,7 @@ S.alliance = { build = function(host, App)
 				UI.mk("UICorner", { CornerRadius = UDim.new(1, 0) }, dot)
 			end
 			local left = 104
-			local roleCol = m.role == "leader" and "#f0c75a" or (m.role == "officer" and "#e8d9a8" or "#9a9fa6")
+			local roleCol = m.role == "leader" and "#f0c75a" or (m.role == "officer" and "#e8d9a8" or (m.role == "elder" and "#8fc7d8" or "#9a9fa6"))
 			local nameW = UDim2.new(0.45, -left - btnW * 0.45, 0, 22)
 			text(card, (m.name or "?") .. (r.uid == me and " (you)" or ""), { font = "heavy", size = 16, pos = UDim2.fromOffset(left, 9), sz = nameW, z = 9, truncate = true })
 			text(card, "<font color='" .. roleCol .. "'><b>" .. string.upper(m.role or "member") .. "</b></font>" .. (m.lv and (" · LV " .. m.lv) or "") .. " · " .. (online and "<font color='#8fd07a'>active now</font>" or ago(m.active, nowT)),
@@ -827,6 +864,113 @@ S.alliance = { build = function(host, App)
 		text(c, "Alliance wars are coming soon: declare war on rival alliances and fight for their cities.", { size = 16, color = C.muted, pos = UDim2.fromOffset(110, 92), sz = UDim2.new(1, -130, 0, 44), z = 9, wrap = true, valign = Enum.TextYAlignment.Top })
 	end
 
+	---------------------------------------------------------------- TREASURY (Kash 3 Oct): income and spending, elders and up
+	local LEDGER_NAMES = { dues = "Member dues", tax = "City tax", rent = "City rent", donations = "Donations", fees = "Join fees", upgrades = "Perk upgrades", admin = "Admin", other = "Other" }
+	local LEDGER_ICON = { dues = "icon_users", tax = "icon_tax", rent = "icon_home", donations = "icon_coins", fees = "icon_alliance", upgrades = "icon_sparkles", admin = "icon_crown", other = "icon_coins" }
+	local function treasury(st, a)
+		local list = tabList(8)
+		local ledger = type(a.ledger) == "table" and a.ledger or {}
+		local today = math.floor(App.now() / 86400)
+		local inc7, exp7, byKind = 0, 0, {}
+		local days = {}
+		for k = 0, 6 do
+			local b = ledger[tostring(today - k)] or {}
+			local di, de = 0, 0
+			for kind, v in pairs(b) do
+				byKind[kind] = (byKind[kind] or 0) + v
+				if v >= 0 then di += v else de -= v end
+			end
+			inc7 += di; exp7 += de
+			table.insert(days, { day = today - k, inc = di, exp = de })
+		end
+		-- balance and 7-day totals
+		local top = UI.card(list, { sz = UDim2.new(1, 0, 0, 84), z = 8, order = 1 })
+		UI.icon(top, "icon_coins", 34, C.gold, UDim2.fromOffset(16, 25), { z = 9 })
+		text(top, "TREASURY", { font = "heavy", size = 13, color = C.muted, pos = UDim2.fromOffset(64, 12), sz = UDim2.new(0.3, -64, 0, 16), z = 9 })
+		text(top, R.Money(a.treasury or 0), { font = "display", size = 32, color = C.gold, pos = UDim2.fromOffset(64, 30), sz = UDim2.new(0.34, -64, 0, 40), z = 9, scaled = true })
+		local function stat(i, label, val, col)
+			text(top, label, { font = "heavy", size = 12, color = C.muted, pos = UDim2.new(0.34 + (i - 1) * 0.22, 0, 0, 14), sz = UDim2.new(0.22, -12, 0, 16), z = 9, align = Enum.TextXAlignment.Right })
+			text(top, val, { font = "display", size = 24, color = col, pos = UDim2.new(0.34 + (i - 1) * 0.22, 0, 0, 34), sz = UDim2.new(0.22, -12, 0, 32), z = 9, align = Enum.TextXAlignment.Right, scaled = true })
+		end
+		stat(1, "IN · 7 DAYS", "+" .. R.Money(inc7), C.good)
+		stat(2, "OUT · 7 DAYS", "-" .. R.Money(exp7), C.bad)
+		local net = inc7 - exp7
+		stat(3, "NET · 7 DAYS", (net >= 0 and "+" or "-") .. R.Money(math.abs(net)), net >= 0 and C.good or C.bad)
+		-- by source
+		section(list, "WHERE IT COMES FROM AND GOES", 10, "last 7 days")
+		local kinds = {}
+		for kind, v in pairs(byKind) do if v ~= 0 then table.insert(kinds, { kind = kind, v = v }) end end
+		table.sort(kinds, function(x, y) return math.abs(x.v) > math.abs(y.v) end)
+		if #kinds == 0 then
+			local e = UI.card(list, { sz = UDim2.new(1, 0, 0, 52), z = 8, order = 11 })
+			text(e, "Nothing yet. Dues, city tax and rent, donations and join fees show up here.", { size = 14, color = C.muted, pos = UDim2.fromOffset(16, 0), sz = UDim2.new(1, -32, 1, 0), z = 9, wrap = true })
+		end
+		local maxAbs = 1
+		for _, k in ipairs(kinds) do maxAbs = math.max(maxAbs, math.abs(k.v)) end
+		for i, k in ipairs(kinds) do
+			local c = UI.card(list, { sz = UDim2.new(1, 0, 0, 46), z = 8, order = 10 + i })
+			local pos = k.v >= 0
+			UI.icon(c, LEDGER_ICON[k.kind] or "icon_coins", 22, pos and C.good or C.bad, UDim2.fromOffset(14, 12), { z = 9 })
+			text(c, LEDGER_NAMES[k.kind] or k.kind, { font = "heavy", size = 15, pos = UDim2.fromOffset(46, 0), sz = UDim2.new(0.3, -46, 1, 0), z = 9, truncate = true })
+			local track = UI.mk("Frame", { BackgroundColor3 = C.black, BackgroundTransparency = 0.4, BorderSizePixel = 0, Position = UDim2.new(0.3, 0, 0, 17), Size = UDim2.new(0.45, 0, 0, 12), ZIndex = 9 }, c)
+			UI.mk("Frame", { BackgroundColor3 = pos and C.good or C.bad, BorderSizePixel = 0, Size = UDim2.fromScale(math.clamp(math.abs(k.v) / maxAbs, 0.02, 1), 1), ZIndex = 10 }, track)
+			text(c, (pos and "+" or "-") .. R.Money(math.abs(k.v)), { font = "heavy", size = 16, color = pos and C.good or C.bad, pos = UDim2.new(0.75, 0, 0, 0), sz = UDim2.new(0.25, -16, 1, 0), z = 9, align = Enum.TextXAlignment.Right })
+		end
+		-- per day
+		section(list, "BY DAY", 100, "UTC days")
+		for i, dd in ipairs(days) do
+			local c = UI.card(list, { sz = UDim2.new(1, 0, 0, 38), z = 8, order = 100 + i })
+			text(c, i == 1 and "Today" or (i == 2 and "Yesterday" or os.date("!%a %d %b", dd.day * 86400)), { font = "heavy", size = 14, pos = UDim2.fromOffset(16, 0), sz = UDim2.new(0.25, -16, 1, 0), z = 9 })
+			text(c, "+" .. R.Money(dd.inc), { size = 14, color = C.good, pos = UDim2.new(0.25, 0, 0, 0), sz = UDim2.new(0.25, -8, 1, 0), z = 9, align = Enum.TextXAlignment.Right })
+			text(c, "-" .. R.Money(dd.exp), { size = 14, color = C.bad, pos = UDim2.new(0.5, 0, 0, 0), sz = UDim2.new(0.25, -8, 1, 0), z = 9, align = Enum.TextXAlignment.Right })
+			local n = dd.inc - dd.exp
+			text(c, (n >= 0 and "+" or "-") .. R.Money(math.abs(n)), { font = "heavy", size = 14, color = n >= 0 and C.good or C.bad, pos = UDim2.new(0.75, 0, 0, 0), sz = UDim2.new(0.25, -16, 1, 0), z = 9, align = Enum.TextXAlignment.Right })
+		end
+		-- recent entries
+		local tl = type(a.tlog) == "table" and a.tlog or {}
+		if #tl > 0 then
+			section(list, "RECENT", 200, "donations, join fees and upgrades")
+			local NAMES = { donate = "donated", fee = "paid the join fee", upgrade = "upgrade" }
+			for i, e in ipairs(tl) do
+				if i > 30 then break end
+				local c = UI.card(list, { sz = UDim2.new(1, 0, 0, 36), z = 8, order = 200 + i })
+				text(c, e.t and os.date("!%d %b %H:%M", e.t) or "", { size = 13, color = C.muted, pos = UDim2.fromOffset(16, 0), sz = UDim2.fromOffset(110, 36), z = 9 })
+				local who = tostring(e.w or "?")
+				text(c, e.k == "upgrade" and who or (who .. " " .. (NAMES[e.k] or e.k or "")), { size = 14, pos = UDim2.fromOffset(126, 0), sz = UDim2.new(1, -300, 1, 0), z = 9, truncate = true })
+				local v = tonumber(e.a) or 0
+				text(c, (v >= 0 and "+" or "-") .. R.Money(math.abs(v)), { font = "heavy", size = 15, color = v >= 0 and C.good or C.bad, pos = UDim2.new(1, -176, 0, 0), sz = UDim2.fromOffset(160, 36), z = 9, align = Enum.TextXAlignment.Right })
+			end
+		end
+		local note = UI.mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 30), ZIndex = 8, LayoutOrder = 999 }, list)
+		text(note, "Only elders, officers and the leader can see the treasury.", { size = 13, color = C.dim, sz = UDim2.fromScale(1, 1), z = 9, wrap = true })
+	end
+
+	---------------------------------------------------------------- BROWSE (Kash 3 Oct): look at other alliances while in one
+	local function browse(st, a)
+		local list = tabList(6)
+		if not obj.browse then
+			text(list, "Loading...", { size = 15, color = C.muted, order = 1, z = 8 })
+			task.spawn(function()
+				local res = App.req("allyList", {})
+				if res.ok then obj.browse = res.list; obj.browseT = os.clock(); obj:Refresh(App.state) end
+			end)
+			return
+		end
+		if os.clock() - (obj.browseT or 0) > 60 then obj.browse = nil end -- refresh next time the tab is drawn
+		for i, x in ipairs(obj.browse) do
+			local mine = x.id == st.alliance
+			local card = UI.card(list, { sz = UDim2.new(1, 0, 0, 58), z = 8, order = i, hot = mine })
+			text(card, "#" .. i, { font = "display", size = 18, color = i <= 3 and C.gold or C.muted, pos = UDim2.fromOffset(10, 0), sz = UDim2.fromOffset(40, 58), z = 9 })
+			UI.allyBadge(card, x, 36, { pos = UDim2.fromOffset(48, 11), z = 9 })
+			text(card, "[" .. tostring(x.tag) .. "] " .. tostring(x.name) .. (mine and "  (yours)" or ""), { font = "heavy", size = 17, pos = UDim2.fromOffset(92, 6), sz = UDim2.new(0.6, -92, 0, 24), z = 9, truncate = true })
+			text(card, "Level " .. (x.level or 1) .. " · led by " .. tostring(x.leader or "?") .. (x.open == false and " · invite only" or "") .. ((x.minLv or 0) > 0 and (" · needs LV " .. x.minLv) or ""), { size = 13, color = C.muted, pos = UDim2.fromOffset(92, 30), sz = UDim2.new(0.6, -92, 0, 18), z = 9, truncate = true })
+			text(card, (x.cities or 0) .. " cities", { font = "heavy", size = 16, color = C.manila, pos = UDim2.new(0.6, 0, 0, 6), sz = UDim2.new(0.4, -16, 0, 22), z = 9, align = Enum.TextXAlignment.Right })
+			text(card, (x.members or 0) .. "/" .. (x.cap or AC.MaxMembers) .. " members", { size = 13, color = C.muted, pos = UDim2.new(0.6, 0, 0, 30), sz = UDim2.new(0.4, -16, 0, 18), z = 9, align = Enum.TextXAlignment.Right })
+		end
+		local note = UI.mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 30), ZIndex = 8, LayoutOrder = 999 }, list)
+		text(note, "Leave your alliance to join another one.", { size = 13, color = C.dim, sz = UDim2.fromScale(1, 1), z = 9 })
+	end
+
 	function obj:Refresh(st)
 		UI.clear(area)
 		obj.timer = nil
@@ -837,10 +981,13 @@ S.alliance = { build = function(host, App)
 		sub.Text = "[" .. a.tag .. "] " .. a.name .. (info and (" · level " .. (info.level or 1)) or "")
 		-- MANAGE only for the leader and officers (Kash 3 Oct)
 		local manager = myRole == "leader" or myRole == "officer"
+		local elder = manager or myRole == "elder"
 		local names = { "OVERVIEW", "MEMBERS", "PERKS", "CITIES", "QUESTS", "WAR" }
+		if elder then table.insert(names, "TREASURY") end -- elders and up (Kash 3 Oct)
+		table.insert(names, "BROWSE")
 		if manager then table.insert(names, "MANAGE") end
 		local aw = area.AbsoluteSize.X
-		local tw = aw > 0 and math.clamp(math.floor((aw - 6 * (#names - 1)) / #names), 80, 124) or 120
+		local tw = aw > 0 and math.clamp(math.floor((aw - 6 * (#names - 1)) / #names), 64, 124) or 110
 		obj.tabs = UI.tabs(area, names, function(i) obj.tab = i; obj.fee = nil; obj:Refresh(App.state) end, { w = tw, z = 8 })
 		if obj.tab > #names then obj.tab = 1 end
 		obj.tabs:Set(obj.tab)
@@ -853,7 +1000,9 @@ S.alliance = { build = function(host, App)
 		elseif obj.tab == 3 then perks(st, a, myRole, info)
 		elseif obj.tab == 4 then cities(st, a)
 		elseif obj.tab == 5 then quests(st, a, info)
-		elseif obj.tab == 6 then war()
+		elseif names[obj.tab] == "WAR" then war()
+		elseif names[obj.tab] == "TREASURY" then treasury(st, a)
+		elseif names[obj.tab] == "BROWSE" then browse(st, a)
 		else manage(st, a, myRole) end
 	end
 	function obj:Tick()
@@ -886,7 +1035,7 @@ S.rankings = { build = function(host, App)
 			local card = UI.card(list, { sz = UDim2.new(1, 0, 0, 44), z = 7, order = k, hot = k <= 3, button = isPlayer })
 			text(card, "#" .. k, { font = "display", size = 20, color = k <= 3 and C.gold or C.muted, pos = UDim2.fromOffset(12, 0), sz = UDim2.fromOffset(56, 44), z = 8 })
 			if obj.kind == "alliances" then
-				UI.mk("Frame", { BackgroundColor3 = Color3.fromHex(e.color or "546e7a"), BorderSizePixel = 0, Position = UDim2.fromOffset(70, 12), Size = UDim2.fromOffset(20, 20), ZIndex = 8 }, card)
+				UI.allyBadge(card, e, 30, { pos = UDim2.fromOffset(66, 7), z = 8 })
 				text(card, "[" .. e.tag .. "] " .. e.name, { font = "heavy", size = 17, pos = UDim2.fromOffset(100, 0), sz = UDim2.new(0.6, -100, 1, 0), z = 8, truncate = true })
 				text(card, e.value .. " cities · " .. (e.members or 0) .. " members", { font = "heavy", size = 16, color = C.manila, pos = UDim2.new(0.6, 0, 0, 0), sz = UDim2.new(0.4, -16, 1, 0), z = 8, align = Enum.TextXAlignment.Right })
 			else

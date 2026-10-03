@@ -842,7 +842,7 @@ function act.allyList(plr, p)
 		local cities = 0
 		for _, c in pairs(WS.Cities) do if c.owner == id then cities += 1 end end
 		table.insert(list, { id = id, name = s.name, tag = s.tag, color = s.color, members = s.members, open = s.open, cities = cities,
-			fee = s.fee or 0, dues = s.dues or 0, style = s.style or "flat" })
+			fee = s.fee or 0, dues = s.dues or 0, style = s.style or "flat", cap = s.cap, emblem = s.emblem, emblemImg = s.emblemImg, level = s.level, leader = s.leader, minLv = s.minLv })
 	end
 	table.sort(list, function(x, y) if x.cities ~= y.cities then return x.cities > y.cities end; return (x.members or 0) > (y.members or 0) end)
 	return ok({ list = list })
@@ -921,6 +921,7 @@ function act.allyDonate(plr, p, a)
 		local m = x.members[tostring(plr.UserId)]
 		if not m then return nil, "You are not in that alliance" end
 		x.treasury = (x.treasury or 0) + amt
+		WS.Ledger(x, "donations", amt); WS.TLog(x, "donate", amt, d.name ~= "" and d.name or plr.Name)
 		m.donated = (m.donated or 0) + amt; m.active = now()
 		WS.AddLog(x, d.name ~= "" and (d.name .. " donated " .. R.Money(amt)) or (plr.Name .. " donated " .. R.Money(amt)))
 		return x, true
@@ -973,6 +974,7 @@ function act.allyUpgrade(plr, p, a)
 		local cost = WS.UpgradeCost(lvl, up)
 		if (x.treasury or 0) < cost then return nil, "The treasury needs " .. R.Money(cost) end
 		x.treasury -= cost
+		WS.Ledger(x, "upgrades", -cost); WS.TLog(x, "upgrade", -cost, (p.data.name or "?") .. " · " .. up.name .. " " .. (lvl + 1))
 		x.up[up.key] = lvl + 1
 		WS.AddLog(x, up.name .. " raised to level " .. (lvl + 1))
 		return x, true
@@ -987,7 +989,7 @@ function act.allyRole(plr, p, a)
 	if WS.Role(rec, plr.UserId) ~= "leader" then return no("Only the leader can change roles") end
 	local target = tostring(a.uid or "")
 	local role = a.role
-	if role ~= "officer" and role ~= "member" and role ~= "leader" then return no("Bad role") end
+	if role ~= "officer" and role ~= "elder" and role ~= "member" and role ~= "leader" then return no("Bad role") end
 	if target == tostring(plr.UserId) then return no("Pick another member") end
 	local rec2, err = WS.MutateAlliance(id, function(x)
 		local m = x.members[target]
@@ -1062,6 +1064,15 @@ function act.allyManage(plr, p, a)
 		val = math.clamp(math.floor(tonumber(a.lv) or 0), 0, 500)
 	elseif kind == "perms" then
 		val = { upgrade = a.upgrade ~= false, kick = a.kick ~= false }
+	elseif kind == "emblem" then
+		for _, e in ipairs(AC.Emblems) do if e == a.emblem then val = e end end
+		if not val then return no("Pick one of the emblems") end
+	elseif kind == "emblemImg" then
+		if not PS.Has(p, "CustomFlag") then return no("Your own image needs the Custom Flag pass") end
+		local id = tonumber(a.img)
+		if a.img == "" or a.img == nil then val = ""
+		elseif not id or id < 1 or id > 1e15 or id ~= math.floor(id) then return no("Paste an image or decal id (numbers only)")
+		else val = string.format("%d", id) end
 	elseif kind == "target" then
 		-- alliance target capital (Kash 3 Oct): every member sees which city the alliance is attacking
 		local i = math.floor(tonumber(a.city) or 0)
@@ -1081,6 +1092,8 @@ function act.allyManage(plr, p, a)
 		else
 			if r ~= "leader" then return nil, "Only the leader can change this" end
 			if kind == "color" then x.color = val; WS.AddLog(x, "Alliance colour changed")
+			elseif kind == "emblem" then x.emblem = val; x.emblemImg = nil; WS.AddLog(x, "Alliance emblem changed")
+			elseif kind == "emblemImg" then x.emblemImg = val ~= "" and val or nil; WS.AddLog(x, val ~= "" and "Alliance emblem image changed" or "Alliance emblem image removed")
 			elseif kind == "minLv" then x.minLv = val; WS.AddLog(x, val > 0 and ("New members need level " .. val) or "Any level can join")
 			else x.perms = val; WS.AddLog(x, "Officer permissions updated") end
 		end

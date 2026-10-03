@@ -119,8 +119,18 @@ function PS.PayRent(p, inc)
 	local rate, owner = WS.RentFor(p.data, p.userId)
 	if rate <= 0 or not owner or inc <= 0 then return inc end
 	local cut = inc * rate
-	WS.Credit(owner, cut)
+	WS.Credit(owner, cut, "rent")
 	return inc - cut
+end
+-- the alliance record as this player may see it: the treasury ledger only goes to elders and up (Kash 3 Oct)
+function PS.AllyView(p, a)
+	if type(a) ~= "table" or type(a.members) ~= "table" then return a end
+	local m = a.members[tostring(p.userId)]
+	local r = m and m.role
+	if r == "leader" or r == "officer" or r == "elder" then return a end
+	local v = table.clone(a)
+	v.ledger = nil; v.tlog = nil
+	return v
 end
 function PS.AllianceTag(aid) local s = WS.Index[aid]; return s and s.tag or nil end
 function PS.VipTier(p)
@@ -165,7 +175,7 @@ function PS.Earn(p, amount, src)
 	if rate > 0 then
 		local cut = amount * rate
 		amount -= cut
-		WS.Credit(d.alliance, cut)
+		WS.Credit(d.alliance, cut, "dues")
 		p.duesPaid = (p.duesPaid or 0) + cut
 	end
 	d.cash += amount
@@ -313,7 +323,7 @@ function PS.Arrive(p, c, when, quiet)
 	c.at = c.to; c.to = nil; c.t0 = nil; c.t1 = nil; c.load = nil; c.empty = nil; c.recall = nil; c.orig = nil
 	if load then
 		local got = PS.Earn(p, load.pay - load.tax, "convoy")
-		if load.owner and load.tax > 0 then WS.Credit(load.owner, load.tax) end
+		if load.owner and load.tax > 0 then WS.Credit(load.owner, load.tax, "tax") end
 		PS.AddXp(p, load.xp, quiet)
 		d.stats.trips += 1
 		if PS.AN and d.stats.trips == 1 then pcall(PS.AN.Step, p, "First convoy") end
@@ -337,21 +347,20 @@ function PS.Dispatch(p, c, b, load, startAt)
 	return true
 end
 
--- best load anywhere from city a (Auto Dispatch). Scores net pay per second of travel.
-function PS.BestRoute(p, a, budget, mods)
+-- best load anywhere from city a (Auto Dispatch). Kash 3 Oct: ALWAYS the best net pay per second of travel, every
+-- load on every route (not just each route's top load), world events included for live sends. No fleet spreading.
+function PS.BestRoute(p, a, budget, mods, live)
 	local era = R.PlayerEra(p.data)
 	local fast = PS.Has(p, "FastConvoys")
 	local bestScore, bestB, bestLoad
-	-- spread the fleet: every other convoy already heading to a city makes it 20% less attractive
-	local heading = {}
-	for _, c in ipairs(p.data.convoys) do if c.to then heading[c.to] = (heading[c.to] or 0) + 1 end end
 	for b = 1, #World.Cities do
 		if b ~= a then
-			local loads = PS.LoadsFor(p, a, b, mods)
-			local L = loads[1]
-			if L and L.cost <= budget then
-				local score = L.net / T.TripSeconds(a, b, era, fast) * 0.8 ^ (heading[b] or 0)
-				if not bestScore or score > bestScore then bestScore, bestB, bestLoad = score, b, L end
+			local secs = T.TripSeconds(a, b, era, fast)
+			for _, L in ipairs(PS.LoadsFor(p, a, b, mods, live)) do
+				if L.cost <= budget then
+					local score = L.net / secs
+					if not bestScore or score > bestScore then bestScore, bestB, bestLoad = score, b, L end
+				end
 			end
 		end
 	end
@@ -361,11 +370,13 @@ end
 function PS.AutoDispatch(p, c, startAt, mods)
 	if not PS.Has(p, "AutoDispatch") or c.to or p.data.autoOff or not p.data.onboarded then return false end
 	-- never spends more than half of your cash on one load, so building and units are not starved
-	local b, L = PS.BestRoute(p, c.at, p.data.cash * 0.5, mods)
+	local live = (startAt or now()) >= now() - 5 -- offline catch-up never sees world events
+	local b, L = PS.BestRoute(p, c.at, p.data.cash * 0.5, mods, live)
 	if not b then return false end
 	local tax, owner = PS.TaxFor(p, b)
 	p.data.cash -= L.cost
-	PS.Dispatch(p, c, b, { good = L.good, cost = L.cost, pay = L.pay, tax = L.tax, xp = L.xp, owner = owner, taxPct = tax }, startAt)
+	PS.Dispatch(p, c, b, { good = L.good, cost = L.cost, pay = L.pay, tax = L.tax, xp = L.xp, owner = owner, taxPct = tax, ev = L.ev }, startAt)
+	if L.ev then p.data.wev = L.ev end -- one event bonus per event, like a manual send
 	return true
 end
 
@@ -578,7 +589,7 @@ function PS.Snapshot(p)
 		units = d.units, atk = atk, def = def, siege = M.SiegeDamage(d.lv, d.sk, d.units, { attack = mods.siege }),
 		convoys = d.convoys, slots = PS.Slots(p), boss = boss, tasks = tasks, loan = d.loan,
 		taskRewards = { easy = PS.TaskReward(p, { diff = "easy" }), medium = PS.TaskReward(p, { diff = "medium" }), hard = PS.TaskReward(p, { diff = "hard" }), weekly = PS.TaskReward(p, { src = "weekly" }) },
-		loanMax = PS.LoanMax(p, mods), alliance = d.alliance, alliance_rec = a, stats = d.stats, allyInfo = PS.AllyInfo(p, a),
+		loanMax = PS.LoanMax(p, mods), alliance = d.alliance, alliance_rec = PS.AllyView(p, a), stats = d.stats, allyInfo = PS.AllyInfo(p, a),
 		gp = p.gp, mods = mods, incHr = PS.IncHr(p, mods), serverTime = now(), autoOff = d.autoOff, studio = Store.IsStudio,
 		online = Store.Online, capitalCredit = d.capitalCredit or 0,
 		bank = d.bank, bankRate = Config.Bank.InterestPerHour * (1 + (mods.interest or 0)), bankCap = R.MinuteValue(d.lv) * R.BankCapMinutes, shield = d.shield, revenge = d.revenge,
@@ -878,7 +889,7 @@ function PS.Rankings(kind)
 		for id, s in pairs(WS.Index) do
 			local cities = 0
 			for _, city in pairs(WS.Cities) do if city.owner == id then cities += 1 end end
-			table.insert(list, { name = s.name, tag = s.tag, color = s.color, value = cities, members = s.members })
+			table.insert(list, { name = s.name, tag = s.tag, color = s.color, emblem = s.emblem, emblemImg = s.emblemImg, value = cities, members = s.members })
 		end
 		table.sort(list, function(a, b) if a.value ~= b.value then return a.value > b.value end; return (a.members or 0) > (b.members or 0) end)
 		while #list > 50 do table.remove(list) end

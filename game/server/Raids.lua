@@ -197,7 +197,7 @@ function RA.Targets(p)
 			table.insert(list, {
 				id = id, name = q.data.name, flag = q.data.flag, lv = q.data.lv, def = def,
 				uid = plr.UserId, dn = plr.DisplayName, un = plr.Name, -- the player who owns this country
-				cash = math.floor(q.data.cash), cooldown = math.max(0, (lastHit[id] or 0) + RC.Cooldown - t),
+				cash = math.floor(q.data.cash), cooldown = 0, -- only YOUR own cooldown counts (Kash 3 Oct), merged below
 				shield = math.max(0, (q.data.shield or 0) - t), tag = q.data.alliance and PS.AllianceTag and PS.AllianceTag(q.data.alliance) or nil,
 			})
 		end
@@ -205,7 +205,7 @@ function RA.Targets(p)
 	for _, a in ipairs(RA.AI) do
 		local _, def = aiPower(a)
 		table.insert(list, { id = a.id, name = a.name, flag = a.flag, lv = a.lv, def = def, cash = math.floor(a.cash), ai = true,
-			cooldown = math.max(0, (lastHit[a.id] or 0) + RC.Cooldown - t), shield = 0 })
+			cooldown = 0, shield = 0 })
 	end
 	-- the button also shows YOUR own cooldown on that target (Kash 2 Oct: some raided targets showed no timer)
 	local mine = p.raidCd or {}
@@ -435,7 +435,6 @@ local function remoteAttack(plr, p, id, uid, guaranteed)
 		if (rec.sh or 0) > t then return nil, "They are under a raid shield" end
 		if unpaid(rec) >= RA.MaxUnpaid then return nil, "They have been raided too often. Try again later" end
 		if win then
-			if (rec.last or 0) + RC.Cooldown > t then return nil, "They were just raided. Try again in " .. ((rec.last or 0) + RC.Cooldown - t) .. "s" end
 			local onHand = cashOnHand(card, rec)
 			steal = math.floor(math.min(onHand * RC.StealPct * (1 + (mods.loot or 0)), stealCap(card.lv or 1)))
 			steal = math.max(0, math.min(steal, onHand))
@@ -547,7 +546,8 @@ function RA.Attack(plr, p, id, guaranteed)
 	if q == p then return { ok = false, msg = "You cannot raid yourself" } end
 	if q and q.data.lv < playerProtectedLv() then return { ok = false, msg = "That nation is too new to be raided" } end
 	local t = now()
-	if (lastHit[id] or 0) + RC.Cooldown > t then return { ok = false, msg = "They were just raided. Try again in " .. ((lastHit[id] or 0) + RC.Cooldown - t) .. "s" } end
+	-- Kash 3 Oct: the whole lobby can raid the same nation; each attacker only has their own cooldown on it (p.raidCd).
+	-- lastHit is still stamped below, but only the AI uses it (so rival nations don't pile onto one player).
 	-- you can't hammer the same target: one attack per target per cooldown, win or lose (review #7)
 	p.raidCd = p.raidCd or {}
 	if not guaranteed and (p.raidCd[id] or 0) + RC.Cooldown > t then return { ok = false, msg = "You just attacked them. Try again in " .. ((p.raidCd[id] or 0) + RC.Cooldown - t) .. "s" } end

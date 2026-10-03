@@ -477,3 +477,23 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 
 ## 3 Oct 11:09 (Kash)
 - Recall can be cancelled: CANCEL RECALL · CONTINUE TO <city> turns the convoy around again with its original cargo at normal speed. The cargo refund now happens when a recalled convoy actually gets home, so cancelling never charges again.
+
+## 3 Oct 11:11-11:12 (Kash)
+- TREASURY tab for elders and up: balance, 7-day income / spending / net, breakdown by source (dues, city tax, city rent, donations, join fees, perk upgrades) with bars, a by-day table and the last 30 donations / join fees / upgrades. New ELDER rank between member and officer (leader promotes member -> elder -> officer and demotes back; officers can remove members and elders; leadership passes officer -> elder -> member). Members below elder don't receive the ledger at all (PS.AllyView).
+
+## 3 Oct 11:13 (Kash)
+- Asked whether raids should go global instead of server only: answered in chat (not changed).
+
+## 3 Oct 11:14 (Kash)
+- Auto Dispatch always takes the best net pay per second of travel: every load on every route (not just each route's top load), world events included for live sends (locks the event bonus like a manual send), no more fleet spreading penalty.
+
+## 3 Oct 11:16 (Kash)
+- The "[Kash] if youre stuck on cash..." chat line is his own tip #2; the live game still shows [Kash] because the [Tip] change isn't published yet.
+- Players in an alliance can browse other alliances: new BROWSE tab (rank, badge, level, leader, cities, members/cap, invite only / min level). Also fixed the join list showing 30 as the cap instead of each alliance's real cap.
+
+## 3 Oct 11:21 (Kash)
+- Alliance emblems: 46 icons to pick from in MANAGE (leader), drawn on the alliance colour as a badge everywhere (overview, join list, browse, rankings). With the Custom Flag pass the leader can use their own image instead.
+- Asked what Revenge Strike does and noted confetti on someone else's purchase: answered in chat.
+
+## 3 Oct 11:24 (Kash)
+- "They were just raided" blocked everyone once anyone raided a nation. Removed the shared cooldown: the whole lobby can raid the same nation, each attacker only has their own cooldown on it. (AI rivals still can't pile onto one player.)

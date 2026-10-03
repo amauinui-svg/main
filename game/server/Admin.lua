@@ -200,7 +200,7 @@ end)
 cmd("allytreasury", "/allytreasury 1m  add cash to your alliance treasury", function(_, p, a)
 	local d = p.data
 	if not d.alliance then return "You are not in an alliance" end
-	WS.Credit(d.alliance, num(a[1], 1e6))
+	WS.Credit(d.alliance, num(a[1], 1e6), "admin")
 	return "Treasury credited"
 end)
 

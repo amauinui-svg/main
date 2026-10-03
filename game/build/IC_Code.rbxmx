@@ -1095,6 +1095,13 @@ C.Alliance = {
 	CreateCost = 50000,
 	MaxMembers = 30,
 	MaxCities = 10,
+	-- alliance emblems (Kash 3 Oct): any of these on the alliance colour, or your own image with the Custom Flag pass
+	Emblems = { "icon_crown", "icon_castle", "icon_defense", "icon_attack", "icon_battle", "icon_crosshair", "icon_flame", "icon_gem",
+		"icon_gold", "icon_coins", "icon_goldbar", "icon_globe", "icon_anvil", "icon_hammer", "icon_pickaxe", "icon_mountain",
+		"icon_tree", "icon_leaf", "icon_sprout", "icon_wheat", "icon_ship", "icon_plane", "icon_rocket", "icon_satellite",
+		"icon_train", "icon_factory", "icon_landmark", "icon_capitol", "icon_bell", "icon_book", "icon_bosses", "icon_sparkles",
+		"icon_seal", "icon_flag", "icon_map", "icon_tent", "icon_cpu", "icon_bot", "icon_droplet", "icon_fish",
+		"icon_alliance", "icon_users", "icon_military", "icon_influence", "icon_xp", "icon_rankings" },
 	Colors = { "c0392b", "d35400", "d4a017", "27ae60", "16a085", "2980b9", "2c3e91", "8e44ad", "c2185b", "6d4c41", "546e7a", "1b1b1b" },
 	TaxMax = 15,
 	TaxChangeCooldown = 24 * 3600,
@@ -2347,7 +2354,7 @@ end
 
 ---------------------------------------------------------------- alliances
 local function summary(a)
-	return { name = a.name, tag = a.tag, color = a.color, members = a.count or 0, level = a.level or 1, cap = WS.MemberCap(a), open = a.open ~= false, leader = a.leaderName,
+	return { name = a.name, tag = a.tag, color = a.color, emblem = a.emblem, emblemImg = a.emblemImg, members = a.count or 0, level = a.level or 1, cap = WS.MemberCap(a), open = a.open ~= false, leader = a.leaderName,
 		fee = a.joinFee or 0, dues = a.dues and a.dues.pct or 0, style = a.dues and a.dues.style or "flat", minLv = a.minLv or 0 }
 end
 -- returns record, readOk (readOk=false means the DataStore could not be reached: do not act on a missing record)
@@ -2523,7 +2530,7 @@ function WS.Join(plr, id, who, maxFee, lv)
 		if a.open == false then return nil, "That alliance is invite only" end
 		if (a.minLv or 0) > (lv or 1) then return nil, "That alliance needs level " .. a.minLv .. " to join" end
 		a.members[key] = { name = who or plr.Name, role = "member", joined = now(), active = now(), lv = lv, wk = 0, tot = 0 }
-		if fee > 0 then a.treasury = (a.treasury or 0) + fee end
+		if fee > 0 then a.treasury = (a.treasury or 0) + fee; WS.Ledger(a, "fees", fee); WS.TLog(a, "fee", fee, who or plr.Name) end
 		charged = fee
 		addLog(a, (who or plr.Name) .. " joined")
 		return a, true
@@ -2540,10 +2547,10 @@ function WS.Leave(plr, id, who)
 		a.members[key] = nil
 		addLog(a, (who or plr.Name) .. " left")
 		if me.role == "leader" then
-			-- hand leadership to the longest-serving officer, else the longest-serving member
+			-- hand leadership to the longest-serving officer, then elder, else the longest-serving member
 			local best, bestKey
 			for k, m in pairs(a.members) do
-				local score = (m.role == "officer" and 0 or 1e12) + (m.joined or 0)
+				local score = (m.role == "officer" and 0 or m.role == "elder" and 1e12 or 2e12) + (m.joined or 0)
 				if not best or score < best then best, bestKey = score, k end
 			end
 			if bestKey then
@@ -2614,10 +2621,33 @@ function WS.EnsureWeek(a)
 end
 
 local pendingTreasury = {} -- [aid] = amount
+local pendingKinds = {} -- [aid] = { [kind] = amount } for the treasury ledger
+-- TREASURY LEDGER (Kash 3 Oct): daily totals per kind for the last 7 days (income positive, spending negative) plus
+-- the last 40 big entries (donations, join fees, upgrades). Shown on the TREASURY tab to elders and up.
+WS.LedgerDays = 7
+function WS.Ledger(a, kind, amt)
+	if not a or amt ~= amt or amt == 0 then return end
+	a.ledger = type(a.ledger) == "table" and a.ledger or {}
+	local day = tostring(math.floor(os.time() / 86400))
+	local b = a.ledger[day] or {}
+	a.ledger[day] = b
+	b[kind] = (b[kind] or 0) + amt
+	local cutoff = math.floor(os.time() / 86400) - WS.LedgerDays
+	for k in pairs(a.ledger) do if (tonumber(k) or 0) <= cutoff then a.ledger[k] = nil end end
+end
+function WS.TLog(a, kind, amt, who)
+	a.tlog = type(a.tlog) == "table" and a.tlog or {}
+	table.insert(a.tlog, 1, { t = os.time(), k = kind, a = math.floor(amt), w = who })
+	while #a.tlog > 40 do table.remove(a.tlog) end
+end
 local pendingProg = {} -- [aid] = { xp = n, mem = { [uid] = pts }, q = { [kind] = { n = n, by = { [uid] = n } } } }
-function WS.Credit(aid, amount)
+function WS.Credit(aid, amount, kind)
 	if not aid or amount ~= amount or amount <= 0 or amount == math.huge then return end
 	pendingTreasury[aid] = (pendingTreasury[aid] or 0) + amount
+	local pk = pendingKinds[aid] or {}
+	pendingKinds[aid] = pk
+	kind = kind or "other"
+	pk[kind] = (pk[kind] or 0) + amount
 end
 function WS.AddProgress(aid, uid, kind, n)
 	n = tonumber(n) or 0
@@ -2669,8 +2699,8 @@ local function applyProg(a, pp)
 end
 
 function WS.FlushTreasury()
-	local batch, prog = pendingTreasury, pendingProg
-	pendingTreasury, pendingProg = {}, {}
+	local batch, prog, kinds = pendingTreasury, pendingProg, pendingKinds
+	pendingTreasury, pendingProg, pendingKinds = {}, {}, {}
 	local ids = {}
 	for aid in pairs(batch) do ids[aid] = true end
 	for aid in pairs(prog) do ids[aid] = true end
@@ -2680,10 +2710,12 @@ function WS.FlushTreasury()
 		local rec, err = WS.MutateAlliance(aid, function(a)
 			loud = false
 			a.treasury = (a.treasury or 0) + amt
+			for kk, v in pairs(kinds[aid] or {}) do WS.Ledger(a, kk, v) end
 			if pp then loud = applyProg(a, pp) else WS.EnsureWeek(a) end
 			return a, true
 		end, true)
 		if not rec and err ~= "Alliance not found" then
+			if kinds[aid] then local pk = pendingKinds[aid] or {}; pendingKinds[aid] = pk; for kk, v in pairs(kinds[aid]) do pk[kk] = (pk[kk] or 0) + v end end
 			if amt > 0 then pendingTreasury[aid] = (pendingTreasury[aid] or 0) + amt end
 			if pp then
 				local cur = pendingProg[aid]
@@ -3100,8 +3132,18 @@ function PS.PayRent(p, inc)
 	local rate, owner = WS.RentFor(p.data, p.userId)
 	if rate <= 0 or not owner or inc <= 0 then return inc end
 	local cut = inc * rate
-	WS.Credit(owner, cut)
+	WS.Credit(owner, cut, "rent")
 	return inc - cut
+end
+-- the alliance record as this player may see it: the treasury ledger only goes to elders and up (Kash 3 Oct)
+function PS.AllyView(p, a)
+	if type(a) ~= "table" or type(a.members) ~= "table" then return a end
+	local m = a.members[tostring(p.userId)]
+	local r = m and m.role
+	if r == "leader" or r == "officer" or r == "elder" then return a end
+	local v = table.clone(a)
+	v.ledger = nil; v.tlog = nil
+	return v
 end
 function PS.AllianceTag(aid) local s = WS.Index[aid]; return s and s.tag or nil end
 function PS.VipTier(p)
@@ -3146,7 +3188,7 @@ function PS.Earn(p, amount, src)
 	if rate > 0 then
 		local cut = amount * rate
 		amount -= cut
-		WS.Credit(d.alliance, cut)
+		WS.Credit(d.alliance, cut, "dues")
 		p.duesPaid = (p.duesPaid or 0) + cut
 	end
 	d.cash += amount
@@ -3294,7 +3336,7 @@ function PS.Arrive(p, c, when, quiet)
 	c.at = c.to; c.to = nil; c.t0 = nil; c.t1 = nil; c.load = nil; c.empty = nil; c.recall = nil; c.orig = nil
 	if load then
 		local got = PS.Earn(p, load.pay - load.tax, "convoy")
-		if load.owner and load.tax > 0 then WS.Credit(load.owner, load.tax) end
+		if load.owner and load.tax > 0 then WS.Credit(load.owner, load.tax, "tax") end
 		PS.AddXp(p, load.xp, quiet)
 		d.stats.trips += 1
 		if PS.AN and d.stats.trips == 1 then pcall(PS.AN.Step, p, "First convoy") end
@@ -3318,21 +3360,20 @@ function PS.Dispatch(p, c, b, load, startAt)
 	return true
 end
 
--- best load anywhere from city a (Auto Dispatch). Scores net pay per second of travel.
-function PS.BestRoute(p, a, budget, mods)
+-- best load anywhere from city a (Auto Dispatch). Kash 3 Oct: ALWAYS the best net pay per second of travel, every
+-- load on every route (not just each route's top load), world events included for live sends. No fleet spreading.
+function PS.BestRoute(p, a, budget, mods, live)
 	local era = R.PlayerEra(p.data)
 	local fast = PS.Has(p, "FastConvoys")
 	local bestScore, bestB, bestLoad
-	-- spread the fleet: every other convoy already heading to a city makes it 20% less attractive
-	local heading = {}
-	for _, c in ipairs(p.data.convoys) do if c.to then heading[c.to] = (heading[c.to] or 0) + 1 end end
 	for b = 1, #World.Cities do
 		if b ~= a then
-			local loads = PS.LoadsFor(p, a, b, mods)
-			local L = loads[1]
-			if L and L.cost <= budget then
-				local score = L.net / T.TripSeconds(a, b, era, fast) * 0.8 ^ (heading[b] or 0)
-				if not bestScore or score > bestScore then bestScore, bestB, bestLoad = score, b, L end
+			local secs = T.TripSeconds(a, b, era, fast)
+			for _, L in ipairs(PS.LoadsFor(p, a, b, mods, live)) do
+				if L.cost <= budget then
+					local score = L.net / secs
+					if not bestScore or score > bestScore then bestScore, bestB, bestLoad = score, b, L end
+				end
 			end
 		end
 	end
@@ -3342,11 +3383,13 @@ end
 function PS.AutoDispatch(p, c, startAt, mods)
 	if not PS.Has(p, "AutoDispatch") or c.to or p.data.autoOff or not p.data.onboarded then return false end
 	-- never spends more than half of your cash on one load, so building and units are not starved
-	local b, L = PS.BestRoute(p, c.at, p.data.cash * 0.5, mods)
+	local live = (startAt or now()) >= now() - 5 -- offline catch-up never sees world events
+	local b, L = PS.BestRoute(p, c.at, p.data.cash * 0.5, mods, live)
 	if not b then return false end
 	local tax, owner = PS.TaxFor(p, b)
 	p.data.cash -= L.cost
-	PS.Dispatch(p, c, b, { good = L.good, cost = L.cost, pay = L.pay, tax = L.tax, xp = L.xp, owner = owner, taxPct = tax }, startAt)
+	PS.Dispatch(p, c, b, { good = L.good, cost = L.cost, pay = L.pay, tax = L.tax, xp = L.xp, owner = owner, taxPct = tax, ev = L.ev }, startAt)
+	if L.ev then p.data.wev = L.ev end -- one event bonus per event, like a manual send
 	return true
 end
 
@@ -3559,7 +3602,7 @@ function PS.Snapshot(p)
 		units = d.units, atk = atk, def = def, siege = M.SiegeDamage(d.lv, d.sk, d.units, { attack = mods.siege }),
 		convoys = d.convoys, slots = PS.Slots(p), boss = boss, tasks = tasks, loan = d.loan,
 		taskRewards = { easy = PS.TaskReward(p, { diff = "easy" }), medium = PS.TaskReward(p, { diff = "medium" }), hard = PS.TaskReward(p, { diff = "hard" }), weekly = PS.TaskReward(p, { src = "weekly" }) },
-		loanMax = PS.LoanMax(p, mods), alliance = d.alliance, alliance_rec = a, stats = d.stats, allyInfo = PS.AllyInfo(p, a),
+		loanMax = PS.LoanMax(p, mods), alliance = d.alliance, alliance_rec = PS.AllyView(p, a), stats = d.stats, allyInfo = PS.AllyInfo(p, a),
 		gp = p.gp, mods = mods, incHr = PS.IncHr(p, mods), serverTime = now(), autoOff = d.autoOff, studio = Store.IsStudio,
 		online = Store.Online, capitalCredit = d.capitalCredit or 0,
 		bank = d.bank, bankRate = Config.Bank.InterestPerHour * (1 + (mods.interest or 0)), bankCap = R.MinuteValue(d.lv) * R.BankCapMinutes, shield = d.shield, revenge = d.revenge,
@@ -3859,7 +3902,7 @@ function PS.Rankings(kind)
 		for id, s in pairs(WS.Index) do
 			local cities = 0
 			for _, city in pairs(WS.Cities) do if city.owner == id then cities += 1 end end
-			table.insert(list, { name = s.name, tag = s.tag, color = s.color, value = cities, members = s.members })
+			table.insert(list, { name = s.name, tag = s.tag, color = s.color, emblem = s.emblem, emblemImg = s.emblemImg, value = cities, members = s.members })
 		end
 		table.sort(list, function(a, b) if a.value ~= b.value then return a.value > b.value end; return (a.members or 0) > (b.members or 0) end)
 		while #list > 50 do table.remove(list) end
@@ -4456,7 +4499,7 @@ function RA.Targets(p)
 			table.insert(list, {
 				id = id, name = q.data.name, flag = q.data.flag, lv = q.data.lv, def = def,
 				uid = plr.UserId, dn = plr.DisplayName, un = plr.Name, -- the player who owns this country
-				cash = math.floor(q.data.cash), cooldown = math.max(0, (lastHit[id] or 0) + RC.Cooldown - t),
+				cash = math.floor(q.data.cash), cooldown = 0, -- only YOUR own cooldown counts (Kash 3 Oct), merged below
 				shield = math.max(0, (q.data.shield or 0) - t), tag = q.data.alliance and PS.AllianceTag and PS.AllianceTag(q.data.alliance) or nil,
 			})
 		end
@@ -4464,7 +4507,7 @@ function RA.Targets(p)
 	for _, a in ipairs(RA.AI) do
 		local _, def = aiPower(a)
 		table.insert(list, { id = a.id, name = a.name, flag = a.flag, lv = a.lv, def = def, cash = math.floor(a.cash), ai = true,
-			cooldown = math.max(0, (lastHit[a.id] or 0) + RC.Cooldown - t), shield = 0 })
+			cooldown = 0, shield = 0 })
 	end
 	-- the button also shows YOUR own cooldown on that target (Kash 2 Oct: some raided targets showed no timer)
 	local mine = p.raidCd or {}
@@ -4694,7 +4737,6 @@ local function remoteAttack(plr, p, id, uid, guaranteed)
 		if (rec.sh or 0) > t then return nil, "They are under a raid shield" end
 		if unpaid(rec) >= RA.MaxUnpaid then return nil, "They have been raided too often. Try again later" end
 		if win then
-			if (rec.last or 0) + RC.Cooldown > t then return nil, "They were just raided. Try again in " .. ((rec.last or 0) + RC.Cooldown - t) .. "s" end
 			local onHand = cashOnHand(card, rec)
 			steal = math.floor(math.min(onHand * RC.StealPct * (1 + (mods.loot or 0)), stealCap(card.lv or 1)))
 			steal = math.max(0, math.min(steal, onHand))
@@ -4806,7 +4848,8 @@ function RA.Attack(plr, p, id, guaranteed)
 	if q == p then return { ok = false, msg = "You cannot raid yourself" } end
 	if q and q.data.lv < playerProtectedLv() then return { ok = false, msg = "That nation is too new to be raided" } end
 	local t = now()
-	if (lastHit[id] or 0) + RC.Cooldown > t then return { ok = false, msg = "They were just raided. Try again in " .. ((lastHit[id] or 0) + RC.Cooldown - t) .. "s" } end
+	-- Kash 3 Oct: the whole lobby can raid the same nation; each attacker only has their own cooldown on it (p.raidCd).
+	-- lastHit is still stamped below, but only the AI uses it (so rival nations don't pile onto one player).
 	-- you can't hammer the same target: one attack per target per cooldown, win or lose (review #7)
 	p.raidCd = p.raidCd or {}
 	if not guaranteed and (p.raidCd[id] or 0) + RC.Cooldown > t then return { ok = false, msg = "You just attacked them. Try again in " .. ((p.raidCd[id] or 0) + RC.Cooldown - t) .. "s" } end
@@ -5360,7 +5403,7 @@ end)
 cmd("allytreasury", "/allytreasury 1m  add cash to your alliance treasury", function(_, p, a)
 	local d = p.data
 	if not d.alliance then return "You are not in an alliance" end
-	WS.Credit(d.alliance, num(a[1], 1e6))
+	WS.Credit(d.alliance, num(a[1], 1e6), "admin")
 	return "Treasury credited"
 end)
 
@@ -6236,7 +6279,7 @@ function act.allyList(plr, p)
 		local cities = 0
 		for _, c in pairs(WS.Cities) do if c.owner == id then cities += 1 end end
 		table.insert(list, { id = id, name = s.name, tag = s.tag, color = s.color, members = s.members, open = s.open, cities = cities,
-			fee = s.fee or 0, dues = s.dues or 0, style = s.style or "flat" })
+			fee = s.fee or 0, dues = s.dues or 0, style = s.style or "flat", cap = s.cap, emblem = s.emblem, emblemImg = s.emblemImg, level = s.level, leader = s.leader, minLv = s.minLv })
 	end
 	table.sort(list, function(x, y) if x.cities ~= y.cities then return x.cities > y.cities end; return (x.members or 0) > (y.members or 0) end)
 	return ok({ list = list })
@@ -6315,6 +6358,7 @@ function act.allyDonate(plr, p, a)
 		local m = x.members[tostring(plr.UserId)]
 		if not m then return nil, "You are not in that alliance" end
 		x.treasury = (x.treasury or 0) + amt
+		WS.Ledger(x, "donations", amt); WS.TLog(x, "donate", amt, d.name ~= "" and d.name or plr.Name)
 		m.donated = (m.donated or 0) + amt; m.active = now()
 		WS.AddLog(x, d.name ~= "" and (d.name .. " donated " .. R.Money(amt)) or (plr.Name .. " donated " .. R.Money(amt)))
 		return x, true
@@ -6367,6 +6411,7 @@ function act.allyUpgrade(plr, p, a)
 		local cost = WS.UpgradeCost(lvl, up)
 		if (x.treasury or 0) < cost then return nil, "The treasury needs " .. R.Money(cost) end
 		x.treasury -= cost
+		WS.Ledger(x, "upgrades", -cost); WS.TLog(x, "upgrade", -cost, (p.data.name or "?") .. " · " .. up.name .. " " .. (lvl + 1))
 		x.up[up.key] = lvl + 1
 		WS.AddLog(x, up.name .. " raised to level " .. (lvl + 1))
 		return x, true
@@ -6381,7 +6426,7 @@ function act.allyRole(plr, p, a)
 	if WS.Role(rec, plr.UserId) ~= "leader" then return no("Only the leader can change roles") end
 	local target = tostring(a.uid or "")
 	local role = a.role
-	if role ~= "officer" and role ~= "member" and role ~= "leader" then return no("Bad role") end
+	if role ~= "officer" and role ~= "elder" and role ~= "member" and role ~= "leader" then return no("Bad role") end
 	if target == tostring(plr.UserId) then return no("Pick another member") end
 	local rec2, err = WS.MutateAlliance(id, function(x)
 		local m = x.members[target]
@@ -6456,6 +6501,15 @@ function act.allyManage(plr, p, a)
 		val = math.clamp(math.floor(tonumber(a.lv) or 0), 0, 500)
 	elseif kind == "perms" then
 		val = { upgrade = a.upgrade ~= false, kick = a.kick ~= false }
+	elseif kind == "emblem" then
+		for _, e in ipairs(AC.Emblems) do if e == a.emblem then val = e end end
+		if not val then return no("Pick one of the emblems") end
+	elseif kind == "emblemImg" then
+		if not PS.Has(p, "CustomFlag") then return no("Your own image needs the Custom Flag pass") end
+		local id = tonumber(a.img)
+		if a.img == "" or a.img == nil then val = ""
+		elseif not id or id < 1 or id > 1e15 or id ~= math.floor(id) then return no("Paste an image or decal id (numbers only)")
+		else val = string.format("%d", id) end
 	elseif kind == "target" then
 		-- alliance target capital (Kash 3 Oct): every member sees which city the alliance is attacking
 		local i = math.floor(tonumber(a.city) or 0)
@@ -6475,6 +6529,8 @@ function act.allyManage(plr, p, a)
 		else
 			if r ~= "leader" then return nil, "Only the leader can change this" end
 			if kind == "color" then x.color = val; WS.AddLog(x, "Alliance colour changed")
+			elseif kind == "emblem" then x.emblem = val; x.emblemImg = nil; WS.AddLog(x, "Alliance emblem changed")
+			elseif kind == "emblemImg" then x.emblemImg = val ~= "" and val or nil; WS.AddLog(x, val ~= "" and "Alliance emblem image changed" or "Alliance emblem image removed")
 			elseif kind == "minLv" then x.minLv = val; WS.AddLog(x, val > 0 and ("New members need level " .. val) or "Any level can join")
 			else x.perms = val; WS.AddLog(x, "Officer permissions updated") end
 		end
@@ -7366,6 +7422,30 @@ function UI.flag(parent, flag, w, p)
 		if id then
 			mk("ImageLabel", { Name = "Custom", BackgroundTransparency = 1, Image = "rbxthumb://type=Asset&id=" .. id .. "&w=420&h=420", ScaleType = Enum.ScaleType.Crop, Size = UDim2.fromScale(1, 1), ZIndex = z + 3 }, f)
 		end
+	end
+	return f
+end
+
+-- alliance badge (Kash 3 Oct): the alliance colour with its emblem (or the leader's own image), tag underneath when big enough
+-- a = { color, tag, emblem, emblemImg }
+function UI.allyBadge(parent, a, size, p)
+	p = p or {}
+	local z = p.z or 5
+	local okC, col = pcall(Color3.fromHex, tostring(a.color or "546e7a"))
+	local f = mk("Frame", { Name = "AllyBadge", BackgroundColor3 = okC and col or Color3.fromHex("546e7a"), BorderSizePixel = 0, Position = p.pos or UDim2.new(),
+		Size = UDim2.fromOffset(size, size), AnchorPoint = p.anchor or Vector2.zero, ZIndex = z, ClipsDescendants = true, LayoutOrder = p.order or 0 }, parent)
+	mk("UICorner", { CornerRadius = UDim.new(0, math.max(3, math.floor(size / 8))) }, f)
+	mk("UIStroke", { Color = UI.C.black, Thickness = math.max(1, math.floor(size / 28)) }, f)
+	local id = a.emblemImg and tostring(a.emblemImg):match("%d+")
+	if id then
+		mk("ImageLabel", { BackgroundTransparency = 1, Image = "rbxthumb://type=Asset&id=" .. id .. "&w=150&h=150", ScaleType = Enum.ScaleType.Crop, Size = UDim2.fromScale(1, 1), ZIndex = z + 1 }, f)
+	elseif a.emblem and Assets[a.emblem] then
+		local big = size >= 48 and a.tag
+		local s = math.floor(size * (big and 0.56 or 0.7))
+		UI.img(f, a.emblem, { sz = UDim2.fromOffset(s, s), pos = UDim2.new(0.5, 0, big and 0.4 or 0.5, 0), anchor = Vector2.new(0.5, 0.5), color = UI.C.white, z = z + 1, slice = false })
+		if big then UI.text(f, a.tag, { font = "heavy", size = math.floor(size * 0.2), color = UI.C.white, align = Enum.TextXAlignment.Center, pos = UDim2.new(0, 0, 1, -math.floor(size * 0.27)), sz = UDim2.new(1, 0, 0, math.floor(size * 0.24)), z = z + 1, stroke = 1.2 }) end
+	else
+		UI.text(f, a.tag or "?", { font = "display", size = math.floor(size * 0.34), color = UI.C.white, align = Enum.TextXAlignment.Center, sz = UDim2.fromScale(1, 1), z = z + 1, stroke = 1.5, scaled = size < 40 })
 	end
 	return f
 end
@@ -10068,10 +10148,10 @@ S.alliance = { build = function(host, App)
 		else
 			for i, a in ipairs(obj.list) do
 				local card = UI.card(left, { sz = UDim2.new(1, 0, 0, 58), z = 8, order = i })
-				UI.mk("Frame", { BackgroundColor3 = Color3.fromHex(a.color), BorderSizePixel = 0, Position = UDim2.fromOffset(12, 14), Size = UDim2.fromOffset(28, 28), ZIndex = 9 }, card)
+				UI.allyBadge(card, a, 34, { pos = UDim2.fromOffset(10, 12), z = 9 })
 				text(card, "[" .. a.tag .. "] " .. a.name, { font = "heavy", size = 17, pos = UDim2.fromOffset(52, 6), sz = UDim2.new(1, -180, 0, 24), z = 9, truncate = true })
-				text(card, (a.members or 0) .. "/" .. AC.MaxMembers .. " members · " .. a.cities .. " cities" .. (a.open == false and " · invite only" or ""), { size = 13, color = C.muted, pos = UDim2.fromOffset(52, 30), sz = UDim2.new(1, -180, 0, 18), z = 9 })
-				local full = (a.members or 0) >= AC.MaxMembers or a.open == false
+				text(card, (a.members or 0) .. "/" .. (a.cap or AC.MaxMembers) .. " members · " .. a.cities .. " cities" .. (a.open == false and " · invite only" or ""), { size = 13, color = C.muted, pos = UDim2.fromOffset(52, 30), sz = UDim2.new(1, -180, 0, 18), z = 9 })
+				local full = (a.members or 0) >= (a.cap or AC.MaxMembers) or a.open == false
 				UI.button(card, full and "locked" or "green", full and "CLOSED" or "JOIN", function(btn)
 					local res = App.req("allyJoin", { id = a.id }, btn)
 					if res.ok then App.toast("WELCOME TO [" .. a.tag .. "]", a.name, "good"); obj.list = nil end
@@ -10156,8 +10236,7 @@ S.alliance = { build = function(host, App)
 		local nowT = App.now()
 		-- header
 		local head = UI.card(list, { sz = UDim2.new(1, 0, 0, 96), z = 8, order = 1 })
-		UI.mk("Frame", { BackgroundColor3 = Color3.fromHex(a.color or "546e7a"), BorderSizePixel = 0, Position = UDim2.fromOffset(16, 16), Size = UDim2.fromOffset(64, 64), ZIndex = 9 }, head)
-		text(head, a.tag, { font = "display", size = 22, color = C.white, align = Enum.TextXAlignment.Center, pos = UDim2.fromOffset(16, 16), sz = UDim2.fromOffset(64, 64), z = 10, stroke = 1.5 })
+		UI.allyBadge(head, a, 64, { pos = UDim2.fromOffset(16, 16), z = 9 })
 		text(head, a.name, { font = "display", size = 26, pos = UDim2.fromOffset(96, 12), sz = UDim2.new(0.6, -96, 0, 32), z = 9, truncate = true })
 		text(head, "Led by " .. (a.leaderName or "?") .. " · " .. nMembers .. "/" .. cap .. " members · you are " .. (myRole or "member"), { size = 14, color = C.muted, pos = UDim2.fromOffset(96, 48), sz = UDim2.new(0.6, -96, 0, 20), z = 9, truncate = true })
 		text(head, "TREASURY", { font = "heavy", size = 13, color = C.muted, pos = UDim2.new(0.62, 0, 0, 14), sz = UDim2.new(0.38, -16, 0, 18), z = 9, align = Enum.TextXAlignment.Right })
@@ -10418,6 +10497,41 @@ S.alliance = { build = function(host, App)
 					sw.Activated:Connect(function() App.req("allyManage", { kind = "color", color = col }) end)
 				end
 			end
+			-- emblem (Kash 3 Oct): pick an icon, or use your own image with the Custom Flag pass
+			section(list, "ALLIANCE EMBLEM", nextOrder(), "Shown on your badge everywhere")
+			do
+				local perRow = 16
+				local rows = math.ceil(#AC.Emblems / perRow)
+				local c = row(76 + rows * 50)
+				UI.allyBadge(c, a, 64, { pos = UDim2.fromOffset(16, 6), z = 9 })
+				text(c, "Your badge", { font = "heavy", size = 14, color = C.muted, pos = UDim2.fromOffset(92, 22), sz = UDim2.fromOffset(200, 20), z = 9 })
+				for k, key in ipairs(AC.Emblems) do
+					local col, rw = (k - 1) % perRow, math.floor((k - 1) / perRow)
+					local cell = UI.mk("TextButton", { Text = "", AutoButtonColor = true, BackgroundColor3 = Color3.fromHex(a.color or "546e7a"), BorderSizePixel = 0,
+						Position = UDim2.fromOffset(16 + col * 50, 80 + rw * 50), Size = UDim2.fromOffset(42, 42), ZIndex = 9 }, c)
+					UI.mk("UICorner", { CornerRadius = UDim.new(0, 8) }, cell)
+					if a.emblem == key and not a.emblemImg then UI.mk("UIStroke", { Color = C.white, Thickness = 3, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, cell) end
+					UI.icon(cell, key, 28, C.white, UDim2.fromScale(0.5, 0.5), { z = 10, anchor = Vector2.new(0.5, 0.5) })
+					cell.Activated:Connect(function() App.req("allyManage", { kind = "emblem", emblem = key }) end)
+				end
+				-- own image
+				local pass = st.gp and st.gp.CustomFlag
+				local box = UI.mk("TextBox", { Text = a.emblemImg and tostring(a.emblemImg) or "", PlaceholderText = pass and "Your own image: paste an image or decal ID" or "Custom Flag pass: use your own image",
+					ClearTextOnFocus = false, Font = Enum.Font.GothamMedium, TextSize = 14, TextColor3 = C.ink, PlaceholderColor3 = C.muted, BackgroundColor3 = C.black, BackgroundTransparency = 0.3,
+					BorderSizePixel = 0, Position = UDim2.new(0, 320, 0, 18), Size = UDim2.new(1, -620, 0, 40), ZIndex = 9, TextEditable = pass and true or false, TextXAlignment = Enum.TextXAlignment.Left }, c)
+				UI.mk("UICorner", { CornerRadius = UDim.new(0, 6) }, box)
+				UI.mk("UIPadding", { PaddingLeft = UDim.new(0, 10) }, box)
+				if pass then
+					UI.button(c, "gold", "USE IMAGE", function(btn)
+						local id = box.Text:match("%d+")
+						if not id then App.toast("Paste an image or decal ID", nil, "bad"); return end
+						App.req("allyManage", { kind = "emblemImg", img = id }, btn)
+					end, { sz = UDim2.fromOffset(130, 40), pos = UDim2.new(1, -290, 0, 18), z = 9, textSize = 14 })
+					UI.button(c, "slate", "CLEAR", function(btn) App.req("allyManage", { kind = "emblemImg", img = "" }, btn) end, { sz = UDim2.fromOffset(130, 40), pos = UDim2.new(1, -146, 0, 18), z = 9, textSize = 14 })
+				else
+					UI.button(c, "green", "GET CUSTOM FLAG", function(btn) App.req("buyPass", { key = "CustomFlag" }, btn) end, { sz = UDim2.fromOffset(260, 40), pos = UDim2.new(1, -276, 0, 18), z = 9, textSize = 14, icon = "icon_flag" })
+				end
+			end
 			-- officer permissions
 			section(list, "OFFICER PERMISSIONS", nextOrder())
 			do
@@ -10498,10 +10612,13 @@ S.alliance = { build = function(host, App)
 				local function kick(btn) App.confirm("REMOVE " .. (m.name or "?") .. "?", "They leave the alliance right away.", "REMOVE", "red", function() App.req("allyKick", { uid = r.uid }, btn) end) end
 				if isLeader then
 					act("REMOVE", "red", kick)
-					if m.role == "member" then act("PROMOTE", "slate", function(btn) App.req("allyRole", { uid = r.uid, role = "officer" }, btn) end)
-					else act("DEMOTE", "slate", function(btn) App.req("allyRole", { uid = r.uid, role = "member" }, btn) end) end
+					-- ranks (Kash 3 Oct): member -> elder -> officer -> leader
+					local up = ({ member = "elder", elder = "officer" })[m.role or "member"]
+					local down = ({ officer = "elder", elder = "member" })[m.role or "member"]
+					if down then act("DEMOTE", "slate", function(btn) App.req("allyRole", { uid = r.uid, role = down }, btn) end) end
+					if up then act(up == "elder" and "MAKE ELDER" or "MAKE OFFICER", "slate", function(btn) App.req("allyRole", { uid = r.uid, role = up }, btn) end) end
 					act("MAKE LEADER", "gold", function(btn) App.confirm("HAND OVER LEADERSHIP?", (m.name or "?") .. " becomes leader and you become an officer.", "HAND OVER", "gold", function() App.req("allyRole", { uid = r.uid, role = "leader" }, btn) end) end)
-				elseif canKick and m.role == "member" then
+				elseif canKick and (m.role == "member" or m.role == "elder") then
 					act("REMOVE", "red", kick)
 				end
 			end
@@ -10515,7 +10632,7 @@ S.alliance = { build = function(host, App)
 				UI.mk("UICorner", { CornerRadius = UDim.new(1, 0) }, dot)
 			end
 			local left = 104
-			local roleCol = m.role == "leader" and "#f0c75a" or (m.role == "officer" and "#e8d9a8" or "#9a9fa6")
+			local roleCol = m.role == "leader" and "#f0c75a" or (m.role == "officer" and "#e8d9a8" or (m.role == "elder" and "#8fc7d8" or "#9a9fa6"))
 			local nameW = UDim2.new(0.45, -left - btnW * 0.45, 0, 22)
 			text(card, (m.name or "?") .. (r.uid == me and " (you)" or ""), { font = "heavy", size = 16, pos = UDim2.fromOffset(left, 9), sz = nameW, z = 9, truncate = true })
 			text(card, "<font color='" .. roleCol .. "'><b>" .. string.upper(m.role or "member") .. "</b></font>" .. (m.lv and (" · LV " .. m.lv) or "") .. " · " .. (online and "<font color='#8fd07a'>active now</font>" or ago(m.active, nowT)),
@@ -10626,6 +10743,113 @@ S.alliance = { build = function(host, App)
 		text(c, "Alliance wars are coming soon: declare war on rival alliances and fight for their cities.", { size = 16, color = C.muted, pos = UDim2.fromOffset(110, 92), sz = UDim2.new(1, -130, 0, 44), z = 9, wrap = true, valign = Enum.TextYAlignment.Top })
 	end
 
+	---------------------------------------------------------------- TREASURY (Kash 3 Oct): income and spending, elders and up
+	local LEDGER_NAMES = { dues = "Member dues", tax = "City tax", rent = "City rent", donations = "Donations", fees = "Join fees", upgrades = "Perk upgrades", admin = "Admin", other = "Other" }
+	local LEDGER_ICON = { dues = "icon_users", tax = "icon_tax", rent = "icon_home", donations = "icon_coins", fees = "icon_alliance", upgrades = "icon_sparkles", admin = "icon_crown", other = "icon_coins" }
+	local function treasury(st, a)
+		local list = tabList(8)
+		local ledger = type(a.ledger) == "table" and a.ledger or {}
+		local today = math.floor(App.now() / 86400)
+		local inc7, exp7, byKind = 0, 0, {}
+		local days = {}
+		for k = 0, 6 do
+			local b = ledger[tostring(today - k)] or {}
+			local di, de = 0, 0
+			for kind, v in pairs(b) do
+				byKind[kind] = (byKind[kind] or 0) + v
+				if v >= 0 then di += v else de -= v end
+			end
+			inc7 += di; exp7 += de
+			table.insert(days, { day = today - k, inc = di, exp = de })
+		end
+		-- balance and 7-day totals
+		local top = UI.card(list, { sz = UDim2.new(1, 0, 0, 84), z = 8, order = 1 })
+		UI.icon(top, "icon_coins", 34, C.gold, UDim2.fromOffset(16, 25), { z = 9 })
+		text(top, "TREASURY", { font = "heavy", size = 13, color = C.muted, pos = UDim2.fromOffset(64, 12), sz = UDim2.new(0.3, -64, 0, 16), z = 9 })
+		text(top, R.Money(a.treasury or 0), { font = "display", size = 32, color = C.gold, pos = UDim2.fromOffset(64, 30), sz = UDim2.new(0.34, -64, 0, 40), z = 9, scaled = true })
+		local function stat(i, label, val, col)
+			text(top, label, { font = "heavy", size = 12, color = C.muted, pos = UDim2.new(0.34 + (i - 1) * 0.22, 0, 0, 14), sz = UDim2.new(0.22, -12, 0, 16), z = 9, align = Enum.TextXAlignment.Right })
+			text(top, val, { font = "display", size = 24, color = col, pos = UDim2.new(0.34 + (i - 1) * 0.22, 0, 0, 34), sz = UDim2.new(0.22, -12, 0, 32), z = 9, align = Enum.TextXAlignment.Right, scaled = true })
+		end
+		stat(1, "IN · 7 DAYS", "+" .. R.Money(inc7), C.good)
+		stat(2, "OUT · 7 DAYS", "-" .. R.Money(exp7), C.bad)
+		local net = inc7 - exp7
+		stat(3, "NET · 7 DAYS", (net >= 0 and "+" or "-") .. R.Money(math.abs(net)), net >= 0 and C.good or C.bad)
+		-- by source
+		section(list, "WHERE IT COMES FROM AND GOES", 10, "last 7 days")
+		local kinds = {}
+		for kind, v in pairs(byKind) do if v ~= 0 then table.insert(kinds, { kind = kind, v = v }) end end
+		table.sort(kinds, function(x, y) return math.abs(x.v) > math.abs(y.v) end)
+		if #kinds == 0 then
+			local e = UI.card(list, { sz = UDim2.new(1, 0, 0, 52), z = 8, order = 11 })
+			text(e, "Nothing yet. Dues, city tax and rent, donations and join fees show up here.", { size = 14, color = C.muted, pos = UDim2.fromOffset(16, 0), sz = UDim2.new(1, -32, 1, 0), z = 9, wrap = true })
+		end
+		local maxAbs = 1
+		for _, k in ipairs(kinds) do maxAbs = math.max(maxAbs, math.abs(k.v)) end
+		for i, k in ipairs(kinds) do
+			local c = UI.card(list, { sz = UDim2.new(1, 0, 0, 46), z = 8, order = 10 + i })
+			local pos = k.v >= 0
+			UI.icon(c, LEDGER_ICON[k.kind] or "icon_coins", 22, pos and C.good or C.bad, UDim2.fromOffset(14, 12), { z = 9 })
+			text(c, LEDGER_NAMES[k.kind] or k.kind, { font = "heavy", size = 15, pos = UDim2.fromOffset(46, 0), sz = UDim2.new(0.3, -46, 1, 0), z = 9, truncate = true })
+			local track = UI.mk("Frame", { BackgroundColor3 = C.black, BackgroundTransparency = 0.4, BorderSizePixel = 0, Position = UDim2.new(0.3, 0, 0, 17), Size = UDim2.new(0.45, 0, 0, 12), ZIndex = 9 }, c)
+			UI.mk("Frame", { BackgroundColor3 = pos and C.good or C.bad, BorderSizePixel = 0, Size = UDim2.fromScale(math.clamp(math.abs(k.v) / maxAbs, 0.02, 1), 1), ZIndex = 10 }, track)
+			text(c, (pos and "+" or "-") .. R.Money(math.abs(k.v)), { font = "heavy", size = 16, color = pos and C.good or C.bad, pos = UDim2.new(0.75, 0, 0, 0), sz = UDim2.new(0.25, -16, 1, 0), z = 9, align = Enum.TextXAlignment.Right })
+		end
+		-- per day
+		section(list, "BY DAY", 100, "UTC days")
+		for i, dd in ipairs(days) do
+			local c = UI.card(list, { sz = UDim2.new(1, 0, 0, 38), z = 8, order = 100 + i })
+			text(c, i == 1 and "Today" or (i == 2 and "Yesterday" or os.date("!%a %d %b", dd.day * 86400)), { font = "heavy", size = 14, pos = UDim2.fromOffset(16, 0), sz = UDim2.new(0.25, -16, 1, 0), z = 9 })
+			text(c, "+" .. R.Money(dd.inc), { size = 14, color = C.good, pos = UDim2.new(0.25, 0, 0, 0), sz = UDim2.new(0.25, -8, 1, 0), z = 9, align = Enum.TextXAlignment.Right })
+			text(c, "-" .. R.Money(dd.exp), { size = 14, color = C.bad, pos = UDim2.new(0.5, 0, 0, 0), sz = UDim2.new(0.25, -8, 1, 0), z = 9, align = Enum.TextXAlignment.Right })
+			local n = dd.inc - dd.exp
+			text(c, (n >= 0 and "+" or "-") .. R.Money(math.abs(n)), { font = "heavy", size = 14, color = n >= 0 and C.good or C.bad, pos = UDim2.new(0.75, 0, 0, 0), sz = UDim2.new(0.25, -16, 1, 0), z = 9, align = Enum.TextXAlignment.Right })
+		end
+		-- recent entries
+		local tl = type(a.tlog) == "table" and a.tlog or {}
+		if #tl > 0 then
+			section(list, "RECENT", 200, "donations, join fees and upgrades")
+			local NAMES = { donate = "donated", fee = "paid the join fee", upgrade = "upgrade" }
+			for i, e in ipairs(tl) do
+				if i > 30 then break end
+				local c = UI.card(list, { sz = UDim2.new(1, 0, 0, 36), z = 8, order = 200 + i })
+				text(c, e.t and os.date("!%d %b %H:%M", e.t) or "", { size = 13, color = C.muted, pos = UDim2.fromOffset(16, 0), sz = UDim2.fromOffset(110, 36), z = 9 })
+				local who = tostring(e.w or "?")
+				text(c, e.k == "upgrade" and who or (who .. " " .. (NAMES[e.k] or e.k or "")), { size = 14, pos = UDim2.fromOffset(126, 0), sz = UDim2.new(1, -300, 1, 0), z = 9, truncate = true })
+				local v = tonumber(e.a) or 0
+				text(c, (v >= 0 and "+" or "-") .. R.Money(math.abs(v)), { font = "heavy", size = 15, color = v >= 0 and C.good or C.bad, pos = UDim2.new(1, -176, 0, 0), sz = UDim2.fromOffset(160, 36), z = 9, align = Enum.TextXAlignment.Right })
+			end
+		end
+		local note = UI.mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 30), ZIndex = 8, LayoutOrder = 999 }, list)
+		text(note, "Only elders, officers and the leader can see the treasury.", { size = 13, color = C.dim, sz = UDim2.fromScale(1, 1), z = 9, wrap = true })
+	end
+
+	---------------------------------------------------------------- BROWSE (Kash 3 Oct): look at other alliances while in one
+	local function browse(st, a)
+		local list = tabList(6)
+		if not obj.browse then
+			text(list, "Loading...", { size = 15, color = C.muted, order = 1, z = 8 })
+			task.spawn(function()
+				local res = App.req("allyList", {})
+				if res.ok then obj.browse = res.list; obj.browseT = os.clock(); obj:Refresh(App.state) end
+			end)
+			return
+		end
+		if os.clock() - (obj.browseT or 0) > 60 then obj.browse = nil end -- refresh next time the tab is drawn
+		for i, x in ipairs(obj.browse) do
+			local mine = x.id == st.alliance
+			local card = UI.card(list, { sz = UDim2.new(1, 0, 0, 58), z = 8, order = i, hot = mine })
+			text(card, "#" .. i, { font = "display", size = 18, color = i <= 3 and C.gold or C.muted, pos = UDim2.fromOffset(10, 0), sz = UDim2.fromOffset(40, 58), z = 9 })
+			UI.allyBadge(card, x, 36, { pos = UDim2.fromOffset(48, 11), z = 9 })
+			text(card, "[" .. tostring(x.tag) .. "] " .. tostring(x.name) .. (mine and "  (yours)" or ""), { font = "heavy", size = 17, pos = UDim2.fromOffset(92, 6), sz = UDim2.new(0.6, -92, 0, 24), z = 9, truncate = true })
+			text(card, "Level " .. (x.level or 1) .. " · led by " .. tostring(x.leader or "?") .. (x.open == false and " · invite only" or "") .. ((x.minLv or 0) > 0 and (" · needs LV " .. x.minLv) or ""), { size = 13, color = C.muted, pos = UDim2.fromOffset(92, 30), sz = UDim2.new(0.6, -92, 0, 18), z = 9, truncate = true })
+			text(card, (x.cities or 0) .. " cities", { font = "heavy", size = 16, color = C.manila, pos = UDim2.new(0.6, 0, 0, 6), sz = UDim2.new(0.4, -16, 0, 22), z = 9, align = Enum.TextXAlignment.Right })
+			text(card, (x.members or 0) .. "/" .. (x.cap or AC.MaxMembers) .. " members", { size = 13, color = C.muted, pos = UDim2.new(0.6, 0, 0, 30), sz = UDim2.new(0.4, -16, 0, 18), z = 9, align = Enum.TextXAlignment.Right })
+		end
+		local note = UI.mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 30), ZIndex = 8, LayoutOrder = 999 }, list)
+		text(note, "Leave your alliance to join another one.", { size = 13, color = C.dim, sz = UDim2.fromScale(1, 1), z = 9 })
+	end
+
 	function obj:Refresh(st)
 		UI.clear(area)
 		obj.timer = nil
@@ -10636,10 +10860,13 @@ S.alliance = { build = function(host, App)
 		sub.Text = "[" .. a.tag .. "] " .. a.name .. (info and (" · level " .. (info.level or 1)) or "")
 		-- MANAGE only for the leader and officers (Kash 3 Oct)
 		local manager = myRole == "leader" or myRole == "officer"
+		local elder = manager or myRole == "elder"
 		local names = { "OVERVIEW", "MEMBERS", "PERKS", "CITIES", "QUESTS", "WAR" }
+		if elder then table.insert(names, "TREASURY") end -- elders and up (Kash 3 Oct)
+		table.insert(names, "BROWSE")
 		if manager then table.insert(names, "MANAGE") end
 		local aw = area.AbsoluteSize.X
-		local tw = aw > 0 and math.clamp(math.floor((aw - 6 * (#names - 1)) / #names), 80, 124) or 120
+		local tw = aw > 0 and math.clamp(math.floor((aw - 6 * (#names - 1)) / #names), 64, 124) or 110
 		obj.tabs = UI.tabs(area, names, function(i) obj.tab = i; obj.fee = nil; obj:Refresh(App.state) end, { w = tw, z = 8 })
 		if obj.tab > #names then obj.tab = 1 end
 		obj.tabs:Set(obj.tab)
@@ -10652,7 +10879,9 @@ S.alliance = { build = function(host, App)
 		elseif obj.tab == 3 then perks(st, a, myRole, info)
 		elseif obj.tab == 4 then cities(st, a)
 		elseif obj.tab == 5 then quests(st, a, info)
-		elseif obj.tab == 6 then war()
+		elseif names[obj.tab] == "WAR" then war()
+		elseif names[obj.tab] == "TREASURY" then treasury(st, a)
+		elseif names[obj.tab] == "BROWSE" then browse(st, a)
 		else manage(st, a, myRole) end
 	end
 	function obj:Tick()
@@ -10685,7 +10914,7 @@ S.rankings = { build = function(host, App)
 			local card = UI.card(list, { sz = UDim2.new(1, 0, 0, 44), z = 7, order = k, hot = k <= 3, button = isPlayer })
 			text(card, "#" .. k, { font = "display", size = 20, color = k <= 3 and C.gold or C.muted, pos = UDim2.fromOffset(12, 0), sz = UDim2.fromOffset(56, 44), z = 8 })
 			if obj.kind == "alliances" then
-				UI.mk("Frame", { BackgroundColor3 = Color3.fromHex(e.color or "546e7a"), BorderSizePixel = 0, Position = UDim2.fromOffset(70, 12), Size = UDim2.fromOffset(20, 20), ZIndex = 8 }, card)
+				UI.allyBadge(card, e, 30, { pos = UDim2.fromOffset(66, 7), z = 8 })
 				text(card, "[" .. e.tag .. "] " .. e.name, { font = "heavy", size = 17, pos = UDim2.fromOffset(100, 0), sz = UDim2.new(0.6, -100, 1, 0), z = 8, truncate = true })
 				text(card, e.value .. " cities · " .. (e.members or 0) .. " members", { font = "heavy", size = 16, color = C.manila, pos = UDim2.new(0.6, 0, 0, 0), sz = UDim2.new(0.4, -16, 1, 0), z = 8, align = Enum.TextXAlignment.Right })
 			else

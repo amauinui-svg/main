@@ -388,6 +388,30 @@ function UI.flag(parent, flag, w, p)
 	return f
 end
 
+-- alliance badge (Kash 3 Oct): the alliance colour with its emblem (or the leader's own image), tag underneath when big enough
+-- a = { color, tag, emblem, emblemImg }
+function UI.allyBadge(parent, a, size, p)
+	p = p or {}
+	local z = p.z or 5
+	local okC, col = pcall(Color3.fromHex, tostring(a.color or "546e7a"))
+	local f = mk("Frame", { Name = "AllyBadge", BackgroundColor3 = okC and col or Color3.fromHex("546e7a"), BorderSizePixel = 0, Position = p.pos or UDim2.new(),
+		Size = UDim2.fromOffset(size, size), AnchorPoint = p.anchor or Vector2.zero, ZIndex = z, ClipsDescendants = true, LayoutOrder = p.order or 0 }, parent)
+	mk("UICorner", { CornerRadius = UDim.new(0, math.max(3, math.floor(size / 8))) }, f)
+	mk("UIStroke", { Color = UI.C.black, Thickness = math.max(1, math.floor(size / 28)) }, f)
+	local id = a.emblemImg and tostring(a.emblemImg):match("%d+")
+	if id then
+		mk("ImageLabel", { BackgroundTransparency = 1, Image = "rbxthumb://type=Asset&id=" .. id .. "&w=150&h=150", ScaleType = Enum.ScaleType.Crop, Size = UDim2.fromScale(1, 1), ZIndex = z + 1 }, f)
+	elseif a.emblem and Assets[a.emblem] then
+		local big = size >= 48 and a.tag
+		local s = math.floor(size * (big and 0.56 or 0.7))
+		UI.img(f, a.emblem, { sz = UDim2.fromOffset(s, s), pos = UDim2.new(0.5, 0, big and 0.4 or 0.5, 0), anchor = Vector2.new(0.5, 0.5), color = UI.C.white, z = z + 1, slice = false })
+		if big then UI.text(f, a.tag, { font = "heavy", size = math.floor(size * 0.2), color = UI.C.white, align = Enum.TextXAlignment.Center, pos = UDim2.new(0, 0, 1, -math.floor(size * 0.27)), sz = UDim2.new(1, 0, 0, math.floor(size * 0.24)), z = z + 1, stroke = 1.2 }) end
+	else
+		UI.text(f, a.tag or "?", { font = "display", size = math.floor(size * 0.34), color = UI.C.white, align = Enum.TextXAlignment.Center, sz = UDim2.fromScale(1, 1), z = z + 1, stroke = 1.5, scaled = size < 40 })
+	end
+	return f
+end
+
 ---------------------------------------------------------------- formatting shortcuts
 UI.Money = R.Money
 UI.Short = R.Short

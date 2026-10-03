@@ -132,6 +132,13 @@ C.Alliance = {
 	CreateCost = 50000,
 	MaxMembers = 30,
 	MaxCities = 10,
+	-- alliance emblems (Kash 3 Oct): any of these on the alliance colour, or your own image with the Custom Flag pass
+	Emblems = { "icon_crown", "icon_castle", "icon_defense", "icon_attack", "icon_battle", "icon_crosshair", "icon_flame", "icon_gem",
+		"icon_gold", "icon_coins", "icon_goldbar", "icon_globe", "icon_anvil", "icon_hammer", "icon_pickaxe", "icon_mountain",
+		"icon_tree", "icon_leaf", "icon_sprout", "icon_wheat", "icon_ship", "icon_plane", "icon_rocket", "icon_satellite",
+		"icon_train", "icon_factory", "icon_landmark", "icon_capitol", "icon_bell", "icon_book", "icon_bosses", "icon_sparkles",
+		"icon_seal", "icon_flag", "icon_map", "icon_tent", "icon_cpu", "icon_bot", "icon_droplet", "icon_fish",
+		"icon_alliance", "icon_users", "icon_military", "icon_influence", "icon_xp", "icon_rankings" },
 	Colors = { "c0392b", "d35400", "d4a017", "27ae60", "16a085", "2980b9", "2c3e91", "8e44ad", "c2185b", "6d4c41", "546e7a", "1b1b1b" },
 	TaxMax = 15,
 	TaxChangeCooldown = 24 * 3600,
