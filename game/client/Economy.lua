@@ -139,6 +139,7 @@ S.laws = { build = function(host, App)
 		local gs = UI.mk("UIScale", {}, giftBtn.Inst)
 		game:GetService("TweenService"):Create(gs, TweenInfo.new(0.7, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Scale = 1.07 }):Play()
 	end
+	App.on("resize", function() if host.Visible and App.state and obj.Refresh then obj:Refresh(App.state) end end)
 	local function giftVis(st)
 		giftBtn.Inst.Visible = st and st.onboarded and not st.groupGift and (st.groupId or 0) ~= 0 or false
 		-- the era tabs make room for the button: rebuild them when it appears or goes
@@ -254,7 +255,9 @@ S.laws = { build = function(host, App)
 		-- Kash 3 Oct: every era tab is shown; eras you don't have yet only show a lock and the level they open at
 		local cur = R.PlayerEra(st)
 		local giftOn = giftBtn.Inst.Visible
-		if not tabs or obj.curEra ~= cur or obj.tabsGift ~= giftOn then
+		-- rebuild on screen size changes too (phones rotate, windows resize) so the tabs never run under FREE GIFT
+		if not tabs or obj.curEra ~= cur or obj.tabsGift ~= giftOn or obj.tabsW ~= App.W() then
+			obj.tabsW = App.W()
 			if tabs then tabs.Inst:Destroy() end
 			local labels = {}
 			for e = 1, #D.Eras do table.insert(labels, e <= cur and string.upper(D.Eras[e].name) or ("LV " .. D.Eras[e].start)) end

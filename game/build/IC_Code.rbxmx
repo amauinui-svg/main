@@ -8480,6 +8480,7 @@ S.laws = { build = function(host, App)
 		local gs = UI.mk("UIScale", {}, giftBtn.Inst)
 		game:GetService("TweenService"):Create(gs, TweenInfo.new(0.7, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Scale = 1.07 }):Play()
 	end
+	App.on("resize", function() if host.Visible and App.state and obj.Refresh then obj:Refresh(App.state) end end)
 	local function giftVis(st)
 		giftBtn.Inst.Visible = st and st.onboarded and not st.groupGift and (st.groupId or 0) ~= 0 or false
 		-- the era tabs make room for the button: rebuild them when it appears or goes
@@ -8595,7 +8596,9 @@ S.laws = { build = function(host, App)
 		-- Kash 3 Oct: every era tab is shown; eras you don't have yet only show a lock and the level they open at
 		local cur = R.PlayerEra(st)
 		local giftOn = giftBtn.Inst.Visible
-		if not tabs or obj.curEra ~= cur or obj.tabsGift ~= giftOn then
+		-- rebuild on screen size changes too (phones rotate, windows resize) so the tabs never run under FREE GIFT
+		if not tabs or obj.curEra ~= cur or obj.tabsGift ~= giftOn or obj.tabsW ~= App.W() then
+			obj.tabsW = App.W()
 			if tabs then tabs.Inst:Destroy() end
 			local labels = {}
 			for e = 1, #D.Eras do table.insert(labels, e <= cur and string.upper(D.Eras[e].name) or ("LV " .. D.Eras[e].start)) end
@@ -16309,6 +16312,10 @@ local Remotes = RS:WaitForChild("Remotes")
 
 local old = pgui:FindFirstChild("IdleCountryHUD"); if old then old:Destroy() end
 local sg = mk("ScreenGui", { Name = "IdleCountryHUD", ResetOnSpawn = false, IgnoreGuiInset = true, ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets, ZIndexBehavior = Enum.ZIndexBehavior.Sibling, DisplayOrder = 5 }, pgui)
+-- phones: the HUD stays inside the safe area (notch, home bar), this fills the rest of the screen so the 3D world never shows
+local oldBack = pgui:FindFirstChild("IdleCountryBackdrop"); if oldBack then oldBack:Destroy() end
+local backSg = mk("ScreenGui", { Name = "IdleCountryBackdrop", ResetOnSpawn = false, IgnoreGuiInset = true, ScreenInsets = Enum.ScreenInsets.None, DisplayOrder = 4 }, pgui)
+mk("Frame", { Name = "Fill", BackgroundColor3 = Color3.fromHex("14171b"), BorderSizePixel = 0, Size = UDim2.fromScale(1, 1) }, backSg)
 local root = mk("Frame", { Name = "Root", BackgroundTransparency = 1, Size = UDim2.fromOffset(1280, 720), ZIndex = 1 }, sg)
 local uiScale = mk("UIScale", { Name = "Fit" }, root)
 mk("Frame", { Name = "Backdrop", BackgroundColor3 = Color3.fromHex("14171b"), BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ZIndex = 0 }, root)
@@ -16509,24 +16516,26 @@ local function scaleOf(f) topScales[f] = topScales[f] or mk("UIScale", {}, f); r
 local function layoutTop()
 	local w = App.W()
 	local x0 = robloxButtonsEnd()
-	top.id.Position = UDim2.fromOffset(x0, 0)
+	if not top.compact then top.id.Position = UDim2.fromOffset(x0, 0) end
+	-- phones (compact): the identity block lives at the top of the nav, so the top bar only holds money and energy
+	local idW = top.compact and 0 or 340
 	-- shrink the three groups together until cash fits between identity and the bars (phones)
 	-- the UPGRADES button (when shown) takes 122 px (scaled) between the energy group and the gear
 	local upgW = top.upg.Visible and 122 or 0
 	local k = 1
 	for _, try in ipairs({ 1, 0.9, 0.8, 0.72, 0.65, 0.58 }) do
 		k = try
-		local room = w - 62 - (470 + upgW) * k - (x0 + 340 * k)
+		local room = w - 62 - (470 + upgW) * k - (x0 + idW * k)
 		if room >= 300 * k then break end
 	end
-	scaleOf(top.id).Scale = k; scaleOf(top.right).Scale = k; scaleOf(top.mid).Scale = k; scaleOf(top.upg).Scale = k
-	top.id.Size = UDim2.fromOffset(330, TOP / k)
+	if not top.compact then scaleOf(top.id).Scale = k; top.id.Size = UDim2.fromOffset(330, TOP / k) end
+	scaleOf(top.right).Scale = k; scaleOf(top.mid).Scale = k; scaleOf(top.upg).Scale = k
 	top.right.Size = UDim2.fromOffset(470, TOP / k)
 	top.mid.Size = UDim2.fromOffset(300, TOP / k)
 	top.upg.Size = UDim2.fromOffset(122, TOP / k)
 	top.upg.Position = UDim2.new(1, -62, 0, 0)
 	top.right.Position = UDim2.new(1, -62 - math.floor(upgW * k), 0, 0)
-	local midX = x0 + 340 * k
+	local midX = x0 + idW * k
 	local room = w - 62 - (470 + upgW) * k - midX
 	top.mid.Visible = room >= 290 * k
 	top.mid.Position = UDim2.fromOffset(midX + math.max(0, math.floor((room - 300 * k) / 2)), 0)
@@ -16561,6 +16570,30 @@ local function layoutNav()
 	nav.Position = UDim2.fromOffset(0, y)
 	nav.Size = UDim2.new(0, NAVW, 1, -y)
 end
+-- compact identity (phones): flag, name and level bar as the first item of the nav column
+local idSlot = mk("Frame", { Name = "IdentitySlot", BackgroundTransparency = 1, Size = UDim2.fromOffset(NAVW, 64), LayoutOrder = -1, Visible = false, ZIndex = 16 }, nav)
+local function setCompact(on)
+	if top.compact == on then return end
+	top.compact = on
+	idSlot.Visible = on
+	local fs = top.flagHost:FindFirstChildOfClass("UIScale") or mk("UIScale", {}, top.flagHost)
+	if on then
+		top.id.Parent = idSlot
+		scaleOf(top.id).Scale = 1
+		top.id.Position = UDim2.fromOffset(0, 0); top.id.Size = UDim2.fromOffset(NAVW, 64)
+		top.flagHost.Position = UDim2.fromOffset(6, 6); fs.Scale = 0.62
+		top.name.Position = UDim2.fromOffset(46, 4); top.name.Size = UDim2.fromOffset(NAVW - 50, 26); top.name.TextSize = 15
+		top.xp.Inst.Position = UDim2.fromOffset(4, 36); top.xp.Inst.Size = UDim2.fromOffset(NAVW - 8, 22)
+	else
+		top.id.Parent = topBar
+		top.flagHost.Position = UDim2.fromOffset(0, 12); fs.Scale = 1
+		top.name.Position = UDim2.fromOffset(68, 6); top.name.Size = UDim2.fromOffset(250, 24); top.name.TextSize = 19
+		top.xp.Inst.Position = UDim2.fromOffset(68, 34); top.xp.Inst.Size = UDim2.fromOffset(250, 22)
+	end
+	layoutTop()
+end
+App.on("resize", function() setCompact(App.H() < 600) end)
+setCompact(App.H() < 600)
 App.on("resize", layoutNav)
 pcall(function() GuiService:GetPropertyChangedSignal("TopbarInset"):Connect(layoutNav) end)
 layoutNav()
