@@ -597,7 +597,7 @@ S.alliance = { build = function(host, App)
 				local fees = { 0, 10e3, 100e3, 1e6, 10e6, 100e6, 1e9 }
 				for k, v in ipairs(fees) do
 					UI.button(c, f.fee == v and "gold" or "slate", v == 0 and "FREE" or R.Money(v), function() f.fee = v; obj:Refresh(App.state) end,
-						{ sz = UDim2.new(1 / #fees, -6, 0, 34), pos = UDim2.new((k - 1) / #fees, 12, 0, 30), z = 9, textSize = 13 })
+						{ sz = UDim2.new(1 / #fees, -6 - math.ceil(24 / #fees), 0, 34), pos = UDim2.new((k - 1) / #fees, 12 - math.floor(24 * (k - 1) / #fees), 0, 30), z = 9, textSize = 13 })
 				end
 				text(c, "DUES (share of members' earnings)", { font = "heavy", size = 13, color = C.muted, pos = UDim2.fromOffset(16, 74), sz = UDim2.fromOffset(300, 18), z = 9 })
 				UI.button(c, "slate", "-", function() f.pct = math.max(0, f.pct - 1); obj:Refresh(App.state) end, { sz = UDim2.fromOffset(40, 40), pos = UDim2.fromOffset(12, 96), z = 9, textSize = 20 })
