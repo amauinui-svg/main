@@ -266,6 +266,17 @@ local NAV = {
 }
 local nav = UI.list(root, { name = "Nav", pos = UDim2.fromOffset(0, TOP + 4), sz = UDim2.new(0, NAVW, 1, -TOP - 4), gap = 3, z = 15 })
 nav.ScrollBarThickness = 0
+-- on phones the Roblox menu buttons are taller than our scaled top bar: start the nav below them (Kash 00:30 mobile test)
+local function layoutNav()
+	local ok, inset = pcall(function() return GuiService.TopbarInset end)
+	local robloxBottom = (ok and inset and inset.Max.Y > 0) and math.ceil(inset.Max.Y / uiScale.Scale) + 6 or 0
+	local y = math.max(TOP + 4, robloxBottom)
+	nav.Position = UDim2.fromOffset(0, y)
+	nav.Size = UDim2.new(0, NAVW, 1, -y)
+end
+App.on("resize", layoutNav)
+pcall(function() GuiService:GetPropertyChangedSignal("TopbarInset"):Connect(layoutNav) end)
+layoutNav()
 nav:FindFirstChildOfClass("UIPadding").PaddingRight = UDim.new(0, 0)
 nav:FindFirstChildOfClass("UIPadding").PaddingLeft = UDim.new(0, 0)
 local navButtons = {}
@@ -516,7 +527,7 @@ local function drawTimers()
 		top.infT.Text = "+1 in " .. R.Clock(math.max(0, st.regenSec - st.infT - since)) .. " · full in " .. R.Duration((st.infMax - st.inf) * st.regenSec - st.infT - since)
 	else top.infT.Text = "FULL" end
 	if st.sup < st.supMax then
-		top.supT.Text = "+1 in " .. R.Clock(math.max(0, 60 - st.supT - since))
+		top.supT.Text = "+1 in " .. R.Clock(math.max(0, (st.supSec or 60) - st.supT - since))
 	else top.supT.Text = "FULL" end
 end
 

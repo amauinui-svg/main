@@ -970,9 +970,11 @@ C.Passes = {
 	VIP = { id = 2006120681, name = "VIP", desc = "+10% cash from everything, +10% faster Influence regen and the VIP chat tag.", price = 499 },
 	MegaVIP = { id = 2006588683, name = "Mega VIP", desc = "+25% cash, +25% faster Influence regen, a unique LIMITED officer and the MEGA VIP chat tag.", price = 899 },
 	CustomFlag = { id = 2005754689, name = "Custom Flag", desc = "Design your own flag: extra layouts, emblems and colours, or use your own image.", price = 99 },
+	FastInfluence = { id = 2005478758, name = "2x Influence Regen", desc = "Influence refills twice as fast.", price = 499 }, -- Kash 00:39
+	FastSupply = { id = 2006054752, name = "2x Supply Regen", desc = "Supply refills twice as fast.", price = 199 }, -- Kash 00:39
 	CrateLuck = { id = 2006210718, name = "2x Crate Luck", desc = "Double the odds of Legendary and better from every crate.", price = 349 },
 }
-C.PassOrder = { "FastConvoys", "AutoDispatch", "ExtraConvoys", "ExtraLots", "BonusOfficer", "VIP", "MegaVIP", "CrateLuck", "CustomFlag" }
+C.PassOrder = { "FastInfluence", "FastConvoys", "FastSupply", "AutoDispatch", "ExtraConvoys", "ExtraLots", "BonusOfficer", "VIP", "MegaVIP", "CrateLuck", "CustomFlag" }
 
 -- Popular capitals (Kash 2 Oct): shown first in onboarding. Live list comes from where players actually live;
 -- this is the starting list until enough players have picked (New York, London, Sao Paulo, Los Angeles, Mexico City, Jakarta).
@@ -1211,7 +1213,8 @@ end
 -- A level costs a multiple of what one FULL Influence bar earns at that level with the best law you have,
 -- so the refill on level-up can never chain into the next level by itself.
 -- 3 Oct (Kash: progress too fast, levels should be a lot harder): about twice the XP per level
-R.XpFirst, R.XpBase, R.XpStep, R.XpCap = 1.0, 2.5, 0.4, 10
+-- 3 Oct 00:38 (Kash: better, but still a bit too hard, even with VIP): eased to about 1.45x the original curve
+R.XpFirst, R.XpBase, R.XpStep, R.XpCap = 0.9, 1.9, 0.3, 7.5
 local bestXp, bestCash = {}, {}
 function R.BestXpPerInfluence(lv)
 	if bestXp[lv] then return bestXp[lv] end
@@ -1229,7 +1232,7 @@ function R.BestCashPerInfluence(lv)
 end
 function R.XpReq(lv)
 	-- 3 Oct 00:37 (Kash: level 3 was too hard to reach): gentle first levels, then the normal climb from level 4
-	local early = { [1] = R.XpFirst, [2] = 1.4, [3] = 2.2 }
+	local early = { [1] = R.XpFirst, [2] = 1.2, [3] = 1.7 }
 	local mult = early[lv] or math.min(R.XpCap, R.XpBase + R.XpStep * (lv - 2))
 	return math.floor(R.BestXpPerInfluence(lv) * R.MaxInfluence(lv) * mult + 0.5)
 end
@@ -3021,9 +3024,11 @@ function PS.Mods(p)
 	local vt = PS.VipTier(p)
 	local vip = (vt and vt.cash or 0) + (p.premium and Config.PremiumBonus or 0) + (p.inGroup and Config.Group.Bonus or 0)
 	local vipRegen = vt and vt.regen or 0
+	local regenPass = PS.Has(p, "FastInfluence") and 2 or 1 -- 2x Influence Regen pass doubles the whole rate
 	return {
 		law = 1 + (ideo.law or 0) + perks.law + b.law + vip, props = 1 + (ideo.props or 0) + perks.props + b.props + vip + R.WonderBonus(d.wonder),
-		convoy = 1 + (ideo.convoy or 0) + perks.convoy + b.convoy + vip, regen = 1 + (ideo.regen or 0) + perks.regen + b.regen + vipRegen,
+		convoy = 1 + (ideo.convoy or 0) + perks.convoy + b.convoy + vip, regen = (1 + (ideo.regen or 0) + perks.regen + b.regen + vipRegen) * regenPass,
+		supRegen = (1 + (ideo.regen or 0)) * (PS.Has(p, "FastSupply") and 2 or 1),
 		xp = 1 + (ideo.xp or 0) + b.xp + vip,
 		attack = (ideo.attack or 0) + perks.attack + b.attack + b.gearAtk, defense = (ideo.defense or 0) + perks.defense + b.defense + b.gearDef,
 		siege = (ideo.attack or 0) + perks.attack + 0.05 * war + b.siege, boss = b.boss,
@@ -3032,6 +3037,7 @@ function PS.Mods(p)
 	}
 end
 function PS.RegenSec(mods) return R.RegenSec / (mods and mods.regen or 1) end
+function PS.SupplySec(mods) return R.SupplyRegenSec / (mods and mods.supRegen or 1) end
 function PS.Has(p, pass) return p.gp[pass] == true end
 -- silent rent on property income to the alliance holding your home capital (Kash 18:49: never notified)
 function PS.PayRent(p, inc)
@@ -3482,7 +3488,7 @@ function PS.Snapshot(p)
 		name = d.name, flag = d.flag, ideo = d.ideo, home = d.home, onboarded = d.onboarded,
 		cash = d.cash, gold = d.gold, seals = d.seals, lv = d.lv, era = R.PlayerEra(d), eraCost = R.EraCost((d.era or 1) + 1), xp = d.xp, xpReq = R.XpReq(d.lv),
 		inf = d.inf, infMax = R.MaxInfluence(d.lv, d.sk), infT = d.infT, regenSec = PS.RegenSec(mods),
-		sup = d.sup, supMax = R.MaxSupply(d.lv, d.sk), supT = d.supT,
+		sup = d.sup, supMax = R.MaxSupply(d.lv, d.sk), supT = d.supT, supSec = PS.SupplySec(mods),
 		passes = d.passes, lots = d.lots, lotsMax = PS.LotsMax(p), sk = d.sk, skillFree = PS.SkillFree(d), goldLaws = PS.GoldLaws(d),
 		units = d.units, atk = atk, def = def, siege = M.SiegeDamage(d.lv, d.sk, d.units, { attack = mods.siege }),
 		convoys = d.convoys, slots = PS.Slots(p), boss = boss, tasks = tasks, loan = d.loan,
@@ -3661,7 +3667,7 @@ function PS.CatchUp(p)
 	end
 	local maxSup = R.MaxSupply(d.lv, d.sk)
 	if d.sup < maxSup then
-		local gain = math.floor((d.supT + away) / R.SupplyRegenSec)
+		local gain = math.floor((d.supT + away) / PS.SupplySec(mods))
 		d.sup = math.min(maxSup, d.sup + gain); d.supT = 0
 	end
 	local trips = PS.AdvanceConvoys(p, now(), true)
@@ -3703,7 +3709,8 @@ function PS.Step(plr, p)
 	local maxSup = R.MaxSupply(d.lv, d.sk)
 	if d.sup < maxSup then
 		d.supT += 1
-		while d.supT >= R.SupplyRegenSec and d.sup < maxSup do d.sup += 1; d.supT -= R.SupplyRegenSec end
+		local supSec = PS.SupplySec(mods)
+		while d.supT >= supSec and d.sup < maxSup do d.sup += 1; d.supT -= supSec end
 		if d.sup >= maxSup then d.supT = 0 end
 	else d.supT = 0 end
 	PS.Earn(p, PS.PayRent(p, PS.IncHr(p, mods) / 3600), "props")
@@ -14740,7 +14747,7 @@ local LIMITED = Color3.fromHex("ff9a2e")
 local DARK = Color3.fromHex("121519")
 
 local PASS_ART = { FastConvoys = "pass_express", AutoDispatch = "pass_auto", ExtraConvoys = "pass_convoys", ExtraLots = "pass_lots",
-	BonusOfficer = "pass_officer", CrateLuck = "pass_luck", VIP = "pass_vip", MegaVIP = "pass_megavip", CustomFlag = "pass_flag" }
+	FastInfluence = "icon_influence", FastSupply = "icon_supply", BonusOfficer = "pass_officer", CrateLuck = "pass_luck", VIP = "pass_vip", MegaVIP = "pass_megavip", CustomFlag = "pass_flag" }
 
 ---------------------------------------------------------------- small local kit
 local function tw(o, t, props, style, dir, rep, rev, delay)
@@ -16069,7 +16076,7 @@ local STEPS = {
 	{ title = "YOUR FIRST LAW", text = "Tap <b>PASS</b> on a law. It costs Influence and pays cash and XP.", find = "pass", done = function(st) return (st.stats and st.stats.laws or 0) >= 1 end },
 	{ title = "LEVEL UP", text = "Keep passing laws to reach <b>level 2</b>. Influence refills over time and on every level up.", find = "pass", done = function(st) return (st.lv or 1) >= 2 end },
 	{ title = "PROPERTIES", text = "You unlocked <b>PROPERTIES</b>! Open it to earn money even while you are away.", tab = "properties", done = function(st, App) return App.current == "properties" end },
-	{ title = "BUILD", text = "Tap an empty lot (<b>FOR SALE</b>) and build your first property. It pays you every hour.", find = "lot", done = function(st) return built(st) end,
+	{ title = "BUILD", text = "Build your first property: tap a <b>FOR SALE</b> lot, then <b>BUILD</b>. It pays you every hour.", find = "lot", done = function(st) return built(st) end,
 		-- not enough cash yet: say how much is missing instead of pointing at a button that will refuse
 		alt = function(st)
 			local need = R.PropCost(1, 0)
@@ -16206,7 +16213,17 @@ S._tutorial = { init = function(App)
 	end
 
 	local function build()
-		card = UI.img(App.sg or App.root, "panel", { name = "Tutorial", sz = UDim2.fromOffset(520, 118), pos = UDim2.new(0.5, (App.NAVW or 176) / 2, 1, -18), anchor = Vector2.new(0.5, 1), z = 70 })
+		-- the card lives in a holder that copies the HUD scale, so it is the same size as the rest of the UI on phones
+		local holder = mk("Frame", { Name = "TutorialHolder", BackgroundTransparency = 1, Size = App.root.Size, ZIndex = 70 }, App.sg)
+		local hs = mk("UIScale", {}, holder)
+		local function sync()
+			hs.Scale = App.root:FindFirstChildOfClass("UIScale").Scale
+			holder.Size = App.root.Size
+		end
+		sync()
+		App.root:GetPropertyChangedSignal("Size"):Connect(sync)
+		App.root:FindFirstChildOfClass("UIScale"):GetPropertyChangedSignal("Scale"):Connect(sync)
+		card = UI.img(holder, "panel", { name = "Tutorial", sz = UDim2.fromOffset(520, 118), pos = UDim2.new(0.5, (App.NAVW or 176) / 2, 1, -18), anchor = Vector2.new(0.5, 1), z = 70 })
 		UI.outline(card, C.gold, 2)
 		UI.icon(card, "icon_sparkles", 26, C.gold, UDim2.fromOffset(16, 16), { z = 71 })
 		titleL = text(card, "", { font = "display", size = 20, color = C.manila, pos = UDim2.fromOffset(50, 12), sz = UDim2.new(1, -170, 0, 26), z = 71 })
@@ -16536,6 +16553,17 @@ local NAV = {
 }
 local nav = UI.list(root, { name = "Nav", pos = UDim2.fromOffset(0, TOP + 4), sz = UDim2.new(0, NAVW, 1, -TOP - 4), gap = 3, z = 15 })
 nav.ScrollBarThickness = 0
+-- on phones the Roblox menu buttons are taller than our scaled top bar: start the nav below them (Kash 00:30 mobile test)
+local function layoutNav()
+	local ok, inset = pcall(function() return GuiService.TopbarInset end)
+	local robloxBottom = (ok and inset and inset.Max.Y > 0) and math.ceil(inset.Max.Y / uiScale.Scale) + 6 or 0
+	local y = math.max(TOP + 4, robloxBottom)
+	nav.Position = UDim2.fromOffset(0, y)
+	nav.Size = UDim2.new(0, NAVW, 1, -y)
+end
+App.on("resize", layoutNav)
+pcall(function() GuiService:GetPropertyChangedSignal("TopbarInset"):Connect(layoutNav) end)
+layoutNav()
 nav:FindFirstChildOfClass("UIPadding").PaddingRight = UDim.new(0, 0)
 nav:FindFirstChildOfClass("UIPadding").PaddingLeft = UDim.new(0, 0)
 local navButtons = {}
@@ -16786,7 +16814,7 @@ local function drawTimers()
 		top.infT.Text = "+1 in " .. R.Clock(math.max(0, st.regenSec - st.infT - since)) .. " · full in " .. R.Duration((st.infMax - st.inf) * st.regenSec - st.infT - since)
 	else top.infT.Text = "FULL" end
 	if st.sup < st.supMax then
-		top.supT.Text = "+1 in " .. R.Clock(math.max(0, 60 - st.supT - since))
+		top.supT.Text = "+1 in " .. R.Clock(math.max(0, (st.supSec or 60) - st.supT - since))
 	else top.supT.Text = "FULL" end
 end
 

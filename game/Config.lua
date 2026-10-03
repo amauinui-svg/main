@@ -14,9 +14,11 @@ C.Passes = {
 	VIP = { id = 2006120681, name = "VIP", desc = "+10% cash from everything, +10% faster Influence regen and the VIP chat tag.", price = 499 },
 	MegaVIP = { id = 2006588683, name = "Mega VIP", desc = "+25% cash, +25% faster Influence regen, a unique LIMITED officer and the MEGA VIP chat tag.", price = 899 },
 	CustomFlag = { id = 2005754689, name = "Custom Flag", desc = "Design your own flag: extra layouts, emblems and colours, or use your own image.", price = 99 },
+	FastInfluence = { id = 2005478758, name = "2x Influence Regen", desc = "Influence refills twice as fast.", price = 499 }, -- Kash 00:39
+	FastSupply = { id = 2006054752, name = "2x Supply Regen", desc = "Supply refills twice as fast.", price = 199 }, -- Kash 00:39
 	CrateLuck = { id = 2006210718, name = "2x Crate Luck", desc = "Double the odds of Legendary and better from every crate.", price = 349 },
 }
-C.PassOrder = { "FastConvoys", "AutoDispatch", "ExtraConvoys", "ExtraLots", "BonusOfficer", "VIP", "MegaVIP", "CrateLuck", "CustomFlag" }
+C.PassOrder = { "FastInfluence", "FastConvoys", "FastSupply", "AutoDispatch", "ExtraConvoys", "ExtraLots", "BonusOfficer", "VIP", "MegaVIP", "CrateLuck", "CustomFlag" }
 
 -- Popular capitals (Kash 2 Oct): shown first in onboarding. Live list comes from where players actually live;
 -- this is the starting list until enough players have picked (New York, London, Sao Paulo, Los Angeles, Mexico City, Jakarta).

@@ -68,7 +68,8 @@ end
 -- A level costs a multiple of what one FULL Influence bar earns at that level with the best law you have,
 -- so the refill on level-up can never chain into the next level by itself.
 -- 3 Oct (Kash: progress too fast, levels should be a lot harder): about twice the XP per level
-R.XpFirst, R.XpBase, R.XpStep, R.XpCap = 1.0, 2.5, 0.4, 10
+-- 3 Oct 00:38 (Kash: better, but still a bit too hard, even with VIP): eased to about 1.45x the original curve
+R.XpFirst, R.XpBase, R.XpStep, R.XpCap = 0.9, 1.9, 0.3, 7.5
 local bestXp, bestCash = {}, {}
 function R.BestXpPerInfluence(lv)
 	if bestXp[lv] then return bestXp[lv] end
@@ -86,7 +87,7 @@ function R.BestCashPerInfluence(lv)
 end
 function R.XpReq(lv)
 	-- 3 Oct 00:37 (Kash: level 3 was too hard to reach): gentle first levels, then the normal climb from level 4
-	local early = { [1] = R.XpFirst, [2] = 1.4, [3] = 2.2 }
+	local early = { [1] = R.XpFirst, [2] = 1.2, [3] = 1.7 }
 	local mult = early[lv] or math.min(R.XpCap, R.XpBase + R.XpStep * (lv - 2))
 	return math.floor(R.BestXpPerInfluence(lv) * R.MaxInfluence(lv) * mult + 0.5)
 end

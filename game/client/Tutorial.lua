@@ -19,7 +19,7 @@ local STEPS = {
 	{ title = "YOUR FIRST LAW", text = "Tap <b>PASS</b> on a law. It costs Influence and pays cash and XP.", find = "pass", done = function(st) return (st.stats and st.stats.laws or 0) >= 1 end },
 	{ title = "LEVEL UP", text = "Keep passing laws to reach <b>level 2</b>. Influence refills over time and on every level up.", find = "pass", done = function(st) return (st.lv or 1) >= 2 end },
 	{ title = "PROPERTIES", text = "You unlocked <b>PROPERTIES</b>! Open it to earn money even while you are away.", tab = "properties", done = function(st, App) return App.current == "properties" end },
-	{ title = "BUILD", text = "Tap an empty lot (<b>FOR SALE</b>) and build your first property. It pays you every hour.", find = "lot", done = function(st) return built(st) end,
+	{ title = "BUILD", text = "Build your first property: tap a <b>FOR SALE</b> lot, then <b>BUILD</b>. It pays you every hour.", find = "lot", done = function(st) return built(st) end,
 		-- not enough cash yet: say how much is missing instead of pointing at a button that will refuse
 		alt = function(st)
 			local need = R.PropCost(1, 0)
@@ -156,7 +156,17 @@ S._tutorial = { init = function(App)
 	end
 
 	local function build()
-		card = UI.img(App.sg or App.root, "panel", { name = "Tutorial", sz = UDim2.fromOffset(520, 118), pos = UDim2.new(0.5, (App.NAVW or 176) / 2, 1, -18), anchor = Vector2.new(0.5, 1), z = 70 })
+		-- the card lives in a holder that copies the HUD scale, so it is the same size as the rest of the UI on phones
+		local holder = mk("Frame", { Name = "TutorialHolder", BackgroundTransparency = 1, Size = App.root.Size, ZIndex = 70 }, App.sg)
+		local hs = mk("UIScale", {}, holder)
+		local function sync()
+			hs.Scale = App.root:FindFirstChildOfClass("UIScale").Scale
+			holder.Size = App.root.Size
+		end
+		sync()
+		App.root:GetPropertyChangedSignal("Size"):Connect(sync)
+		App.root:FindFirstChildOfClass("UIScale"):GetPropertyChangedSignal("Scale"):Connect(sync)
+		card = UI.img(holder, "panel", { name = "Tutorial", sz = UDim2.fromOffset(520, 118), pos = UDim2.new(0.5, (App.NAVW or 176) / 2, 1, -18), anchor = Vector2.new(0.5, 1), z = 70 })
 		UI.outline(card, C.gold, 2)
 		UI.icon(card, "icon_sparkles", 26, C.gold, UDim2.fromOffset(16, 16), { z = 71 })
 		titleL = text(card, "", { font = "display", size = 20, color = C.manila, pos = UDim2.fromOffset(50, 12), sz = UDim2.new(1, -170, 0, 26), z = 71 })

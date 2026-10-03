@@ -99,9 +99,11 @@ function PS.Mods(p)
 	local vt = PS.VipTier(p)
 	local vip = (vt and vt.cash or 0) + (p.premium and Config.PremiumBonus or 0) + (p.inGroup and Config.Group.Bonus or 0)
 	local vipRegen = vt and vt.regen or 0
+	local regenPass = PS.Has(p, "FastInfluence") and 2 or 1 -- 2x Influence Regen pass doubles the whole rate
 	return {
 		law = 1 + (ideo.law or 0) + perks.law + b.law + vip, props = 1 + (ideo.props or 0) + perks.props + b.props + vip + R.WonderBonus(d.wonder),
-		convoy = 1 + (ideo.convoy or 0) + perks.convoy + b.convoy + vip, regen = 1 + (ideo.regen or 0) + perks.regen + b.regen + vipRegen,
+		convoy = 1 + (ideo.convoy or 0) + perks.convoy + b.convoy + vip, regen = (1 + (ideo.regen or 0) + perks.regen + b.regen + vipRegen) * regenPass,
+		supRegen = (1 + (ideo.regen or 0)) * (PS.Has(p, "FastSupply") and 2 or 1),
 		xp = 1 + (ideo.xp or 0) + b.xp + vip,
 		attack = (ideo.attack or 0) + perks.attack + b.attack + b.gearAtk, defense = (ideo.defense or 0) + perks.defense + b.defense + b.gearDef,
 		siege = (ideo.attack or 0) + perks.attack + 0.05 * war + b.siege, boss = b.boss,
@@ -110,6 +112,7 @@ function PS.Mods(p)
 	}
 end
 function PS.RegenSec(mods) return R.RegenSec / (mods and mods.regen or 1) end
+function PS.SupplySec(mods) return R.SupplyRegenSec / (mods and mods.supRegen or 1) end
 function PS.Has(p, pass) return p.gp[pass] == true end
 -- silent rent on property income to the alliance holding your home capital (Kash 18:49: never notified)
 function PS.PayRent(p, inc)
@@ -560,7 +563,7 @@ function PS.Snapshot(p)
 		name = d.name, flag = d.flag, ideo = d.ideo, home = d.home, onboarded = d.onboarded,
 		cash = d.cash, gold = d.gold, seals = d.seals, lv = d.lv, era = R.PlayerEra(d), eraCost = R.EraCost((d.era or 1) + 1), xp = d.xp, xpReq = R.XpReq(d.lv),
 		inf = d.inf, infMax = R.MaxInfluence(d.lv, d.sk), infT = d.infT, regenSec = PS.RegenSec(mods),
-		sup = d.sup, supMax = R.MaxSupply(d.lv, d.sk), supT = d.supT,
+		sup = d.sup, supMax = R.MaxSupply(d.lv, d.sk), supT = d.supT, supSec = PS.SupplySec(mods),
 		passes = d.passes, lots = d.lots, lotsMax = PS.LotsMax(p), sk = d.sk, skillFree = PS.SkillFree(d), goldLaws = PS.GoldLaws(d),
 		units = d.units, atk = atk, def = def, siege = M.SiegeDamage(d.lv, d.sk, d.units, { attack = mods.siege }),
 		convoys = d.convoys, slots = PS.Slots(p), boss = boss, tasks = tasks, loan = d.loan,
@@ -739,7 +742,7 @@ function PS.CatchUp(p)
 	end
 	local maxSup = R.MaxSupply(d.lv, d.sk)
 	if d.sup < maxSup then
-		local gain = math.floor((d.supT + away) / R.SupplyRegenSec)
+		local gain = math.floor((d.supT + away) / PS.SupplySec(mods))
 		d.sup = math.min(maxSup, d.sup + gain); d.supT = 0
 	end
 	local trips = PS.AdvanceConvoys(p, now(), true)
@@ -781,7 +784,8 @@ function PS.Step(plr, p)
 	local maxSup = R.MaxSupply(d.lv, d.sk)
 	if d.sup < maxSup then
 		d.supT += 1
-		while d.supT >= R.SupplyRegenSec and d.sup < maxSup do d.sup += 1; d.supT -= R.SupplyRegenSec end
+		local supSec = PS.SupplySec(mods)
+		while d.supT >= supSec and d.sup < maxSup do d.sup += 1; d.supT -= supSec end
 		if d.sup >= maxSup then d.supT = 0 end
 	else d.supT = 0 end
 	PS.Earn(p, PS.PayRent(p, PS.IncHr(p, mods) / 3600), "props")

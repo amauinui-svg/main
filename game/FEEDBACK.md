@@ -364,3 +364,10 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 ## 3 Oct 00:37 (Kash)
 - Level 3 was too hard to reach: first levels are gentler (level 2 needs 1.4 Influence bars of XP, level 3 needs 2.2, normal climb from level 4).
 - Army training (MILITARY) and attacking other players (RAIDS) now unlock at level 3, together with the shop. AI nations still leave players alone until level 5.
+
+## 3 Oct 00:38 (Kash)
+- Level progression better but still a bit too hard (tested with VIP and Mega VIP): eased the whole curve to about 1.45x the original (was 2x). XpBase 1.9, XpStep 0.3, cap 7.5; level 2 = 1.2 bars, level 3 = 1.7 bars.
+
+## 3 Oct 00:39 (Kash)
+- New passes: 2x Influence Regen R$499 (id 2005478758, the big one) and 2x Supply Regen R$199 (id 2006054752). Influence pass doubles the whole regen rate (stacks with VIP, officers, government); Supply pass doubles Supply regen. Theocracy's +10% now also applies to Supply as its card says. Both are first/third in the GAME PASSES list.
+- Mobile test: nav now starts below the Roblox menu buttons on phones; tutorial card scales with the HUD.
