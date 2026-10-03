@@ -997,6 +997,15 @@ C.Badges = {
 	{ key = "forbidden", id = 0, name = "Forbidden Power", desc = "Own a FORBIDDEN officer." },
 }
 
+-- GEAR SHOP (Kash 2 Oct 23:26): restocks every 5 minutes with 3 random items of every rarity; 1 of each per player.
+-- Higher rarities need high levels. Price = minutes of law income at your level (never below the unlock level).
+C.GearShop = {
+	Restock = 300,
+	PerRarity = 3,
+	Levels = { 1, 10, 25, 50, 80, 110, 140, 170 },        -- common .. forbidden
+	Minutes = { 4, 10, 25, 60, 150, 360, 900, 2400 },    -- price in minutes of law income
+}
+
 C.Products = {
 	-- Founder's Crate: 49 R$ each (Kash 2 Oct), bulk cheaper per crate
 	Crate1 = { id = 3716173429, robux = 49, crates = 1 },
@@ -5183,19 +5192,14 @@ function act.onboard(plr, p, a)
 	if name:find("[^%w %-'%.]") then return no("Use letters, numbers, spaces, - ' . only") end
 	local f = WS.Filter(name, plr.UserId)
 	if not f or f ~= name then return no("That name is not allowed. Try another.") end
-	local flag = type(a.flag) == "table" and a.flag or {}
-	local layout = table.find(R.FlagLayouts, flag.l) and flag.l or "h3"
-	local cols = {}
-	for i = 1, 3 do
-		local c = type(flag.c) == "table" and flag.c[i]
-		cols[i] = table.find(R.FlagColors, c) and c or R.FlagColors[i]
-	end
+	local cleanFlag, ferr = A.CleanFlag(p, a.flag)
+	if not cleanFlag then cleanFlag = { l = "h3", c = { R.FlagColors[1], R.FlagColors[2], R.FlagColors[3] } } end
 	local ideo = R.IdeologyByKey[a.ideo] and a.ideo or "republic"
 	local home = int(a.home, 1, #World.Cities)
 	if not home then return no("Pick a home capital") end
 	WS.HomeMoved(nil, home)
 	if PS.AN then PS.AN.Step(p, "Founded country") end
-	d.name, d.flag, d.ideo, d.home, d.onboarded = name, { l = layout, c = cols }, ideo, home, true
+	d.name, d.flag, d.ideo, d.home, d.onboarded = name, cleanFlag, ideo, home, true
 	for _, c in ipairs(d.convoys) do if not c.to then c.at = home end end
 	PS.EnsureConvoys(p)
 	PS.GrantVipOfficer(p)
@@ -5695,7 +5699,15 @@ end
 -- flags: everyone can pick the basic layouts/colours; the Custom Flag pass adds more layouts, colours, an emblem
 -- and your own image (an asset id; Roblox moderates every uploaded image)
 function act.setFlag(plr, p, a)
-	local f = type(a.flag) == "table" and a.flag or {}
+	local flag, err = A.CleanFlag(p, a.flag)
+	if not flag then return no(err) end
+	p.data.flag = flag
+	return ok({ flag = flag })
+end
+-- shared flag validation (setFlag and onboarding). Returns flag or nil, message
+function A.CleanFlag(p, f)
+	local function no(m) return nil, m end
+	f = type(f) == "table" and f or {}
 	local pass = PS.Has(p, "CustomFlag")
 	local layouts = pass and R.FlagLayoutsAll or R.FlagLayouts
 	local colors = pass and R.FlagColorsAll or R.FlagColors
@@ -5718,8 +5730,7 @@ function act.setFlag(plr, p, a)
 		if not id or id < 1 or id > 1e15 or id ~= math.floor(id) then return no("Paste an image or decal id (numbers only)") end
 		flag.img = string.format("%d", id)
 	end
-	p.data.flag = flag
-	return ok({ flag = flag })
+	return flag
 end
 function act.revengeStrike(plr, p, a)
 	local r = p.data.revenge
@@ -6258,6 +6269,51 @@ function act.adRefill(plr, p)
 	return ok()
 end
 
+-- GEAR SHOP: a stock of 3 items per rarity, rolled from the 5 minute window and the player id (same for the whole
+-- window, new every restock). d.gshop = { w = window, b = { [index] = true } } remembers what was bought this window.
+local function gearStock(p, w)
+	local GS = Config.GearShop
+	local list = {}
+	for r = 1, #GS.Levels do
+		for k = 1, GS.PerRarity do
+			local rng = Random.new((w * 7919 + (p.userId % 1000003) * 104729 + r * 131 + k * 17) % 2147483647)
+			local g = O.NewGear(rng, r, k == 1 and "weapon" or (k == 2 and "armor" or nil))
+			g.id = nil
+			table.insert(list, { g = g, r = r, lvl = GS.Levels[r], cost = math.floor(R.MinuteValue(math.max(p.data.lv, GS.Levels[r])) * GS.Minutes[r] / 10 + 0.5) * 10 })
+		end
+	end
+	return list
+end
+function act.gearShop(plr, p)
+	local w = os.time() // Config.GearShop.Restock
+	local d = p.data
+	if type(d.gshop) ~= "table" or d.gshop.w ~= w then d.gshop = { w = w, b = {} } end
+	local out = {}
+	for i, e in ipairs(gearStock(p, w)) do
+		table.insert(out, { i = i, gear = e.g, lvl = e.lvl, cost = e.cost, bought = d.gshop.b[tostring(i)] == true })
+	end
+	return ok({ w = w, ends = (w + 1) * Config.GearShop.Restock, items = out })
+end
+function act.gearBuy(plr, p, a)
+	local d = p.data
+	local w = os.time() // Config.GearShop.Restock
+	if tonumber(a.w) ~= w then return no("The shop just restocked. Take a look at the new items!") end
+	local i = int(a.i, 1, #Config.GearShop.Levels * Config.GearShop.PerRarity)
+	if not i then return no("Unknown item") end
+	if type(d.gshop) ~= "table" or d.gshop.w ~= w then d.gshop = { w = w, b = {} } end
+	if d.gshop.b[tostring(i)] then return no("You already bought this one. More in the next restock.") end
+	local e = gearStock(p, w)[i]
+	if d.lv < e.lvl then return no("Unlocks at level " .. e.lvl) end
+	if invFull(d, 1) then return no("Inventory full. Discard some gear first.") end
+	if not PS.Spend(p, e.cost) then return no("Need " .. R.Money(e.cost)) end
+	local g = e.g
+	g.id = string.format("g%x%06x", os.time(), math.random(0, 16777215))
+	PS.AddGear(p, g)
+	d.gshop.b[tostring(i)] = true
+	if PS.AN then PS.AN.Custom(p, "GearShopBuy", e.r) end
+	return ok({ gear = g })
+end
+
 -- onboarding funnel steps reported by the onboarding screens (analytics only)
 local FUNNEL_UI = { name = "Named country", flag = "Designed flag", gov = "Chose government" }
 function act.funnel(plr, p, a)
@@ -6304,9 +6360,9 @@ function act.adminList(plr, p)
 	return ok({ list = AD.List() })
 end
 
-A.NoSync = { funnel = true, tutorial = true, adRefill = true, allyList = true, rankings = true, profile = true, adminList = true }
+A.NoSync = { gearShop = true, funnel = true, tutorial = true, adRefill = true, allyList = true, rankings = true, profile = true, adminList = true }
 -- requests allowed before onboarding finishes
-A.PreOnboard = { sync = true, onboard = true, rankings = true, admin = true, adminList = true, funnel = true }
+A.PreOnboard = { buyPass = true, sync = true, onboard = true, rankings = true, admin = true, adminList = true, funnel = true }
 return A
 ]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX21"><Properties><string name="Name">ServerScriptService|GameServer|Script</string><ProtectedString name="Source"><![CDATA[-- GameServer: wires the services together. All game rules live in ServerScriptService.Server and ReplicatedStorage.Shared.
 local Players = game:GetService("Players")
@@ -9785,6 +9841,7 @@ function O.show(App)
 	local nav = UI.mk("Frame", { Name = "NavRow", BackgroundTransparency = 1, Position = UDim2.new(0, 0, 1, -52), Size = UDim2.new(1, 0, 0, 52), ZIndex = 62 }, body)
 	local step = 1
 	local draw
+	local obPassSeen = false
 
 	local back = UI.button(nav, "slate", "BACK", function() if step > 1 then step -= 1; draw() end end, { sz = UDim2.fromOffset(140, 46), z = 63 })
 	local nextB = UI.button(nav, "manila", "NEXT", nil, { name = "NextBtn", sz = UDim2.fromOffset(220, 46), pos = UDim2.new(1, -220, 0, 0), z = 63 })
@@ -9817,33 +9874,77 @@ function O.show(App)
 		end
 	end
 	steps[2] = function()
-		text(area, "Design your flag", { font = "display", size = 24, pos = UDim2.fromOffset(4, 10), sz = UDim2.new(1, 0, 0, 30), z = 63 })
-		local prev = preview(area, UDim2.new(1, -210, 0, 50))
-		local function redraw() prev:Destroy(); prev = preview(area, UDim2.new(1, -210, 0, 50)) end
-		local lay = UI.mk("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(4, 50), Size = UDim2.new(1, -230, 0, 46), ZIndex = 63 }, area)
-		UI.mk("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }, lay)
-		for li, l in ipairs(R.FlagLayouts) do
-			local b = UI.mk("TextButton", { LayoutOrder = li, Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.fromOffset(54, 40), ZIndex = 63 }, lay)
-			UI.flag(b, { l = l, c = form.flag.c }, 52, { z = 64, pos = UDim2.fromOffset(1, 3) })
-			if form.flag.l == l then UI.mk("Frame", { BackgroundColor3 = C.manila, BorderSizePixel = 0, Position = UDim2.new(0, 0, 1, 2), Size = UDim2.new(1, 0, 0, 4), ZIndex = 64 }, b) end
-			b.Activated:Connect(function() form.flag.l = l; draw() end)
+		-- Kash 2 Oct 23:23: the Custom Flag pass is offered right here, with its extra options shown (locked until owned)
+		local owned = App.state and App.state.gp and App.state.gp.CustomFlag
+		local passInfo = Config.Passes.CustomFlag or { price = 99 }
+		local basicL, basicC = {}, {}
+		for _, l in ipairs(R.FlagLayouts) do basicL[l] = true end
+		for _, c in ipairs(R.FlagColors) do basicC[c] = true end
+		local function buyPass() task.spawn(function() App.req("buyPass", { key = "CustomFlag" }) end) end
+		local function lockMark(parent, z)
+			local lk = UI.mk("Frame", { BackgroundColor3 = C.black, BackgroundTransparency = 0.45, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ZIndex = z }, parent)
+			UI.icon(lk, "icon_lock", 14, C.gold, UDim2.fromScale(0.5, 0.5), { z = z + 1, anchor = Vector2.new(0.5, 0.5) })
 		end
+		text(area, "Design your flag", { font = "display", size = 24, pos = UDim2.fromOffset(4, 6), sz = UDim2.new(1, 0, 0, 30), z = 63 })
+		local prev = preview(area, UDim2.new(1, -210, 0, 46))
+		local lay = UI.mk("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(4, 42), Size = UDim2.new(1, -230, 0, 84), ZIndex = 63 }, area)
+		UI.mk("UIGridLayout", { CellSize = UDim2.fromOffset(52, 38), CellPadding = UDim2.fromOffset(5, 6), SortOrder = Enum.SortOrder.LayoutOrder }, lay)
+		for li, l in ipairs(R.FlagLayoutsAll or R.FlagLayouts) do
+			local locked = not basicL[l] and not owned
+			local b = UI.mk("TextButton", { LayoutOrder = li, Text = "", AutoButtonColor = false, BackgroundTransparency = 1, ZIndex = 63 }, lay)
+			UI.flag(b, { l = l, c = form.flag.c }, 50, { z = 64, pos = UDim2.fromOffset(1, 2) })
+			if locked then lockMark(b, 66) end
+			if form.flag.l == l then UI.mk("Frame", { BackgroundColor3 = C.manila, BorderSizePixel = 0, Position = UDim2.new(0, 0, 1, 0), Size = UDim2.new(1, 0, 0, 3), ZIndex = 64 }, b) end
+			b.Activated:Connect(function() if locked then buyPass() else form.flag.l = l; draw() end end)
+		end
+		local cols = R.FlagColorsAll or R.FlagColors
 		for row = 1, 3 do
-			text(area, ({ "MAIN", "SECOND", "THIRD" })[row], { font = "heavy", size = 13, color = C.muted, pos = UDim2.fromOffset(4, 108 + (row - 1) * 52), sz = UDim2.fromOffset(70, 40), z = 63 })
-			local sw = UI.mk("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(76, 108 + (row - 1) * 52), Size = UDim2.new(1, -310, 0, 40), ZIndex = 63 }, area)
-			UI.mk("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder }, sw)
-			for ci, col in ipairs(R.FlagColors) do
-				local s = UI.mk("TextButton", { LayoutOrder = ci, Text = "", AutoButtonColor = false, BackgroundColor3 = Color3.fromHex(col), Size = UDim2.fromOffset(30, 36), ZIndex = 64, BorderSizePixel = 0 }, sw)
-				UI.mk("UIStroke", { Color = C.black, Thickness = 1 }, s)
-				if form.flag.c[row] == col then UI.icon(s, "icon_check", 22, (col == "ecf0f1" or col == "f1c40f") and C.black or C.white, UDim2.fromScale(0.5, 0.5), { anchor = Vector2.new(0.5, 0.5), z = 65 }) end
-				s.Activated:Connect(function() form.flag.c[row] = col; draw() end)
+			local y = 134 + (row - 1) * 40
+			text(area, ({ "MAIN", "SECOND", "THIRD" })[row], { font = "heavy", size = 13, color = C.muted, pos = UDim2.fromOffset(4, y), sz = UDim2.fromOffset(62, 34), z = 63 })
+			local sw = UI.mk("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(66, y), Size = UDim2.new(1, -296, 0, 34), ZIndex = 63 }, area)
+			UI.mk("UIGridLayout", { CellSize = UDim2.new(1 / #cols, -2, 1, 0), CellPadding = UDim2.fromOffset(2, 0), SortOrder = Enum.SortOrder.LayoutOrder }, sw)
+			for ci, col in ipairs(cols) do
+				local locked = not basicC[col] and not owned
+				local s2 = UI.mk("TextButton", { LayoutOrder = ci, Text = "", AutoButtonColor = false, BackgroundColor3 = Color3.fromHex(col), ZIndex = 64, BorderSizePixel = 0 }, sw)
+				UI.mk("UIStroke", { Color = C.black, Thickness = 1 }, s2)
+				if locked then lockMark(s2, 65) end
+				if form.flag.c[row] == col then UI.icon(s2, "icon_check", 14, (col == "ecf0f1" or col == "f1c40f" or col == "f5deb3" or col == "c0c0c0") and C.black or C.white, UDim2.fromScale(0.5, 0.5), { anchor = Vector2.new(0.5, 0.5), z = 66 }) end
+				s2.Activated:Connect(function() if locked then buyPass() else form.flag.c[row] = col; draw() end end)
 			end
 		end
+		-- emblems (pass)
+		local ey = 258
+		text(area, "EMBLEM", { font = "heavy", size = 13, color = C.muted, pos = UDim2.fromOffset(4, ey), sz = UDim2.fromOffset(62, 34), z = 63 })
+		local em = UI.mk("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(66, ey), Size = UDim2.new(1, -296, 0, 34), ZIndex = 63 }, area)
+		UI.mk("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder }, em)
+		local emblems = { false }
+		for _, e in ipairs(R.FlagEmblems or {}) do table.insert(emblems, e) end
+		for ei, e in ipairs(emblems) do
+			local b = UI.mk("TextButton", { LayoutOrder = ei, Text = e and "" or "NONE", FontFace = UI.Font.heavy, TextSize = 10, TextColor3 = C.muted, AutoButtonColor = false, BackgroundColor3 = C.slate, BorderSizePixel = 0, Size = UDim2.fromOffset(34, 34), ZIndex = 64 }, em)
+			UI.mk("UICorner", { CornerRadius = UDim.new(0, 6) }, b)
+			if (form.flag.e or false) == e then UI.mk("UIStroke", { Color = C.manila, Thickness = 2 }, b) end
+			if e then UI.icon(b, e, 22, C.ink, UDim2.fromScale(0.5, 0.5), { z = 65, anchor = Vector2.new(0.5, 0.5) }) end
+			local locked = e and not owned
+			if locked then lockMark(b, 66) end
+			b.Activated:Connect(function() if locked then buyPass() else form.flag.e = e or nil; draw() end end)
+		end
 		UI.button(area, "slate", "RANDOM", function()
-			form.flag.l = R.FlagLayouts[math.random(1, #R.FlagLayouts)]
-			for k = 1, 3 do form.flag.c[k] = R.FlagColors[math.random(1, #R.FlagColors)] end
+			local L = owned and (R.FlagLayoutsAll or R.FlagLayouts) or R.FlagLayouts
+			local Cc = owned and (R.FlagColorsAll or R.FlagColors) or R.FlagColors
+			form.flag.l = L[math.random(1, #L)]
+			for k = 1, 3 do form.flag.c[k] = Cc[math.random(1, #Cc)] end
 			draw()
-		end, { sz = UDim2.fromOffset(200, 44), pos = UDim2.new(1, -210, 0, 196), z = 63, icon = "icon_sparkles", textSize = 15 })
+		end, { sz = UDim2.fromOffset(200, 40), pos = UDim2.new(1, -210, 0, 186), z = 63, icon = "icon_sparkles", textSize = 15 })
+		-- the pass offer
+		local offer = UI.card(area, { pos = UDim2.fromOffset(4, 306), sz = UDim2.new(1, -8, 0, 64), z = 63, hot = true })
+		UI.icon(offer, "icon_flag", 30, C.gold, UDim2.new(0, 14, 0.5, 0), { z = 64, anchor = Vector2.new(0, 0.5) })
+		if owned then
+			text(offer, "<b>CUSTOM FLAG</b> unlocked: every layout, colour and emblem is yours.", { size = 16, rich = true, pos = UDim2.fromOffset(56, 0), sz = UDim2.new(1, -70, 1, 0), z = 64 })
+		else
+			text(offer, "<font color='#f0c75a'><b>CUSTOM FLAG</b></font>: 6 more layouts, 12 more colours, emblems, or your own image.", { size = 15, rich = true, wrap = true, pos = UDim2.fromOffset(56, 0), sz = UDim2.new(1, -250, 1, 0), z = 64 })
+			UI.button(offer, "gold", "UNLOCK · R$ " .. (passInfo.price or 99), function() buyPass() end, { pos = UDim2.new(1, -10, 0.5, 0), anchor = Vector2.new(1, 0.5), sz = UDim2.fromOffset(176, 44), z = 65, textSize = 15 })
+		end
+		local _ = prev
 		return function() return true end
 	end
 	steps[3] = function()
@@ -9908,6 +10009,7 @@ function O.show(App)
 		if res.ok then
 			cover:Destroy()
 			App.state.onboarded = true
+			App.play("level_up")
 			if App.updateNav then App.updateNav(App.state) end
 			App.open("laws")
 			-- run the screen inits now, then ask about the tutorial (Kash 2 Oct)
@@ -9920,6 +10022,9 @@ function O.show(App)
 	end)
 	draw()
 	-- finished elsewhere (another server, or a retry): close the cover
+	App.on("full", function(st)
+		if cover.Parent and step == 2 and st.gp and st.gp.CustomFlag and not obPassSeen then obPassSeen = true; draw() end
+	end)
 	App.on("full", function(st) if st.onboarded and cover.Parent then cover:Destroy(); App.open("laws") end end)
 end
 return O
@@ -15044,7 +15149,132 @@ S._vipTags = { init = function(App)
 end }
 
 return S
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX35"><Properties><string name="Name">ReplicatedStorage.Client|Tester|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- TESTER PANEL (Kash 2 Oct): owner only. A TEST button (and F2) opens a panel of quick buttons plus a command line.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX35"><Properties><string name="Name">ReplicatedStorage.Client|GearShop|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- GEAR SHOP (Kash 2 Oct 23:26): a second tab inside SHOP. Restocks every 5 minutes with 3 random items of every
+-- rarity, one of each per player. Higher rarities unlock at higher levels. Bought with cash.
+local RS = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+local Shared = RS:WaitForChild("Shared")
+local R = require(Shared.Rules)
+local O = require(Shared.Officers)
+local Config = require(Shared.Config)
+
+local S = {}
+
+local SHORT = { law = "law cash", props = "property income", convoy = "convoy pay", xp = "XP", attack = "attack", defense = "defense",
+	loot = "raid loot", losses = "fewer deaths", interest = "bank interest", regen = "Influence regen", siege = "siege damage", boss = "boss damage" }
+
+S.gearshop = { build = function(host, App)
+	local UI = App.UI
+	local C = UI.C
+	local mk, text = UI.mk, UI.text
+	local obj = {}
+	local data, loading = nil, false
+	local cards = {}
+
+	local panel, body = UI.panel(host, "GEAR SHOP", { sz = UDim2.new(1, -20, 1, -20), pos = UDim2.fromOffset(10, 10), z = 5, titleSize = 26 })
+	local _ = panel
+	local timer = text(body, "", { font = "heavy", size = 16, color = C.gold, rich = true, pos = UDim2.fromOffset(0, 2), sz = UDim2.new(1, 0, 0, 22), z = 7, align = Enum.TextXAlignment.Right })
+	text(body, "New gear every 5 minutes. One of each item per restock. Rarer gear unlocks as you level up.", { size = 15, color = C.muted, pos = UDim2.fromOffset(0, 2), sz = UDim2.new(1, -260, 0, 22), z = 7, truncate = true })
+	local list = UI.list(body, { pos = UDim2.fromOffset(0, 34), sz = UDim2.new(1, 0, 1, -34), gap = 8, z = 6 })
+
+	local function stat(g)
+		local s = "+" .. tostring(g.power or 0) .. "% " .. (g.kind == "weapon" and "attack" or "defense")
+		if g.perk then s ..= "\n<font color='#8fd07a'>+" .. tostring(g.perk.v) .. "% " .. (SHORT[g.perk.k] or g.perk.k) .. "</font>" end
+		return s
+	end
+
+	local function setBtn(c)
+		local st = App.state
+		local e = c.e
+		if e.bought then c.btn:Set("locked", "SOLD")
+		elseif (st.lv or 1) < e.lvl then c.btn:Set("locked", "LEVEL " .. e.lvl)
+		elseif (st.cash or 0) < e.cost then c.btn:Set("slate", R.Money(e.cost))
+		else c.btn:Set("green", "BUY " .. R.Money(e.cost)) end
+	end
+
+	local function build()
+		UI.clear(list)
+		cards = {}
+		if not data then
+			text(list, "Loading the shop...", { size = 16, color = C.muted, sz = UDim2.new(1, 0, 0, 30), z = 7 })
+			return
+		end
+		local byR = {}
+		for _, e in ipairs(data.items) do
+			local r = O.RarityByKey[e.gear.rarity].index
+			byR[r] = byR[r] or {}
+			table.insert(byR[r], e)
+		end
+		local order = 0
+		for r = 1, #Config.GearShop.Levels do
+			local rar = O.Rarities[r]
+			local col = Color3.fromHex(rar.color)
+			local need = Config.GearShop.Levels[r]
+			local locked = (App.state.lv or 1) < need
+			order += 1
+			local head = mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, -4, 0, 26), ZIndex = 7, LayoutOrder = order }, list)
+			text(head, rar.name, { font = "heavy", size = 18, color = col, stroke = 1, sz = UDim2.new(0.5, 0, 1, 0), z = 8 })
+			if locked then text(head, "Unlocks at level " .. need, { font = "bold", size = 14, color = C.muted, sz = UDim2.new(1, 0, 1, 0), z = 8, align = Enum.TextXAlignment.Right }) end
+			order += 1
+			local row = mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, -4, 0, 132), ZIndex = 7, LayoutOrder = order }, list)
+			mk("UIGridLayout", { CellSize = UDim2.new(1 / 3, -8, 1, 0), CellPadding = UDim2.fromOffset(10, 0), SortOrder = Enum.SortOrder.LayoutOrder }, row)
+			for k, e in ipairs(byR[r] or {}) do
+				local g = e.gear
+				local card = UI.card(row, { z = 8, order = k })
+				mk("UIStroke", { Color = col, Thickness = 2, Transparency = locked and 0.6 or 0, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, card)
+				local well = mk("Frame", { BackgroundColor3 = C.black, BackgroundTransparency = 0.2, BorderSizePixel = 0, Position = UDim2.fromOffset(10, 10), Size = UDim2.fromOffset(84, 84), ZIndex = 9 }, card)
+				mk("UICorner", { CornerRadius = UDim.new(0, 8) }, well)
+				local glow = mk("UIGradient", { Color = ColorSequence.new(col:Lerp(C.black, 0.55), C.black), Rotation = 90 }, well)
+				local _g = glow
+				UI.img(well, g.icon, { sz = UDim2.fromScale(0.86, 0.86), pos = UDim2.fromScale(0.5, 0.5), anchor = Vector2.new(0.5, 0.5), z = 10, slice = false, fit = true,
+					color = locked and Color3.fromHex("444444") or nil })
+				if locked then UI.icon(well, "icon_lock", 26, C.gold, UDim2.fromScale(0.5, 0.5), { z = 11, anchor = Vector2.new(0.5, 0.5) }) end
+				text(card, g.name, { font = "heavy", size = 16, pos = UDim2.fromOffset(104, 10), sz = UDim2.new(1, -112, 0, 22), z = 9, truncate = true })
+				text(card, (g.kind == "weapon" and "WEAPON" or "ARMOR") .. " · " .. rar.name, { font = "bold", size = 12, color = col, pos = UDim2.fromOffset(104, 32), sz = UDim2.new(1, -112, 0, 16), z = 9, truncate = true })
+				text(card, stat(g), { size = 14, rich = true, wrap = true, pos = UDim2.fromOffset(104, 50), sz = UDim2.new(1, -112, 0, 40), z = 9, valign = Enum.TextYAlignment.Top })
+				local c = { e = e }
+				c.btn = UI.button(card, "green", "BUY", function(btn)
+					local st = App.state
+					if e.bought then App.toast("Sold out", "New stock in the next restock", "info"); return end
+					if (st.lv or 1) < e.lvl then App.toast("Unlocks at level " .. e.lvl, nil, "bad"); App.shake(btn.Inst); return end
+					local res = App.req("gearBuy", { i = e.i, w = data.w }, btn)
+					if res.ok then
+						e.bought = true
+						setBtn(c)
+						App.toast(string.upper(g.name) .. " BOUGHT", "Equip it on an officer in MILITARY > OFFICERS", "gold")
+						App.play("purchase", { volume = 0.45 })
+					elseif res.msg and res.msg:find("restocked") then obj.load() end
+				end, { pos = UDim2.new(0, 10, 1, -38), sz = UDim2.new(1, -20, 0, 30), z = 10, textSize = 14 })
+				setBtn(c)
+				table.insert(cards, c)
+			end
+		end
+	end
+
+	function obj.load()
+		if loading then return end
+		loading = true
+		task.spawn(function()
+			local res = App.req("gearShop", {})
+			loading = false
+			if res.ok then data = res; build() end
+		end)
+	end
+
+	function obj:Refresh(st) for _, c in ipairs(cards) do setBtn(c) end end
+	function obj:Opened() obj.load() end
+	App.on("tick", function()
+		if not host.Visible or not data then return end
+		local left = data.ends - math.floor(App.now())
+		if left <= 0 then timer.Text = "RESTOCKING..."; obj.load(); return end
+		timer.Text = "RESTOCK IN <font color='#ece8dc'>" .. string.format("%d:%02d", left // 60, left % 60) .. "</font>"
+	end)
+	build()
+	return obj
+end }
+
+return S
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX36"><Properties><string name="Name">ReplicatedStorage.Client|Tester|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- TESTER PANEL (Kash 2 Oct): owner only. A TEST button (and F2) opens a panel of quick buttons plus a command line.
 -- Every button just sends the same text you could type, e.g. "/cash 1m". The server checks the owner again.
 local UIS = game:GetService("UserInputService")
 
@@ -15173,7 +15403,7 @@ S._tester = { init = function(App)
 end }
 
 return S
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX36"><Properties><string name="Name">ReplicatedStorage.Client|Tutorial|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- TUTORIAL (Kash 2 Oct): offered at the end of onboarding. A small guide card at the bottom of the screen and a
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX37"><Properties><string name="Name">ReplicatedStorage.Client|Tutorial|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- TUTORIAL (Kash 2 Oct): offered at the end of onboarding. A small guide card at the bottom of the screen and a
 -- pulsing frame on the tab to open. It never blocks the game and can be skipped any time.
 -- Progress is saved on the server (App.state.tut: step number, -1 = skipped or finished, nil = never offered).
 local TweenService = game:GetService("TweenService")
@@ -15190,10 +15420,10 @@ end
 -- each step: text, the tab to point at (or nil), and when it is done
 local STEPS = {
 	{ title = "PASS LAWS", text = "Open <b>LAWS</b>. Laws are how your nation makes money.", tab = "laws", done = function(st, App) return App.current == "laws" end },
-	{ title = "YOUR FIRST LAW", text = "Tap <b>PASS</b> on a law. It costs Influence and pays cash and XP.", done = function(st) return (st.stats and st.stats.laws or 0) >= 1 end },
-	{ title = "LEVEL UP", text = "Keep passing laws to reach <b>level 2</b>. Influence refills over time and on every level up.", done = function(st) return (st.lv or 1) >= 2 end },
+	{ title = "YOUR FIRST LAW", text = "Tap <b>PASS</b> on a law. It costs Influence and pays cash and XP.", find = "pass", done = function(st) return (st.stats and st.stats.laws or 0) >= 1 end },
+	{ title = "LEVEL UP", text = "Keep passing laws to reach <b>level 2</b>. Influence refills over time and on every level up.", find = "pass", done = function(st) return (st.lv or 1) >= 2 end },
 	{ title = "PROPERTIES", text = "You unlocked <b>PROPERTIES</b>! Open it to earn money even while you are away.", tab = "properties", done = function(st, App) return App.current == "properties" end },
-	{ title = "BUILD", text = "Build your first property. It pays you every hour.", done = function(st) return built(st) end },
+	{ title = "BUILD", text = "Tap an empty lot (<b>FOR SALE</b>) and build your first property. It pays you every hour.", find = "lot", done = function(st) return built(st) end },
 	{ title = "THE WORLD", text = "Open the <b>WORLD</b> map. Your convoys trade between real capitals.", tab = "map", done = function(st, App) return App.current == "map" end },
 	{ title = "SEND A CONVOY", text = "Tap a city, pick a load and <b>SEND</b>. Cities that want your goods pay more.", done = function(st) return sending(st) end },
 	{ title = "YOU ARE READY", text = "New tabs unlock as you level up. Good luck, leader!", final = true },
@@ -15213,19 +15443,73 @@ S._tutorial = { init = function(App)
 		if App.state then App.state.tut = step end
 	end
 
+	-- SPOTLIGHT (Kash 23:23): darken everything except the thing to press, with a snug rounded gold frame around it
+	local spot = {}
+	local spotConn
 	local function clearRing()
-		if ringTw then ringTw:Cancel(); ringTw = nil end
-		if ring then ring:Destroy(); ring = nil end
+		if spotConn then spotConn:Disconnect(); spotConn = nil end
+		for _, f in pairs(spot) do f:Destroy() end
+		spot = {}
 	end
-	local function pointAt(tab)
+	local function findTarget(S1)
+		if S1.tab then
+			local nb = App.navButtons and App.navButtons[S1.tab]
+			return nb and nb.Inst.Visible and nb.Inst or nil
+		end
+		local scr
+		if S1.find == "pass" then scr = App.screens and App.screens.laws
+		elseif S1.find == "lot" then scr = App.screens and App.screens.properties end
+		if not scr or not scr.host or not scr.host.Visible then return nil end
+		local want = S1.find == "pass" and "PASS" or "FOR SALE"
+		for _, d in ipairs(scr.host:GetDescendants()) do
+			if d:IsA("TextLabel") and d.Text == want and d.Visible then
+				local b = d:FindFirstAncestorWhichIsA("GuiButton")
+				if b and b.Visible and b.AbsoluteSize.X > 0 then
+					-- only targets on screen (inside the scrolling list)
+					local sf = b:FindFirstAncestorWhichIsA("ScrollingFrame")
+					if not sf or (b.AbsolutePosition.Y >= sf.AbsolutePosition.Y and b.AbsolutePosition.Y + b.AbsoluteSize.Y <= sf.AbsolutePosition.Y + sf.AbsoluteSize.Y) then return b end
+				end
+			end
+		end
+		return nil
+	end
+	local function pointAt(S1)
 		clearRing()
-		local nb = tab and App.navButtons and App.navButtons[tab]
-		if not nb or not nb.Inst.Visible then return end
-		ring = mk("Frame", { Name = "TutorialRing", BackgroundTransparency = 1, Size = UDim2.new(1, 8, 1, 8), Position = UDim2.fromOffset(-4, -4), ZIndex = 30 }, nb.Inst)
-		local s = mk("UIStroke", { Color = C.gold, Thickness = 3, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, ring)
-		mk("UICorner", { CornerRadius = UDim.new(0, 8) }, ring)
-		ringTw = TweenService:Create(s, TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Transparency = 0.8, Thickness = 6 })
-		ringTw:Play()
+		if not S1.tab and not S1.find then return end
+		local host = App.sg
+		local function dim(name)
+			local f = mk("Frame", { Name = "TutDim" .. name, BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 0.45, BorderSizePixel = 0, ZIndex = 50, Visible = false }, host)
+			spot[name] = f
+			return f
+		end
+		local top, bottom, left, right = dim("T"), dim("B"), dim("L"), dim("R")
+		local ring = mk("Frame", { Name = "TutRing", BackgroundTransparency = 1, ZIndex = 51, Visible = false }, host)
+		mk("UICorner", { CornerRadius = UDim.new(0, 10) }, ring)
+		local st = mk("UIStroke", { Color = C.gold, Thickness = 3, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, ring)
+		spot.ring = ring
+		local t0 = os.clock()
+		spotConn = game:GetService("RunService").RenderStepped:Connect(function()
+			local target = findTarget(S1)
+			local vis = target ~= nil and card and card.Visible
+			for _, f in pairs(spot) do f.Visible = vis and true or false end
+			if not vis then return end
+			local pad = 6
+			local p0, sz = target.AbsolutePosition - Vector2.new(pad, pad), target.AbsoluteSize + Vector2.new(pad * 2, pad * 2)
+			local W, H = host.AbsoluteSize.X, host.AbsoluteSize.Y
+			top.Position = UDim2.fromOffset(0, 0); top.Size = UDim2.fromOffset(W, math.max(0, p0.Y))
+			bottom.Position = UDim2.fromOffset(0, p0.Y + sz.Y); bottom.Size = UDim2.fromOffset(W, math.max(0, H - p0.Y - sz.Y))
+			left.Position = UDim2.fromOffset(0, p0.Y); left.Size = UDim2.fromOffset(math.max(0, p0.X), sz.Y)
+			right.Position = UDim2.fromOffset(p0.X + sz.X, p0.Y); right.Size = UDim2.fromOffset(math.max(0, W - p0.X - sz.X), sz.Y)
+			ring.Position = UDim2.fromOffset(p0.X, p0.Y); ring.Size = UDim2.fromOffset(sz.X, sz.Y)
+			local k = (math.sin((os.clock() - t0) * 5) + 1) / 2
+			st.Thickness = 3 + 2 * k
+			st.Transparency = 0.15 * k
+			-- keep the guide card away from the target
+			local wantTop = p0.Y + sz.Y / 2 > H * 0.55
+			local cy = wantTop and UDim2.new(0, 96, 0, 0) or UDim2.new(1, -18, 0, 0)
+			card.AnchorPoint = Vector2.new(0.5, wantTop and 0 or 1)
+			card.Position = UDim2.new(0.5, (App.NAVW or 176) / 2, cy.X.Scale, cy.X.Offset)
+		end)
 	end
 
 	local function hide()
@@ -15240,7 +15524,7 @@ S._tutorial = { init = function(App)
 	end
 
 	local function build()
-		card = UI.img(App.root, "panel", { name = "Tutorial", sz = UDim2.fromOffset(520, 118), pos = UDim2.new(0.5, (App.NAVW or 176) / 2, 1, -18), anchor = Vector2.new(0.5, 1), z = 70 })
+		card = UI.img(App.sg or App.root, "panel", { name = "Tutorial", sz = UDim2.fromOffset(520, 118), pos = UDim2.new(0.5, (App.NAVW or 176) / 2, 1, -18), anchor = Vector2.new(0.5, 1), z = 70 })
 		mk("UIStroke", { Color = C.gold, Thickness = 2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, card)
 		UI.icon(card, "icon_sparkles", 26, C.gold, UDim2.fromOffset(16, 16), { z = 71 })
 		titleL = text(card, "", { font = "display", size = 20, color = C.manila, pos = UDim2.fromOffset(50, 12), sz = UDim2.new(1, -170, 0, 26), z = 71 })
@@ -15270,9 +15554,12 @@ S._tutorial = { init = function(App)
 		if skip then skip.Visible = not S1.final end
 		if shown ~= step then
 			shown = step
-			pointAt(S1.tab)
-			card.Position = UDim2.new(0.5, (App.NAVW or 176) / 2, 1, 120)
-			TweenService:Create(card, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Position = UDim2.new(0.5, (App.NAVW or 176) / 2, 1, -18) }):Play()
+			pointAt(S1)
+			card.AnchorPoint = Vector2.new(0.5, 1)
+			card.Position = UDim2.new(0.5, (App.NAVW or 176) / 2, 1, -18)
+			local sc = card:FindFirstChildOfClass("UIScale") or mk("UIScale", {}, card)
+			sc.Scale = 0.85
+			TweenService:Create(sc, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
 			if App.play and step > 1 then pcall(App.play, "tab_open") end
 		end
 	end
@@ -15299,7 +15586,7 @@ S._tutorial = { init = function(App)
 end }
 
 return S
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX37"><Properties><string name="Name">StarterPlayer.StarterPlayerScripts|ClientMain|LocalScript</string><ProtectedString name="Source"><![CDATA[-- ClientMain: the shell. Top bar, the left nav (flush with the screen's left edge, Kash 26 Sep), the screen host,
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX38"><Properties><string name="Name">StarterPlayer.StarterPlayerScripts|ClientMain|LocalScript</string><ProtectedString name="Source"><![CDATA[-- ClientMain: the shell. Top bar, the left nav (flush with the screen's left edge, Kash 26 Sep), the screen host,
 -- toasts and level-up banners. The Capitol world map is the home screen (Kash, 1 Oct 2026, Q12).
 -- Everything is laid out in design pixels on a top-left anchored root scaled by ONE UIScale
 -- (LESSONS: a UIScale scales about the AnchorPoint; read TopbarInset lazily).
@@ -15611,11 +15898,12 @@ App.content = content
 local defs = {}
 local inits = {} -- modules can return entries without a build field: { init = function(App) end }
 -- later modules override earlier ones (Warfare's raids replace War's battle, Contracts replaces Economy's tasks)
-for _, modName in ipairs({ "Sound", "Map", "Economy", "War", "Social", "Warfare", "Cabinet", "Country", "Contracts", "Settings", "Shop", "Tester", "Tutorial" }) do
+for _, modName in ipairs({ "Sound", "Map", "Economy", "War", "Social", "Warfare", "Cabinet", "Country", "Contracts", "Settings", "Shop", "GearShop", "Tester", "Tutorial" }) do
 	local okReq, mod = pcall(require, ClientMods:WaitForChild(modName, 5))
 	if okReq and type(mod) == "table" then
 		for k, def in pairs(mod) do
 			if type(def) == "table" and def.build then defs[k] = def
+			elseif type(def) == "table" and def.init and k == "_sound" then App.soundInit = def.init -- runs before onboarding (music + click sounds)
 			elseif type(def) == "table" and def.init then table.insert(inits, def.init) end
 		end
 	else warn("[Idle Country] " .. modName .. ": " .. tostring(mod)) end
@@ -15624,8 +15912,9 @@ end
 -- The child screen's own title is replaced by two tab buttons in the same spot.
 local COMPOSITE = {
 	military = { { key = "military", label = "ARMY", title = "MILITARY" }, { key = "officers", label = "OFFICERS", title = "OFFICERS" } },
+	shop = { { key = "shop", label = "STORE", title = "SHOP" }, { key = "gearshop", label = "GEAR SHOP", title = "GEAR SHOP" } },
 }
-local ROUTE = { officers = { "military", 2 } }
+local ROUTE = { officers = { "military", 2 }, gearshop = { "shop", 2 } }
 for parentKey, kids in pairs(COMPOSITE) do
 	local childDefs = {}
 	for i, k in ipairs(kids) do childDefs[i] = defs[k.key] end
@@ -15851,6 +16140,7 @@ Remotes.Sync.OnClientEvent:Connect(function(kind, data)
 	if kind == "full" then
 		App.state = data
 		App.tickClock = os.clock()
+		if App.soundInit then local f = App.soundInit; App.soundInit = nil; task.spawn(function() local okS, e = pcall(f, App); if not okS then warn("[Idle Country] sound: " .. tostring(e)) end end) end
 		updateNav(data)
 		drawTop(); badges()
 		if not data.onboarded then
@@ -15936,7 +16226,7 @@ if game:GetService("RunService"):IsStudio() then
 		end)
 	end)
 end
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX38"><Properties><string name="Name">ReplicatedFirst|IC_Loading|LocalScript</string><ProtectedString name="Source"><![CDATA[-- Loading screen (ReplicatedFirst): war-room art, the IDLE COUNTRY logo, a shimmering bar, version and disclaimer.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX39"><Properties><string name="Name">ReplicatedFirst|IC_Loading|LocalScript</string><ProtectedString name="Source"><![CDATA[-- Loading screen (ReplicatedFirst): war-room art, the IDLE COUNTRY logo, a shimmering bar, version and disclaimer.
 -- Modelled on the reference game's loading screen (Kash 1 Oct 16:45). Hides once the HUD exists and the save is in.
 local Players = game:GetService("Players")
 local ReplicatedFirst = game:GetService("ReplicatedFirst")
