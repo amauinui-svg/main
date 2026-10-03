@@ -223,3 +223,4 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
   * loading_bg: the cap badge looks like an eye; minor, redo the cap badge as a star if regenerating.
   * Fine as is: country_era3, 4, 6, 7, 8, takedown_bg, officer_founder, officer_megavip, all props/gear/icons.
   Rule for all future people art: no crowds, every face clearly drawn in the officer portrait style.
+  DONE (2 Oct 16:15): reworked + live: enemy_guard/soldier/general, country_era1/2/5, shop_army. Still open: loading_bg cap badge (minor).
