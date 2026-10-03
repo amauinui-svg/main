@@ -16,6 +16,8 @@ local Config = require(Shared.Config)
 local Assets = require(Shared.Assets)
 local okO, O = pcall(require, Shared:WaitForChild("Officers"))
 if not okO then O = nil end
+local okMil, Mil = pcall(require, Shared:WaitForChild("Military"))
+if not okMil then Mil = nil end
 
 local function loadChangelog()
 	local m = Shared:FindFirstChild("Changelog") or Shared:WaitForChild("Changelog", 5)
@@ -412,16 +414,41 @@ M._settings = { init = function(App)
 		if O and O.Rarities then
 			for i = 1, (O.RollTiers or 8) do local r = O.Rarities[i]; if r then table.insert(rarities, kw(r.name:sub(1, 1) .. r.name:sub(2):lower(), r.color)) end end
 		end
+		local gp = Config.GoldPrices or { inf = 19, sup = 19, boss = 9 }
+		local gift = Config.GroupGift or { gold = 100 }
+		local pity = O and O.Pity or { limited = 30, basic = 50 }
+		local bossG = Mil and Mil.BossGold or { 3, 15 }
+		local nav = Config.NavUnlock or {}
 		return {
 			{ title = "YOUR COUNTRY", img = "country_era3", crop = true, color = "e2cfa3", lines = {
 				"Pass " .. kw("LAWS", M2) .. " with " .. kw("Influence", "e0a650") .. " to earn " .. kw("cash", G) .. " and " .. kw("XP", "b19cff") .. ".",
 				"Level up to unlock " .. kw("new laws", M2) .. ". New " .. kw("eras", B) .. " change how your country looks.",
 				"Level-ups give " .. kw("skill points", "b19cff") .. " for permanent upgrades.",
 			} },
+			{ title = "GOLD BARS", img = "icon_goldbar", icon = true, color = M2, lines = {
+				"Gold is the premium currency. Ways to get it for free:",
+				kw("Daily login", G) .. ": " .. kw("5 gold", M2) .. " on day 2, " .. kw("10", M2) .. " on day 5, " .. kw("30 + a Founder's Crate", M2) .. " on day 7.",
+				kw("Bosses", Rd) .. ": every boss you defeat pays " .. kw(bossG[1] .. " to " .. bossG[#bossG] .. " gold", M2) .. " (more in later eras).",
+				kw("Alliances", B) .. ": every alliance level pays gold, and each finished weekly alliance quest pays " .. kw("15 gold", M2) .. ".",
+				kw("FREE GIFT", M2) .. " on the Laws tab: like the game and join the group for " .. kw(gift.gold .. " gold", M2) .. ".",
+				"Or buy gold packs in the " .. kw("SHOP", M2) .. " (bigger packs give bonus gold).",
+				"Spend it on " .. kw("Founder's Crates", O2) .. ", " .. kw("Influence or Supply refills", "e0a650") .. " (" .. gp.inf .. " gold), " .. kw("finishing convoys", B) .. " and " .. kw("skipping boss timers", Rd) .. ".",
+			} },
+			{ title = "LEVELS & ERAS", img = "icon_xp", icon = true, color = "b19cff", lines = {
+				"New tabs open as you level up: " .. kw("Properties", G) .. " at level " .. (nav.properties or 2) .. ", " .. kw("Shop, Military and Raids", Rd) .. " at " .. (nav.shop or 3) .. ", " .. kw("Bosses", Rd) .. " at " .. (nav.bosses or 7) .. ", " .. kw("Alliances", B) .. " at " .. (nav.alliance or 8) .. ".",
+				"Reach the next era's level, then pay to " .. kw("advance your era", B) .. " in LAWS. Each era brings new laws, buildings, troops and a new look.",
+				"Every level-up refills your " .. kw("Influence", "e0a650") .. ".",
+			} },
+			{ title = "GOVERNMENT", img = "icon_crown", icon = true, color = "e2cfa3", lines = {
+				"Your form of government gives a permanent bonus: " .. kw("Democracy", G) .. " property income, " .. kw("Monarchy", M2) .. " law cash, " .. kw("Federation", B) .. " convoy pay,",
+				kw("Military Junta", Rd) .. " attack and defense, " .. kw("Theocracy", P) .. " faster Influence and Supply, " .. kw("Technocracy", T) .. " XP.",
+				"You can change it later from your " .. kw("COUNTRY", M2) .. " tab.",
+			} },
 			{ title = "PROPERTIES", img = "prop_e3_t2", color = G, lines = {
 				"Build on your " .. kw("lots", G) .. " for steady " .. kw("cash per hour", G) .. ".",
 				"They keep earning even while you are " .. kw("offline", B) .. "!",
 				"Level up for better buildings. Buy more lots to build more.",
+				"From the Classical era, build your " .. kw("Wonder", M2) .. ": every stage adds " .. kw("+2% property income", G) .. " forever.",
 			} },
 			{ title = "OFFICERS & GEAR", img = "gear_saber", color = P, lines = {
 				"Hire in 3 tiers: " .. table.concat(hireText, " · ") .. ". Better tiers, rarer officers.",
@@ -433,6 +460,8 @@ M._settings = { init = function(App)
 				kw("Supply Crate", B) .. ": buy it with cash.",
 				kw("Founder's Crate", O2) .. ": " .. kw(limited.gold .. " gold", M2) .. " or Robux, packed with the best loot.",
 				"Win " .. kw("cool gear", P) .. " and rare " .. kw("officers", T) .. ".",
+				kw("Pity", G) .. ": a " .. kw("Legendary or better", O2) .. " is guaranteed within " .. pity.limited .. " Founder's Crates or " .. pity.basic .. " Supply Crates. The bar on each crate shows your progress.",
+				"The " .. kw("GEAR SHOP", P) .. " (in SHOP) restocks every 5 minutes. Rarer gear needs a higher level.",
 			} },
 			{ title = "ORDERS & MERITS", img = "icon_seal", color = M2, lines = {
 				kw("Daily orders", G) .. " (easy, medium, hard) pay " .. kw("Merits", M2) .. " and cash. Finish all for a bonus.",
@@ -445,6 +474,22 @@ M._settings = { init = function(App)
 				"Trade between " .. kw("different regions", B) .. " (Europe to Asia) pays the most.",
 				"Watch for cities with " .. kw("new demand", O2) .. ".",
 				"Hold a city with your alliance to " .. kw("tax", Rd) .. " its trade.",
+				kw("World events", M2) .. " hit every server at once: send a convoy to the event city for " .. kw("2.5x pay", M2) .. ".",
+				"Buy more convoys as you level up. Passes: " .. kw("2x Convoy Speed", B) .. ", " .. kw("+2 Convoys", B) .. " and " .. kw("Auto Dispatch", G) .. " (trades while you are offline).",
+			} },
+			{ title = "BOSSES", img = "icon_bosses", icon = true, color = Rd, lines = {
+				"Every era has a boss. Attack it with your army until its health runs out.",
+				"Defeating it pays " .. kw("cash", G) .. ", " .. kw("XP", "b19cff") .. " and " .. kw("gold", M2) .. ". A new boss appears every hour.",
+			} },
+			{ title = "ALLIANCES", img = "icon_alliance", icon = true, color = B, lines = {
+				"Join or found an alliance to " .. kw("capture cities", Rd) .. " on the world map together.",
+				"Donate to level it up. Every level pays members " .. kw("gold", M2) .. ", and weekly quests pay " .. kw("gold and Merits", M2) .. ".",
+				"Cities your alliance holds pay " .. kw("tax and rent", G) .. ".",
+			} },
+			{ title = "AFK CHAMBER", img = "icon_clock", icon = true, color = T, lines = {
+				"Idle for 15 minutes and you enter the " .. kw("AFK Chamber", T) .. ": you stay in the game and keep earning.",
+				"Every minute there is a small chance to " .. kw("find an item", P) .. ", and a very rare chance at something legendary.",
+				"Tap " .. kw("RETURN", G) .. " to get back to your country.",
 			} },
 			{ title = "RAIDS", img = "enemy_soldier", color = Rd, lines = {
 				"Raid players in your server and " .. kw(raid.AICount .. " AI nations", Rd) .. " that raid back.",

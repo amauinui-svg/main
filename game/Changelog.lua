@@ -1,6 +1,36 @@
 -- Changelog: shown in Settings > CHANGELOG. Newest first. Keep items short (one line each).
 return {
 	{
+		version = "Alpha 0.4",
+		date = "3 Oct 2026",
+		items = {
+			"ERAS: advance through 8 eras from LAWS once you reach each era's level",
+			"WONDERS: build your nation's Wonder from the Classical era; every stage adds +2% property income forever",
+			"GOVERNMENT: pick Democracy, Monarchy, Federation, Military Junta, Theocracy or Technocracy when you found your country, each with its own bonus",
+			"WORLD EVENTS: game-wide events in every server; send a convoy to the event city for 2.5x pay",
+			"City demand is now shared by every server",
+			"GEAR SHOP: new weapons and armor every 5 minutes, rarer gear at higher levels",
+			"PITY: a Legendary or better is guaranteed within 30 Founder's Crates or 50 Supply Crates, with a progress bar on each crate",
+			"AFK CHAMBER: stay in the game while idle, keep earning and find rare items",
+			"BUY CONVOYS: new convoys are bought with cash as you level up",
+			"TUTORIAL: an optional guided tour for new players, with highlighted buttons",
+			"Tabs now unlock as you level up; Shop, Military and Raids open at level 3",
+			"Leveling is smoother in the first levels",
+			"PROFILES: tap a nation to see its profile, titles and achievements",
+			"BADGES: earn badges for big milestones",
+			"FREE GIFT: like the game and join the group for 100 gold and a Founder's Crate",
+			"New passes: 2x Influence Regen and 2x Supply Regen",
+			"Gold packs give bonus gold on the bigger packs; gold prices match Robux 1:1",
+			"STARTER PACK for new players",
+			"Owned passes show OWNED in the shop",
+			"Volume sliders for music and sound effects, and new sounds for rare finds",
+			"Global chat: type /g to talk to every server",
+			"Better layout on phones",
+			"The Game Guide now explains gold bars, eras, government, bosses, alliances and more",
+			"Removed: Takedown tickets and the Alliance Weekly Takedown",
+		},
+	},
+	{
 		version = "Alpha 0.3",
 		date = "2 Oct 2026",
 		items = {
