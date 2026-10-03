@@ -356,6 +356,19 @@ function Map.build(host, App)
 			local b = UI.button(dock, st.autoOff and "slate" or "green", st.autoOff and "AUTO: OFF" or "AUTO: ON", function(btn)
 				App.req("toggleAuto", {}, btn)
 			end, { sz = UDim2.fromOffset(110, 80), z = 21, order = 0, icon = "icon_bot", iconSize = 22, textSize = 14 })
+		else
+			UI.button(dock, "gold", "AUTO\nDISPATCH", function(btn) App.req("buyPass", { key = "AutoDispatch" }, btn) end,
+				{ sz = UDim2.fromOffset(120, 80), z = 21, order = -1, icon = "icon_bot", iconSize = 22, textSize = 14 })
+		end
+		-- 2x convoy speed pass sits next to the convoys it speeds up (Kash 3 Oct 00:36)
+		if st.gp and st.gp.FastConvoys then
+			local card = UI.card(dock, { sz = UDim2.fromOffset(110, 80), z = 21, order = 1 })
+			UI.icon(card, "icon_gauge", 22, C.good, UDim2.new(0.5, 0, 0, 12), { anchor = Vector2.new(0.5, 0), z = 22 })
+			text(card, "2X SPEED", { font = "heavy", size = 14, color = C.good, pos = UDim2.new(0, 0, 0, 40), sz = UDim2.new(1, 0, 0, 18), z = 22, align = Enum.TextXAlignment.Center })
+			text(card, "ACTIVE", { font = "bold", size = 12, color = C.muted, pos = UDim2.new(0, 0, 0, 58), sz = UDim2.new(1, 0, 0, 14), z = 22, align = Enum.TextXAlignment.Center })
+		else
+			UI.button(dock, "gold", "2X CONVOY\nSPEED", function(btn) App.req("buyPass", { key = "FastConvoys" }, btn) end,
+				{ sz = UDim2.fromOffset(130, 80), z = 21, order = -2, icon = "icon_gauge", iconSize = 22, textSize = 14 })
 		end
 		for i, c in ipairs(st.convoys) do
 			local card = UI.card(dock, { button = true, sz = UDim2.fromOffset(214, 80), z = 21, order = i, hot = (selConvoy == i) })

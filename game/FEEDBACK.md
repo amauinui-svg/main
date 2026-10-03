@@ -353,3 +353,10 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 - Bulk bonus approved: R$49 = 49 gold, R$199 = 210 gold, R$699 = 775 gold.
 - Fine that a casual player can afford a Founder's Crate with gold; it is a launch-only crate.
 - Launch timers reset to 7 days from now: Founder's Crate and Limited Bundle end 10 Oct 2026 10:23 UTC (Config.Limited.ends = 1791627808).
+
+## 3 Oct 00:30 (Kash)
+- Tutorial pointed one row too high (LAWS instead of PROPERTIES, MASTERY instead of PASS): the spotlight used raw screen positions while the HUD ignores the top bar inset. Now measured from the HUD root. Dim made stronger, strips snapped to whole pixels (no seams), BUILD step points at the cheapest BUILD button on the building list and says how much cash is missing when the player cannot afford it yet.
+- Wants a desktop + mobile test of onboarding and overlaps across the game. Added Studio-only test hooks: IC_Cmd "vp:WxH" (emulate a screen size) and "audit" (lists text that overflows, goes off screen or overlaps other text).
+
+## 3 Oct 00:36 (Kash)
+- 2x convoy speed pass at R$499, shown where the convoys are (like Auto Dispatch). Reused the existing 2x pass (id 2005160720), renamed "2x Convoy Speed", R$499. Convoy dock now shows a 2X CONVOY SPEED buy button (or 2X SPEED ACTIVE when owned) and an AUTO DISPATCH buy button when not owned.

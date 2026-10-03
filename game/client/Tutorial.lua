@@ -2,6 +2,7 @@
 -- pulsing frame on the tab to open. It never blocks the game and can be skipped any time.
 -- Progress is saved on the server (App.state.tut: step number, -1 = skipped or finished, nil = never offered).
 local TweenService = game:GetService("TweenService")
+local R = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Rules"))
 
 local S = {}
 
@@ -18,7 +19,13 @@ local STEPS = {
 	{ title = "YOUR FIRST LAW", text = "Tap <b>PASS</b> on a law. It costs Influence and pays cash and XP.", find = "pass", done = function(st) return (st.stats and st.stats.laws or 0) >= 1 end },
 	{ title = "LEVEL UP", text = "Keep passing laws to reach <b>level 2</b>. Influence refills over time and on every level up.", find = "pass", done = function(st) return (st.lv or 1) >= 2 end },
 	{ title = "PROPERTIES", text = "You unlocked <b>PROPERTIES</b>! Open it to earn money even while you are away.", tab = "properties", done = function(st, App) return App.current == "properties" end },
-	{ title = "BUILD", text = "Tap an empty lot (<b>FOR SALE</b>) and build your first property. It pays you every hour.", find = "lot", done = function(st) return built(st) end },
+	{ title = "BUILD", text = "Tap an empty lot (<b>FOR SALE</b>) and build your first property. It pays you every hour.", find = "lot", done = function(st) return built(st) end,
+		-- not enough cash yet: say how much is missing instead of pointing at a button that will refuse
+		alt = function(st)
+			local need = R.PropCost(1, 0)
+			if (st.cash or 0) >= need then return nil end
+			return "Your first property costs <b>" .. R.Money(need) .. "</b>. Pass a few more laws in <b>LAWS</b>, then come back and build it."
+		end },
 	{ title = "THE WORLD", text = "Open the <b>WORLD</b> map. Your convoys trade between real capitals.", tab = "map", done = function(st, App) return App.current == "map" end },
 	{ title = "SEND A CONVOY", text = "Tap a city, pick a load and <b>SEND</b>. Cities that want your goods pay more.", done = function(st) return sending(st) end },
 	{ title = "YOU ARE READY", text = "New tabs unlock as you level up. Good luck, leader!", final = true },
@@ -56,6 +63,22 @@ S._tutorial = { init = function(App)
 		elseif S1.find == "lot" then scr = App.screens and App.screens.properties end
 		if not scr or not scr.host or not scr.host.Visible then return nil end
 		local want = S1.find == "pass" and "PASS" or "FOR SALE"
+		-- on the building list, point at the cheapest BUILD button instead of the lots
+		local function onScreen(b)
+			local sf = b:FindFirstAncestorWhichIsA("ScrollingFrame")
+			return not sf or (b.AbsolutePosition.Y >= sf.AbsolutePosition.Y and b.AbsolutePosition.Y + b.AbsoluteSize.Y <= sf.AbsolutePosition.Y + sf.AbsoluteSize.Y)
+		end
+		if S1.find == "lot" then
+			local best, bestCost
+			for _, d in ipairs(scr.host:GetDescendants()) do
+				if d:IsA("TextLabel") and d.Visible and d.Text:sub(1, 7) == "BUILD $" then
+					local b = d:FindFirstAncestorWhichIsA("GuiButton")
+					local cost = tonumber((d.Text:gsub("[^%d]", "")))
+					if b and b.Visible and b.AbsoluteSize.X > 0 and onScreen(b) and cost and (not bestCost or cost < bestCost) then best, bestCost = b, cost end
+				end
+			end
+			if best then return best end
+		end
 		for _, d in ipairs(scr.host:GetDescendants()) do
 			if d:IsA("TextLabel") and d.Text == want and d.Visible then
 				local b = d:FindFirstAncestorWhichIsA("GuiButton")
@@ -73,7 +96,7 @@ S._tutorial = { init = function(App)
 		if not S1.tab and not S1.find then return end
 		local host = App.sg
 		local function dim(name)
-			local f = mk("Frame", { Name = "TutDim" .. name, BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 0.45, BorderSizePixel = 0, ZIndex = 50, Visible = false }, host)
+			local f = mk("Frame", { Name = "TutDim" .. name, BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 0.3, BorderSizePixel = 0, ZIndex = 50, Visible = false }, host)
 			spot[name] = f
 			return f
 		end
@@ -87,13 +110,19 @@ S._tutorial = { init = function(App)
 			local target = findTarget(S1)
 			local vis = target ~= nil and card and card.Visible
 			for _, f in pairs(spot) do f.Visible = vis and true or false end
-			if not vis then return end
+			if not vis then
+				if card then card.AnchorPoint = Vector2.new(0.5, 1); card.Position = UDim2.new(0.5, (App.NAVW or 176) / 2, 1, -18) end
+				return
+			end
 			local pad = 6
 			-- AbsolutePosition does not include the top bar inset but this ScreenGui ignores it, so measure from the
 			-- root frame (which sits at 0,0 of the same ScreenGui) instead of using raw screen numbers
 			local origin = App.root.AbsolutePosition
 			local p0, sz = target.AbsolutePosition - origin - Vector2.new(pad, pad), target.AbsoluteSize + Vector2.new(pad * 2, pad * 2)
-			local W, H = host.AbsoluteSize.X, host.AbsoluteSize.Y
+			-- whole pixels, so the four dim strips meet exactly (no lighter seam where they overlap)
+			p0 = Vector2.new(math.floor(p0.X), math.floor(p0.Y))
+			sz = Vector2.new(math.ceil(sz.X), math.ceil(sz.Y))
+			local W, H = math.ceil(host.AbsoluteSize.X), math.ceil(host.AbsoluteSize.Y) + 60
 			top.Position = UDim2.fromOffset(0, 0); top.Size = UDim2.fromOffset(W, math.max(0, p0.Y))
 			bottom.Position = UDim2.fromOffset(0, p0.Y + sz.Y); bottom.Size = UDim2.fromOffset(W, math.max(0, H - p0.Y - sz.Y))
 			left.Position = UDim2.fromOffset(0, p0.Y); left.Size = UDim2.fromOffset(math.max(0, p0.X), sz.Y)
@@ -145,7 +174,7 @@ S._tutorial = { init = function(App)
 		if not card then build() end
 		card.Visible = true
 		titleL.Text = S1.title
-		bodyL.Text = S1.text
+		bodyL.Text = (S1.alt and S1.alt(st)) or S1.text
 		stepL.Text = "TUTORIAL " .. math.min(step, #STEPS) .. "/" .. #STEPS
 		nextBtn.Inst.Visible = S1.final == true
 		local skip = card:FindFirstChild("Skip")

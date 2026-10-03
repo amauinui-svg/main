@@ -6,7 +6,7 @@ local C = {}
 C.Version = "Alpha 0.3"
 
 C.Passes = {
-	FastConvoys = { id = 2005160720, name = "Express Logistics", desc = "Every convoy travels 2x faster.", price = 249 },
+	FastConvoys = { id = 2005160720, name = "2x Convoy Speed", desc = "Every convoy travels 2x faster.", price = 499 }, -- Kash 00:36: R$499
 	AutoDispatch = { id = 2005970704, name = "Auto Dispatch", desc = "Convoys pick the best load and keep trading while you are offline.", price = 399 },
 	ExtraConvoys = { id = 2006912670, name = "+2 Convoy Slots", desc = "Run two more convoys at once.", price = 199 },
 	ExtraLots = { id = 2006660680, name = "+3 Building Lots", desc = "Three more lots for properties.", price = 149 },
