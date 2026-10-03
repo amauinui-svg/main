@@ -169,24 +169,28 @@ O.CrateInfo = {
 	},
 }
 -- ctx = { era = your era, slotFree = true/false }
-function O.OpenCrate(rng, kind, luck, forceEpic, ctx)
+-- minRarity: nil, true (Epic, the 10-pack guarantee) or a rarity index (the pity guarantee). Rolls below it are raised to it.
+function O.OpenCrate(rng, kind, luck, minRarity, ctx)
 	ctx = ctx or {}
+	local floor = minRarity == true and 4 or (tonumber(minRarity) or 1)
+	local function roll(odds) return math.max(O.Roll(rng, odds, luck), floor) end
 	if kind == "limited" then
 		if rng:NextNumber() < O.EliteChance then
-			local r = O.Roll(rng, O.GearOdds.limited, luck)
-			if forceEpic then r = math.max(r, 4) end
-			local rar = O.Rarities[r]
-			return { type = "troops", item = { era = math.clamp(ctx.era or 1, 1, 8), n = O.EliteSize[r], rarity = rar.key } }
+			local rar = O.Rarities[roll(O.GearOdds.limited)]
+			return { type = "troops", item = { era = math.clamp(ctx.era or 1, 1, 8), n = O.EliteSize[rar.index], rarity = rar.key } }
 		end
-		local r = O.Roll(rng, O.GearOdds.limited, luck)
-		if forceEpic then r = math.max(r, 4) end
-		return { type = "gear", item = O.NewGear(rng, r) }
+		return { type = "gear", item = O.NewGear(rng, roll(O.GearOdds.limited)) }
 	end
 	if ctx.slotFree and rng:NextNumber() < O.BasicOfficerChance then
-		return { type = "officer", item = O.NewOfficer(rng, O.Roll(rng, O.HireOdds.basic_officer, luck)) }
+		return { type = "officer", item = O.NewOfficer(rng, roll(O.HireOdds.basic_officer)) }
 	end
-	return { type = "gear", item = O.NewGear(rng, O.Roll(rng, O.GearOdds.basic, luck)) }
+	return { type = "gear", item = O.NewGear(rng, roll(O.GearOdds.basic)) }
 end
+
+-- PITY (Kash 2 Oct, visible): every crate without a Legendary or better fills the meter; when it is full the next
+-- crate is guaranteed Legendary or better, and any Legendary+ drop empties it.
+O.Pity = { limited = 30, basic = 50 }
+O.PityRarity = 5 -- legendary
 
 ---------------------------------------------------------------- bonuses
 -- sum of every slotted officer's traits plus the gear worn by the player and slotted officers

@@ -706,11 +706,17 @@ function A.OpenCrates(p, kind, n)
 	local results = {}
 	local luck = PS.Has(p, "CrateLuck")
 	local gotEpic = false
+	d.pity = type(d.pity) == "table" and d.pity or {}
 	for k = 1, n do
 		-- a 10-pack guarantees at least one Epic or better
-		local force = (kind == "limited" and n >= 10 and k == n and not gotEpic)
+		local force = (kind == "limited" and n >= 10 and k == n and not gotEpic) or nil
+		-- pity: the crate that fills the meter is Legendary or better
+		local pityAt = O.Pity[kind] or 50
+		if (d.pity[kind] or 0) + 1 >= pityAt then force = O.PityRarity end
 		local r = O.OpenCrate(rng, kind, luck, force, { era = PS.Era(p), slotFree = PS.FreeSlot(p) ~= nil })
-		if O.RarityByKey[r.item.rarity].index >= 4 then gotEpic = true end
+		local ri = O.RarityByKey[r.item.rarity].index
+		if ri >= 4 then gotEpic = true end
+		if ri >= O.PityRarity then d.pity[kind] = 0; r.pity = force == O.PityRarity or nil else d.pity[kind] = (d.pity[kind] or 0) + 1 end
 		if r.type == "officer" then
 			r.where = PS.AddOfficer(p, r.item)
 			if not r.where then -- no room after all: turn it into gear so nothing is lost

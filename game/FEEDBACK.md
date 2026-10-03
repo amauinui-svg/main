@@ -284,3 +284,11 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
     usually have (Kash's notes on his PC from his other games + online) and audit everything.
 - NEW (2 Oct 21:58): TESTER PANEL for Kash: a nice admin panel with lots of test options, plus a command box
   (e.g. /reset fully resets his progress as a brand new player). Owner-only (his UserId), never for other players.
+
+## 2 Oct 22:30 (Kash)
+- Onboarding: players choose their government (democracy, monarchy, etc.) with specific bonuses (property income, less energy, stronger troops...). A developer product lets them change it later.
+  - Done: 6 governments (Democracy +10% property income, Monarchy +10% law cash, Federation +10% convoy pay, Military Junta +10% ATK/DEF, Theocracy Influence and Supply refill 10% faster, Technocracy +10% XP). Change Government product (R$ 99, needs creating in Creator Hub; id 0 until then) from the Country screen.
+
+## 2 Oct 22:32 (Kash)
+- Rules Kash gives (like "Founder's Crate never gives officers") are design notes for the code, NOT text for players. Never copy them into descriptions. Fixed the crate/shop texts.
+- Visible pity system for crates. Done: meter fills with every crate that is not Legendary+; full meter = guaranteed Legendary+ (Founder 30, Supply 50). Shown on crate cards, shop and the drop rates popup.

@@ -246,7 +246,7 @@ local function dropColumns(kind, st)
 			for i = 1, O.RollTiers do vals[i] = (w[i] or 0) * 100 end
 			table.insert(cols, { name = t.name, sub = R.Money(t.cost), vals = vals })
 		end
-		table.insert(notes, "Each hire gives one officer with random traits. You can only hire into an <b>open officer slot</b>.")
+		table.insert(notes, "Each hire gives one officer with random traits.")
 	else
 		for _, e in ipairs(O.CrateInfo[kind] or {}) do
 			local w = weights(e.odds, luck)
@@ -258,11 +258,12 @@ local function dropColumns(kind, st)
 			end
 			table.insert(cols, { name = e.label, sub = pct(e.pct) .. " of drops", vals = vals, extra = extra, color = troops and C.gold or nil })
 		end
+		local pv = (st and st.pity and st.pity[kind]) or 0
+		table.insert(notes, "<font color='#e9b949'><b>PITY " .. pv .. " / " .. (O.Pity[kind] or 50) .. ":</b></font> the crate that fills the meter is guaranteed <b>Legendary or better</b>.")
 		if kind == "limited" then
-			table.insert(notes, "Never gives officers. <b>Elite troops</b> are your era's elite unit (pack size by rarity) and <font color='#f0c75a'><b>never die in raids</b></font>.")
+			table.insert(notes, "<b>Elite troops</b> are your era's elite unit (pack size by rarity) and <font color='#f0c75a'><b>never die in raids</b></font>.")
 			table.insert(notes, "A <b>10-pack</b> guarantees Epic or better: if nothing Epic+ dropped, the last crate is upgraded to Epic.")
 		else
-			table.insert(notes, "The officer roll only counts when you have an <b>open officer slot</b>. With every slot full, that roll becomes gear of the same rarity.")
 			if st and freeSlots(st) == 0 then
 				table.insert(notes, "<font color='#e2695f'><b>Every slot is full right now: this crate gives gear only.</b></font>")
 			end
@@ -645,9 +646,15 @@ local function reveal(App, result, opts)
 end
 
 -- open crates from the inventory (or anywhere) and play the reveal; offers "open another" while crates remain
+local function pityToast(App, res)
+	for _, r in ipairs(res.results or {}) do
+		if r.pity then App.toast("PITY REWARD!", "Your pity meter was full: guaranteed Legendary or better", "gold"); return end
+	end
+end
 local function openCrates(App, kind, n, btn)
 	local res = App.req("openCrate", { kind = kind, n = n }, btn)
 	if not res.ok then return end
+	pityToast(App, res)
 	local left = res.left or (App.state and App.state.crates and App.state.crates[kind]) or 0
 	reveal(App, res, {
 		again = left > 0 and function(b) openCrates(App, kind, 1, b) end or nil,
@@ -656,7 +663,7 @@ local function openCrates(App, kind, n, btn)
 end
 local function buyCrate(App, kind, btn)
 	local res = App.req("buyCrate", { kind = kind }, btn)
-	if res.ok then reveal(App, res) end
+	if res.ok then pityToast(App, res); reveal(App, res) end
 end
 
 local function hireReveal(App, o, where)
@@ -1254,6 +1261,16 @@ S.inventory = { build = function(host, App)
 		stroke(ratesChip, C.manila, 1.2)
 		hoverScale(ratesChip, 0.1)
 		ratesChip.Activated:Connect(function() dropRates(App, kind) end)
+		-- visible PITY meter (Kash 2 Oct): fills with every crate that is not Legendary+
+		do
+			local need = O.Pity[kind] or 50
+			local have = math.min(need, (st and st.pity and st.pity[kind]) or 0)
+			local track = mk("Frame", { Name = "Pity", BackgroundColor3 = C.black, BackgroundTransparency = 0.25, BorderSizePixel = 0, Position = UDim2.new(0, 8, 0, 100), Size = UDim2.new(1, -16, 0, 16), ZIndex = 12 }, c)
+			corner(track, 8)
+			local fill = mk("Frame", { BackgroundColor3 = Color3.fromHex("e9b949"), BorderSizePixel = 0, Size = UDim2.new(have / need, 0, 1, 0), ZIndex = 12 }, track)
+			corner(fill, 8)
+			text(track, "PITY " .. have .. "/" .. need, { font = "heavy", size = 11, color = C.white, align = Enum.TextXAlignment.Center, sz = UDim2.fromScale(1, 1), z = 13, stroke = 1.2 })
+		end
 		if count > 0 then
 			local n = math.min(count, 10)
 			if n > 1 then
@@ -1288,8 +1305,8 @@ S.inventory = { build = function(host, App)
 		end
 		rarityBar(c, isBasic and "SUPPLY" or "LIMITED", rc)
 		c.Activated:Connect(function()
-			local body2 = isBasic and ("Mostly gear. An officer only drops when you have an <b>open officer slot</b>. Bought with cash: about " .. Config.Crates.Basic.lawMinutes .. " minutes of law income at your level.")
-				or "Gear or <b>ELITE TROOPS</b> (never officers). Elite troops never die in raids. A 10-pack guarantees Epic or better. Buy with gold or Robux. Limited time!"
+			local body2 = isBasic and ("Gear and officers. Bought with cash: about " .. Config.Crates.Basic.lawMinutes .. " minutes of law income at your level.")
+				or "Gear or <b>ELITE TROOPS</b>. Elite troops never die in raids. A 10-pack guarantees Epic or better. Buy with gold or Robux. Limited time!"
 			local _, bd, close = popup(App, def.name, 460, 250)
 			text(bd, body2, { size = 16, wrap = true, rich = true, sz = UDim2.new(1, 0, 1, -54), valign = Enum.TextYAlignment.Top, z = 74 })
 			UI.button(bd, "slate", "CLOSE", close, { sz = UDim2.fromOffset(150, 42), pos = UDim2.new(0, 0, 1, -4), anchor = Vector2.new(0, 1), z = 74 })

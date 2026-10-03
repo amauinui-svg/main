@@ -564,7 +564,7 @@ S.shop = { build = function(host, App)
 		local _, cc = liftCard(row, { name = "Crate", sz = UDim2.fromOffset(cw, H), pos = stack and UDim2.fromOffset(0, H + gap) or UDim2.fromOffset(bw + gap, 0), glow = LIMITED, baseGlow = 0.7 })
 		text(cc, L.name, { font = "display", size = 22, color = C.manila, pos = UDim2.fromOffset(16, 10), sz = UDim2.new(1, -60, 0, 28), z = 10, truncate = true })
 		infoBtn(App, cc, L.name, "One crate, two prices: open one now for <b>" .. L.gold .. " gold</b>, or buy Robux packs that go to your <b>Inventory</b> to open any time.\n\n"
-			.. "Gear or <b>ELITE TROOPS</b> that never die in raids (never officers). The <b>10-pack</b> guarantees at least one <b>Epic or better</b>. Tap <b>DROP RATES</b> for every % chance.",
+			.. "Gear or <b>ELITE TROOPS</b> that never die in raids. The <b>10-pack</b> guarantees at least one <b>Epic or better</b>. Tap <b>DROP RATES</b> for every % chance.",
 			UDim2.new(1, -34, 0, 14), 30)
 		local cTimer = text(cc, "", { font = "heavy", size = 13, color = LIMITED, pos = UDim2.fromOffset(16, 38), sz = UDim2.new(1, -32, 0, 18), z = 10 })
 		local crateSize = 116
@@ -582,6 +582,23 @@ S.shop = { build = function(host, App)
 			if App.openCrates then App.openCrates("limited", 1, haveBtn) else App.open("inventory") end
 		end)
 		ratesButton(App, cc, "limited", { pos = UDim2.fromOffset(12, 64), sz = UDim2.fromOffset(112, 26), z = 14, textSize = 12 })
+		-- visible PITY meter (Kash 2 Oct)
+		do
+			local okO, O = pcall(require, game:GetService("ReplicatedStorage").Shared.Officers)
+			local need = okO and O.Pity and O.Pity.limited or 30
+			local track = mk("Frame", { Name = "Pity", BackgroundColor3 = DARK, BorderSizePixel = 0, Position = UDim2.fromOffset(12, 96), Size = UDim2.fromOffset(112, 18), ZIndex = 14 }, cc)
+			corner(track, 9)
+			local fill = mk("Frame", { BackgroundColor3 = Color3.fromHex("e9b949"), BorderSizePixel = 0, Size = UDim2.fromScale(0, 1), ZIndex = 14 }, track)
+			corner(fill, 9)
+			local lbl = text(track, "", { font = "heavy", size = 11, color = C.white, align = Enum.TextXAlignment.Center, sz = UDim2.fromScale(1, 1), z = 15, stroke = 1.2 })
+			local function upd(st)
+				local have = math.min(need, (st and st.pity and st.pity.limited) or 0)
+				fill.Size = UDim2.fromScale(have / need, 1)
+				lbl.Text = "PITY " .. have .. "/" .. need
+			end
+			upd(App.state)
+			App.on("full", function(st) if track.Parent then upd(st) end end)
+		end
 		text(cc, "Gear or <font color='#f0c75a'><b>ELITE TROOPS</b></font> that never die in raids", { size = 14, color = C.ink, align = Enum.TextXAlignment.Center, rich = true,
 			pos = UDim2.fromOffset(12, 184), sz = UDim2.new(1, -24, 0, 20), z = 10, scaled = true })
 		local goldBtn = UI.button(cc, "gold", "OPEN NOW · " .. L.gold .. " GOLD", function(btn)
@@ -655,7 +672,7 @@ S.shop = { build = function(host, App)
 		text(card, B.name, { font = "display", size = 22, color = C.manila, pos = UDim2.fromOffset(130, 12), sz = UDim2.new(1, -150 - rightW, 0, 28), z = 10, truncate = true })
 		tag(card, "FREE TO PLAY", C.good, C.manilaInk, { pos = UDim2.fromOffset(132, 44), z = 11, h = 20, size = 11 })
 		ratesButton(App, card, "basic", { pos = UDim2.fromOffset(242, 41), sz = UDim2.fromOffset(124, 26), z = 11, textSize = 12 })
-		text(card, "Mostly gear. An officer only when you have an open officer slot.", { size = 14, color = C.muted, pos = UDim2.fromOffset(130, 70), sz = UDim2.new(1, -150 - rightW, 0, 36), z = 10, wrap = true, valign = Enum.TextYAlignment.Top })
+		text(card, "Gear and officers, bought with cash.", { size = 14, color = C.muted, pos = UDim2.fromOffset(130, 70), sz = UDim2.new(1, -150 - rightW, 0, 36), z = 10, wrap = true, valign = Enum.TextYAlignment.Top })
 		local buy = UI.button(card, "manila", "BUY & OPEN", function(btn)
 			local st = App.state
 			local price = st and st.basicCratePrice or 0
