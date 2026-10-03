@@ -461,3 +461,6 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 
 ## 3 Oct 10:33 (Kash)
 - Convoy RECALL: a travelling convoy can be turned around for free. The way back takes half the time it already travelled, cargo cost is refunded, one recall per trip. RECALL HOME for parked convoys is now free too.
+
+## 3 Oct 10:41 (Kash)
+- Roblox moderated IC_boss_rogue_general (103274986913008) as "Illegal and Regulated Content" (the cigar = tobacco) and the account is temporarily moderated. Removed boss_5 (Robber Baron, also had a cigar) and boss_6 from the game; those bosses show the skull icon until clean versions exist. RULE for all future art: no tobacco/cigars, alcohol, drugs, weapons-making, or real-world extremist symbols/armbands in anything uploaded to Roblox. Asked Kash to delete/archive 117230554201741 (Robber Baron) before it gets reviewed.

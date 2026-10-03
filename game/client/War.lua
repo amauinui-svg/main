@@ -134,6 +134,8 @@ S.bosses = { build = function(host, App)
 	local portrait = UI.mk("ImageLabel", { Name = "Portrait", BackgroundColor3 = C.black, BorderSizePixel = 0, Position = UDim2.new(1, -PW - 18, 0, 16), Size = UDim2.fromOffset(PW, PW), ZIndex = 7, ScaleType = Enum.ScaleType.Crop }, card)
 	UI.mk("UICorner", { CornerRadius = UDim.new(0, 10) }, portrait)
 	UI.mk("UIStroke", { Color = C.bad, Thickness = 3 }, portrait)
+	-- fallback when a boss has no portrait yet
+	local bossIcon = UI.icon(card, "icon_bosses", 120, C.bad, UDim2.new(1, -PW / 2 - 18 - 60, 0, 16 + PW / 2 - 60), { z = 7 })
 	local name = text(card, "", { font = "display", size = 34, color = C.manila, pos = UDim2.fromOffset(24, 18), sz = UDim2.new(1, -PW - 60, 0, 40), z = 7, scaled = true })
 	local desc = text(card, "", { size = 17, color = C.muted, pos = UDim2.fromOffset(24, 62), sz = UDim2.new(1, -PW - 60, 0, 22), z = 7, truncate = true })
 	local hp = UI.bar(card, C.bad, { pos = UDim2.fromOffset(24, 110), sz = UDim2.new(1, -PW - 60, 0, 34), z = 7, textSize = 17 })
@@ -154,6 +156,8 @@ S.bosses = { build = function(host, App)
 		local B = M.Bosses[boss.era]
 		name.Text = string.upper(B[1])
 		portrait.Image = UI.asset("boss_" .. boss.era)
+		portrait.Visible = portrait.Image ~= ""
+		bossIcon.Visible = not portrait.Visible
 		desc.Text = B[2] .. " · " .. D.Eras[boss.era].name .. " era"
 		local max = M.BossHp(boss.era)
 		hp:Set(boss.hp / max, R.Short(boss.hp) .. " / " .. R.Short(max) .. " HP", "")
