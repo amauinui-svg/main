@@ -176,11 +176,15 @@ end
 function R.EraCost(e) local E = D.Eras[e]; if not E then return nil end; return math.floor(R.MinuteValue(E.start) * 120 / 1000 + 0.5) * 1000 end
 
 ---------------------------------------------------------------- ideologies (onboarding)
+-- Governments (Kash 2 Oct): picked in onboarding, changed later with the Change Government product.
+-- Keys stay the same as old saves ("republic" is shown as DEMOCRACY).
 R.Ideologies = {
-	{ key = "republic", name = "REPUBLIC", desc = "+10% property income", mod = { props = 0.10 } },
-	{ key = "monarchy", name = "MONARCHY", desc = "+10% law cash", mod = { law = 0.10 } },
-	{ key = "federation", name = "FEDERATION", desc = "+10% convoy pay", mod = { convoy = 0.10 } },
-	{ key = "junta", name = "MILITARY JUNTA", desc = "+10% attack and defense", mod = { attack = 0.10, defense = 0.10 } },
+	{ key = "republic", name = "DEMOCRACY", desc = "+10% property income", flavor = "The people build and the economy booms.", mod = { props = 0.10 } },
+	{ key = "monarchy", name = "MONARCHY", desc = "+10% law cash", flavor = "The crown's decrees fill the treasury.", mod = { law = 0.10 } },
+	{ key = "federation", name = "FEDERATION", desc = "+10% convoy pay", flavor = "Free states trading across the world.", mod = { convoy = 0.10 } },
+	{ key = "junta", name = "MILITARY JUNTA", desc = "+10% attack and defense", flavor = "Generals rule. Troops fight harder.", mod = { attack = 0.10, defense = 0.10 } },
+	{ key = "theocracy", name = "THEOCRACY", desc = "Influence and Supply refill 10% faster", flavor = "Faith moves the nation: less waiting, more ruling.", mod = { regen = 0.10 } },
+	{ key = "technocracy", name = "TECHNOCRACY", desc = "+10% XP from everything", flavor = "Experts in charge. Progress comes faster.", mod = { xp = 0.10 } },
 }
 R.IdeologyByKey = {}
 for _, d in ipairs(R.Ideologies) do R.IdeologyByKey[d.key] = d end

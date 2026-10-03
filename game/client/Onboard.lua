@@ -84,15 +84,16 @@ function O.show(App)
 		return function() return true end
 	end
 	steps[3] = function()
-		text(area, "Choose your form of government", { font = "display", size = 24, pos = UDim2.fromOffset(4, 10), sz = UDim2.new(1, 0, 0, 30), z = 63 })
+		text(area, "Choose your form of government (you can change it later)", { font = "display", size = 24, pos = UDim2.fromOffset(4, 10), sz = UDim2.new(1, 0, 0, 30), z = 63 })
 		local grid = UI.mk("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(4, 54), Size = UDim2.new(1, -8, 1, -60), ZIndex = 63 }, area)
-		UI.mk("UIGridLayout", { CellSize = UDim2.new(0.5, -6, 0, 110), CellPadding = UDim2.fromOffset(12, 12), SortOrder = Enum.SortOrder.LayoutOrder }, grid)
-		local icons = { republic = "icon_landmark", monarchy = "icon_crown", federation = "icon_globe", junta = "icon_military" }
+		UI.mk("UIGridLayout", { CellSize = UDim2.new(1 / 3, -8, 0, 132), CellPadding = UDim2.fromOffset(12, 12), SortOrder = Enum.SortOrder.LayoutOrder }, grid)
+		local icons = { republic = "icon_landmark", monarchy = "icon_crown", federation = "icon_globe", junta = "icon_military", theocracy = "icon_sparkles", technocracy = "icon_rocket" }
 		for k, d in ipairs(R.Ideologies) do
 			local card = UI.card(grid, { button = true, z = 64, hot = form.ideo == d.key, order = k })
 			UI.icon(card, icons[d.key], 36, form.ideo == d.key and C.gold or C.manila, UDim2.fromOffset(16, 16), { z = 65 })
-			text(card, d.name, { font = "display", size = 22, pos = UDim2.fromOffset(64, 18), sz = UDim2.new(1, -72, 0, 28), z = 65 })
-			text(card, d.desc, { font = "heavy", size = 17, color = C.good, pos = UDim2.fromOffset(64, 54), sz = UDim2.new(1, -72, 0, 22), z = 65 })
+			text(card, d.name, { font = "display", size = 20, pos = UDim2.fromOffset(62, 14), sz = UDim2.new(1, -70, 0, 26), z = 65, scaled = true })
+			text(card, d.desc, { font = "heavy", size = 16, color = C.good, wrap = true, pos = UDim2.fromOffset(62, 44), sz = UDim2.new(1, -70, 0, 40), z = 65, valign = Enum.TextYAlignment.Top })
+			text(card, d.flavor or "", { size = 14, color = C.muted, wrap = true, pos = UDim2.fromOffset(14, 88), sz = UDim2.new(1, -24, 0, 36), z = 65, valign = Enum.TextYAlignment.Top })
 			card.Activated:Connect(function() form.ideo = d.key; draw() end)
 		end
 		return function() return true end

@@ -586,6 +586,19 @@ function act.revengeStrike(plr, p, a)
 	if not ai and not q and not RA.RemoteOk(r.id) then return no(r.name .. " can't be found right now") end
 	return MK.PromptProduct(plr, "RevengeStrike", r.id)
 end
+function act.changeGov(plr, p, a)
+	local key = a and a.ideo
+	if type(key) ~= "string" or not R.IdeologyByKey[key] then return no("Pick a government") end
+	if key == p.data.ideo then return no("That is already your government") end
+	if (p.data.govCredit or 0) > 0 then
+		p.data.govCredit -= 1
+		p.data.ideo = key
+		p.xpMult = PS.Mods(p).xp
+		return ok({ changed = true })
+	end
+	return MK.PromptProduct(plr, "ChangeGovernment", key)
+end
+
 function act.moveCapital(plr, p, a)
 	local b = int(a.city, 1, #World.Cities)
 	if not b then return no("Pick a city") end

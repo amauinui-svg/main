@@ -41,6 +41,8 @@ C.Products = {
 	FinishConvoy4 = { id = 3715911519, robux = 49, maxMinutes = math.huge },
 	ChallengeRefresh = { id = 3715911521, robux = 19 },
 	MoveCapital = { id = 3715911522, robux = 99 },
+	-- Change Government (Kash 2 Oct): pick a different government later on. id 0 until the product is created.
+	ChangeGovernment = { id = 0, robux = 99 },
 	LimitedBundle = { id = 3715911526, robux = 999 },
 }
 

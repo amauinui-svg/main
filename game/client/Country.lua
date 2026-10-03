@@ -8,6 +8,7 @@ local TweenService = game:GetService("TweenService")
 local Shared = RS:WaitForChild("Shared")
 local D = require(Shared.GameData)
 local R = require(Shared.Rules)
+local Config = require(Shared.Config)
 local TK = require(Shared.Tasks)
 
 local S = {}
@@ -572,6 +573,37 @@ S.country = { build = function(host, App)
 	local ideoL = text(idRow, "", { size = 13, color = C.muted, pos = UDim2.fromOffset(70, 26), sz = UDim2.new(1, -184, 0, 16), z = 10, truncate = true })
 	-- EDIT FLAG (Kash 19:24): opens the flag editor; the Custom Flag pass unlocks the extra options
 	UI.button(idRow, "manila", "EDIT FLAG", function() showFlagEditor(App) end, { pos = UDim2.new(1, 0, 0.5, 0), anchor = Vector2.new(1, 0.5), sz = UDim2.fromOffset(108, 36), z = 11, textSize = 14, icon = "icon_flag", iconSize = 16 })
+	-- government: tap to change it (Change Government product, Kash 2 Oct)
+	local govClick = UI.mk("TextButton", { Text = "", BackgroundTransparency = 1, Position = UDim2.fromOffset(70, 24), Size = UDim2.new(1, -184, 0, 20), ZIndex = 12 }, idRow)
+	govClick.Activated:Connect(function()
+		local host = UI.mk("TextButton", { Name = "GovPicker", Text = "", AutoButtonColor = false, BackgroundColor3 = C.black, BackgroundTransparency = 0.35, Size = UDim2.fromScale(1, 1), ZIndex = 85 }, App.root)
+		local pnl, b = UI.panel(host, "CHANGE GOVERNMENT", { sz = UDim2.fromOffset(760, 470), pos = UDim2.fromScale(0.5, 0.5), anchor = Vector2.new(0.5, 0.5), z = 86 })
+		UI.button(pnl, "slate", "X", function() host:Destroy() end, { pos = UDim2.new(1, -54, 0, 10), sz = UDim2.fromOffset(40, 36), z = 90, textSize = 16 })
+		local st = App.state
+		local prod = Config.Products and Config.Products.ChangeGovernment
+		local free = (st.govCredit or 0) > 0
+		text(b, free and "You have a free change. Pick your new government." or ("Each change costs R$ " .. (prod and prod.robux or 99) .. ". Your current government is lit."), { size = 15, color = C.muted, sz = UDim2.new(1, 0, 0, 22), z = 87 })
+		local grid = UI.mk("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(0, 30), Size = UDim2.new(1, 0, 1, -30), ZIndex = 87 }, b)
+		UI.mk("UIGridLayout", { CellSize = UDim2.new(1 / 3, -8, 0, 170), CellPadding = UDim2.fromOffset(12, 12), SortOrder = Enum.SortOrder.LayoutOrder }, grid)
+		local icons = { republic = "icon_landmark", monarchy = "icon_crown", federation = "icon_globe", junta = "icon_military", theocracy = "icon_sparkles", technocracy = "icon_rocket" }
+		for k, g in ipairs(R.Ideologies) do
+			local cur = st.ideo == g.key
+			local card = UI.card(grid, { z = 88, hot = cur, order = k })
+			UI.icon(card, icons[g.key] or "icon_landmark", 30, cur and C.gold or C.manila, UDim2.fromOffset(12, 12), { z = 89 })
+			text(card, g.name, { font = "display", size = 18, pos = UDim2.fromOffset(50, 14), sz = UDim2.new(1, -58, 0, 24), z = 89, scaled = true })
+			text(card, g.desc, { font = "heavy", size = 15, color = C.good, wrap = true, pos = UDim2.fromOffset(12, 50), sz = UDim2.new(1, -24, 0, 38), z = 89, valign = Enum.TextYAlignment.Top })
+			text(card, g.flavor or "", { size = 13, color = C.muted, wrap = true, pos = UDim2.fromOffset(12, 88), sz = UDim2.new(1, -24, 0, 34), z = 89, valign = Enum.TextYAlignment.Top })
+			if cur then
+				UI.button(card, "locked", "CURRENT", nil, { pos = UDim2.new(0, 10, 1, -44), sz = UDim2.new(1, -20, 0, 36), z = 90, textSize = 14 })
+			else
+				UI.button(card, free and "green" or "gold", free and "SWITCH (FREE)" or ("SWITCH · R$ " .. (prod and prod.robux or 99)), function(btn)
+					local res = App.req("changeGov", { ideo = g.key }, btn)
+					if res.ok and res.changed then App.toast("YOUR NATION IS NOW A " .. g.name, g.desc, "gold"); host:Destroy()
+					elseif res.ok then host:Destroy() end
+				end, { pos = UDim2.new(0, 10, 1, -44), sz = UDim2.new(1, -20, 0, 36), z = 90, textSize = 14 })
+			end
+		end
+	end)
 	local flagClick = UI.mk("TextButton", { Text = "", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 12 }, flagHost)
 	flagClick.Activated:Connect(function() showFlagEditor(App) end)
 	local xpBar = UI.bar(statsB, C.xp, { pos = UDim2.fromOffset(0, 52), sz = UDim2.new(1, 0, 0, 26), z = 10, textSize = 14 })
@@ -695,7 +727,9 @@ S.country = { build = function(host, App)
 			UI.flag(flagHost, st.flag, 58, { z = 10 })
 		end
 		nameL.Text = string.upper((st.name and st.name ~= "") and st.name or Players.LocalPlayer.DisplayName)
-		ideoL.Text = (st.ideo and type(st.ideo) == "string" and (st.ideo .. " · ") or "") .. eraTitle(E.name)
+		local gov = R.IdeologyByKey[st.ideo or ""]
+		ideoL.Text = (gov and (gov.name .. " (" .. gov.desc .. ") · ") or "") .. eraTitle(E.name) .. "  <font color='#e2cfa3'><u>CHANGE</u></font>"
+		ideoL.RichText = true
 		xpBar:Set((st.xp or 0) / math.max(1, st.xpReq or 1), "LEVEL " .. st.lv, R.Short(math.floor(st.xp or 0)) .. " / " .. R.Short(st.xpReq or 0) .. " XP")
 		local officers = 0
 		for _ in pairs((st.inv and st.inv.officers) or {}) do officers += 1 end

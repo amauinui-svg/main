@@ -100,6 +100,18 @@ function grant.MoveCapital(p, city)
 	PS.Note(p, { kind = "toast", text = "Your capital has moved.", tone = "good" })
 	return true
 end
+function grant.ChangeGovernment(p, ideo)
+	local R = require(RS.Shared.Rules)
+	if type(ideo) ~= "string" or not R.IdeologyByKey[ideo] then
+		p.data.govCredit = (p.data.govCredit or 0) + 1 -- no valid pick saved: keep it as a free change for later
+		PS.Note(p, { kind = "toast", text = "Government change saved. Pick your new government any time.", tone = "good" })
+		return true
+	end
+	p.data.ideo = ideo
+	p.xpMult = PS.Mods(p).xp
+	PS.Note(p, { kind = "toast", text = "Your nation is now a " .. R.IdeologyByKey[ideo].name .. "!", tone = "gold" })
+	return true
+end
 function grant.GoldSmall(p) p.data.gold += Config.Products.GoldSmall.gold; return true end
 function grant.GoldBig(p) p.data.gold += Config.Products.GoldBig.gold; return true end
 function grant.GoldHuge(p) p.data.gold += Config.Products.GoldHuge.gold; return true end
