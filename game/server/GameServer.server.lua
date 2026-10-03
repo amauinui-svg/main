@@ -123,18 +123,24 @@ task.spawn(function()
 		end
 	end
 end)
+-- no walking: freeze every character (also players who joined before this script ran, e.g. Studio)
+local function freezeChar(char)
+	local hum = char:WaitForChild("Humanoid", 10)
+	if hum then hum.WalkSpeed = 0; hum.UseJumpPower = true; hum.JumpPower = 0 end
+	local root = char:WaitForChild("HumanoidRootPart", 10)
+	if root then task.wait(); root.Anchored = true end
+end
+local function watchChars(plr)
+	plr.CharacterAdded:Connect(freezeChar)
+	if plr.Character then task.spawn(freezeChar, plr.Character) end
+end
+Players.PlayerAdded:Connect(watchChars)
+for _, plr in ipairs(Players:GetPlayers()) do watchChars(plr) end
 Players.PlayerAdded:Connect(function(plr)
 	plr.DevEnableMouseLock = false
 	pcall(function() plr.DevComputerMovementMode = Enum.DevComputerMovementMode.Scriptable end)
 	pcall(function() plr.DevTouchMovementMode = Enum.DevTouchMovementMode.Scriptable end)
-	local function freeze(char)
-		local hum = char:WaitForChild("Humanoid", 10)
-		if hum then hum.WalkSpeed = 0; hum.UseJumpPower = true; hum.JumpPower = 0 end
-		local root = char:WaitForChild("HumanoidRootPart", 10)
-		if root then root.Anchored = true end
-	end
-	plr.CharacterAdded:Connect(freeze)
-	if plr.Character then task.spawn(freeze, plr.Character) end
+
 	task.wait(1)
 	if plr.Parent then Sync:FireClient(plr, "world", WS.PublicState()) end
 end)
