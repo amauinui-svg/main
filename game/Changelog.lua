@@ -34,7 +34,7 @@ return {
 		version = "Alpha 0.2",
 		date = "1 Oct 2026",
 		items = {
-			"THE WORLD MAP: the Capitol map is now the home screen",
+			"THE WORLD MAP: the World map is now the home screen",
 			"Convoys travel between real world capitals and deliver the goods each city wants",
 			"Alliances can capture and hold cities on the map",
 			"City taxes: alliances that hold a city tax the trade passing through it",

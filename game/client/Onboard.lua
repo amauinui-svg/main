@@ -128,7 +128,7 @@ function O.show(App)
 		local res = App.req("onboard", form, nextB)
 		if res.ok then
 			cover:Destroy()
-			App.toast("WELCOME, " .. string.upper(form.name), "Pass your first laws, then send a convoy from the CAPITOL map", "gold")
+			App.toast("WELCOME, " .. string.upper(form.name), "Pass your first laws, then send a convoy from the WORLD map", "gold")
 			App.open("map")
 		end
 	end)

@@ -34,7 +34,7 @@ local DEFS = {
 	{ key = "shortNumbers", name = "Short numbers (1.2M)", desc = "Off shows full numbers (1,200,000)", icon = "icon_coins", default = true },
 	{ key = "autoClaim", name = "Auto-claim finished orders", desc = "Daily and weekly orders claim themselves", icon = "icon_tasks", default = false },
 	{ key = "reduceMotion", name = "Reduce animations", desc = "Fewer tweens, bobbing and screen shake", icon = "icon_gauge", default = false },
-	{ key = "mapLabels", name = "City names on the map", desc = "Show capital names on the Capitol map", icon = "icon_map", default = true },
+	{ key = "mapLabels", name = "City names on the map", desc = "Show capital names on the World map", icon = "icon_map", default = true },
 }
 
 local function hexOf(c) return string.format("%02x%02x%02x", math.floor(c.R * 255 + 0.5), math.floor(c.G * 255 + 0.5), math.floor(c.B * 255 + 0.5)) end

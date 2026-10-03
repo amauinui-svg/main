@@ -206,7 +206,7 @@ layoutTop()
 ---------------------------------------------------------------- nav (flush left)
 local NAV = {
 	{ key = "country", label = "COUNTRY", icon = "icon_flag" },
-	{ key = "map", label = "CAPITOL", icon = "icon_map" },
+	{ key = "map", label = "WORLD", icon = "icon_map" },
 	{ key = "laws", label = "LAWS", icon = "icon_laws" },
 	{ key = "properties", label = "PROPERTIES", icon = "icon_properties" },
 	{ key = "inventory", label = "INVENTORY", icon = "icon_boxes" },

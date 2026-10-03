@@ -120,7 +120,7 @@ S.alliance = { build = function(host, App)
 		text(hdr, "CITIES HELD " .. #held .. "/" .. AC.MaxCities .. (#countries > 0 and (" · FULL CONTROL: " .. table.concat(countries, ", ") .. " (+10%)") or ""), { font = "heavy", size = 14, color = C.muted, sz = UDim2.fromScale(1, 1), z = 9 })
 		if #held == 0 then
 			local e = UI.card(list, { sz = UDim2.new(1, 0, 0, 50), z = 8, order = 4 })
-			text(e, "No cities yet. Pick an unclaimed city on the CAPITOL map and attack it with your alliance.", { size = 15, color = C.muted, pos = UDim2.fromOffset(16, 0), sz = UDim2.new(1, -32, 1, 0), z = 9, wrap = true })
+			text(e, "No cities yet. Pick an unclaimed city on the WORLD map and attack it with your alliance.", { size = 15, color = C.muted, pos = UDim2.fromOffset(16, 0), sz = UDim2.new(1, -32, 1, 0), z = 9, wrap = true })
 		end
 		for k, i in ipairs(held) do
 			local cs = App.world.cities[i]
@@ -301,7 +301,7 @@ S.shop = { build = function(host, App)
 		end
 		header("CAPITAL", 30)
 		local mc = Config.Products.MoveCapital
-		item(31, "icon_capitol", C.manila, "MOVE YOUR CAPITAL", "Open any city on the CAPITOL map and press MAKE THIS MY CAPITAL", "slate", "OPEN MAP", function() App.open("map") end)
+		item(31, "icon_capitol", C.manila, "MOVE YOUR CAPITAL", "Open any city on the WORLD map and press MAKE THIS MY CAPITAL", "slate", "OPEN MAP", function() App.open("map") end)
 		if st.studio then
 			local note = UI.mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 40), ZIndex = 7, LayoutOrder = 99 }, list)
 			text(note, "Studio: every game pass is granted for testing (Config.StudioGrantsPasses). Set workspace attribute IC_NoPasses to test without them.", { size = 13, color = C.dim, sz = UDim2.fromScale(1, 1), z = 8, wrap = true })

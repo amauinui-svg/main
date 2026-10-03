@@ -1800,7 +1800,7 @@ return {
 		version = "Alpha 0.2",
 		date = "1 Oct 2026",
 		items = {
-			"THE WORLD MAP: the Capitol map is now the home screen",
+			"THE WORLD MAP: the World map is now the home screen",
 			"Convoys travel between real world capitals and deliver the goods each city wants",
 			"Alliances can capture and hold cities on the map",
 			"City taxes: alliances that hold a city tax the trade passing through it",
@@ -7475,7 +7475,7 @@ S.alliance = { build = function(host, App)
 		text(hdr, "CITIES HELD " .. #held .. "/" .. AC.MaxCities .. (#countries > 0 and (" · FULL CONTROL: " .. table.concat(countries, ", ") .. " (+10%)") or ""), { font = "heavy", size = 14, color = C.muted, sz = UDim2.fromScale(1, 1), z = 9 })
 		if #held == 0 then
 			local e = UI.card(list, { sz = UDim2.new(1, 0, 0, 50), z = 8, order = 4 })
-			text(e, "No cities yet. Pick an unclaimed city on the CAPITOL map and attack it with your alliance.", { size = 15, color = C.muted, pos = UDim2.fromOffset(16, 0), sz = UDim2.new(1, -32, 1, 0), z = 9, wrap = true })
+			text(e, "No cities yet. Pick an unclaimed city on the WORLD map and attack it with your alliance.", { size = 15, color = C.muted, pos = UDim2.fromOffset(16, 0), sz = UDim2.new(1, -32, 1, 0), z = 9, wrap = true })
 		end
 		for k, i in ipairs(held) do
 			local cs = App.world.cities[i]
@@ -7656,7 +7656,7 @@ S.shop = { build = function(host, App)
 		end
 		header("CAPITAL", 30)
 		local mc = Config.Products.MoveCapital
-		item(31, "icon_capitol", C.manila, "MOVE YOUR CAPITAL", "Open any city on the CAPITOL map and press MAKE THIS MY CAPITAL", "slate", "OPEN MAP", function() App.open("map") end)
+		item(31, "icon_capitol", C.manila, "MOVE YOUR CAPITAL", "Open any city on the WORLD map and press MAKE THIS MY CAPITAL", "slate", "OPEN MAP", function() App.open("map") end)
 		if st.studio then
 			local note = UI.mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 40), ZIndex = 7, LayoutOrder = 99 }, list)
 			text(note, "Studio: every game pass is granted for testing (Config.StudioGrantsPasses). Set workspace attribute IC_NoPasses to test without them.", { size = 13, color = C.dim, sz = UDim2.fromScale(1, 1), z = 8, wrap = true })
@@ -7797,7 +7797,7 @@ function O.show(App)
 		local res = App.req("onboard", form, nextB)
 		if res.ok then
 			cover:Destroy()
-			App.toast("WELCOME, " .. string.upper(form.name), "Pass your first laws, then send a convoy from the CAPITOL map", "gold")
+			App.toast("WELCOME, " .. string.upper(form.name), "Pass your first laws, then send a convoy from the WORLD map", "gold")
 			App.open("map")
 		end
 	end)
@@ -11639,7 +11639,7 @@ local DEFS = {
 	{ key = "shortNumbers", name = "Short numbers (1.2M)", desc = "Off shows full numbers (1,200,000)", icon = "icon_coins", default = true },
 	{ key = "autoClaim", name = "Auto-claim finished orders", desc = "Daily and weekly orders claim themselves", icon = "icon_tasks", default = false },
 	{ key = "reduceMotion", name = "Reduce animations", desc = "Fewer tweens, bobbing and screen shake", icon = "icon_gauge", default = false },
-	{ key = "mapLabels", name = "City names on the map", desc = "Show capital names on the Capitol map", icon = "icon_map", default = true },
+	{ key = "mapLabels", name = "City names on the map", desc = "Show capital names on the World map", icon = "icon_map", default = true },
 }
 
 local function hexOf(c) return string.format("%02x%02x%02x", math.floor(c.R * 255 + 0.5), math.floor(c.G * 255 + 0.5), math.floor(c.B * 255 + 0.5)) end
@@ -12847,9 +12847,9 @@ S.shop = { build = function(host, App)
 			{ key = "InstantArmy", art = "shop_army", name = "INSTANT ARMY", desc = "Fill your army to its cap with your best unit", glow = C.bad },
 			{ key = "ChallengeRefresh", art = "shop_refresh", name = "CHALLENGE REFRESH", desc = "+1 refresh token: swap an order for a new one", glow = C.xp },
 			{ key = "FinishConvoy", art = "shop_finish", name = "FINISH CONVOY", desc = "Land a travelling convoy instantly. Buy it from the convoy on the map", glow = C.manila,
-				price = "R$ " .. finishMin .. "-" .. finishMax, ctx = "map", ctxLabel = "USE FROM CAPITOL" },
-			{ key = "MoveCapital", art = "shop_capital", name = "MOVE CAPITAL", desc = "Move your capital to any city. Pick it on the CAPITOL map", glow = C.manila,
-				price = "R$ " .. P.MoveCapital.robux, ctx = "map", ctxLabel = "USE FROM CAPITOL" },
+				price = "R$ " .. finishMin .. "-" .. finishMax, ctx = "map", ctxLabel = "USE FROM WORLD" },
+			{ key = "MoveCapital", art = "shop_capital", name = "MOVE CAPITAL", desc = "Move your capital to any city. Pick it on the WORLD map", glow = C.manila,
+				price = "R$ " .. P.MoveCapital.robux, ctx = "map", ctxLabel = "USE FROM WORLD" },
 			{ key = "RevengeStrike", art = "shop_revenge", name = "REVENGE STRIKE", desc = "Hit back at whoever raided you last. Buy it from RAIDS", glow = C.bad,
 				price = "R$ " .. P.RevengeStrike.robux, ctx = "battle", ctxLabel = "USE FROM RAIDS" },
 		}
@@ -13183,7 +13183,7 @@ layoutTop()
 ---------------------------------------------------------------- nav (flush left)
 local NAV = {
 	{ key = "country", label = "COUNTRY", icon = "icon_flag" },
-	{ key = "map", label = "CAPITOL", icon = "icon_map" },
+	{ key = "map", label = "WORLD", icon = "icon_map" },
 	{ key = "laws", label = "LAWS", icon = "icon_laws" },
 	{ key = "properties", label = "PROPERTIES", icon = "icon_properties" },
 	{ key = "inventory", label = "INVENTORY", icon = "icon_boxes" },

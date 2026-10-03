@@ -652,9 +652,9 @@ S.shop = { build = function(host, App)
 			{ key = "InstantArmy", art = "shop_army", name = "INSTANT ARMY", desc = "Fill your army to its cap with your best unit", glow = C.bad },
 			{ key = "ChallengeRefresh", art = "shop_refresh", name = "CHALLENGE REFRESH", desc = "+1 refresh token: swap an order for a new one", glow = C.xp },
 			{ key = "FinishConvoy", art = "shop_finish", name = "FINISH CONVOY", desc = "Land a travelling convoy instantly. Buy it from the convoy on the map", glow = C.manila,
-				price = "R$ " .. finishMin .. "-" .. finishMax, ctx = "map", ctxLabel = "USE FROM CAPITOL" },
-			{ key = "MoveCapital", art = "shop_capital", name = "MOVE CAPITAL", desc = "Move your capital to any city. Pick it on the CAPITOL map", glow = C.manila,
-				price = "R$ " .. P.MoveCapital.robux, ctx = "map", ctxLabel = "USE FROM CAPITOL" },
+				price = "R$ " .. finishMin .. "-" .. finishMax, ctx = "map", ctxLabel = "USE FROM WORLD" },
+			{ key = "MoveCapital", art = "shop_capital", name = "MOVE CAPITAL", desc = "Move your capital to any city. Pick it on the WORLD map", glow = C.manila,
+				price = "R$ " .. P.MoveCapital.robux, ctx = "map", ctxLabel = "USE FROM WORLD" },
 			{ key = "RevengeStrike", art = "shop_revenge", name = "REVENGE STRIKE", desc = "Hit back at whoever raided you last. Buy it from RAIDS", glow = C.bad,
 				price = "R$ " .. P.RevengeStrike.robux, ctx = "battle", ctxLabel = "USE FROM RAIDS" },
 		}
