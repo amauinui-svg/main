@@ -305,3 +305,6 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 - Like the game / join the group popup, disguised as a FREE GIFT button in a tab players visit a lot; stays until they join. Done: pulsing gold FREE GIFT button on the LAWS screen; popup with LIKE THE GAME, JOIN GROUP, CLAIM GIFT (100 gold, 1 Founder's Crate, +10% cash). The server checks the group fresh; the button disappears once claimed.
 - Robux purchases show in chat with stars and what was bought for how much. Done: products and passes, server-wide, e.g. "⭐ Testland bought 10 Founder's Crates for R$399! ⭐". Ad rewards are not announced.
 - Watch an ad to refill Influence. Done: WATCH AD · FREE on the out-of-Influence popup (only when Roblox has an ad for the player), 5 min cooldown. Uses the 9 R$ refill product as the reward (Roblox rule: 3-10 R$ value). Needs the game public with rewarded ads enabled (2,000+ monthly visitors, verified ID).
+
+## 2 Oct 22:53 (Kash)
+- Game copied into a new experience owned by Kash's personal account (universe 10769117926, place 104255655483582) so his personal ad credit can be used; ownership transfers to Tabby Studios later. All 9 passes and 22 products recreated there with the same names, prices and pass art; Config ids switched to the new ones. Studio work now happens in the new place.

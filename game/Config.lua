@@ -1,20 +1,20 @@
 -- Config: everything Kash may want to tune without touching game logic.
--- Robux items were created on the Creator Dashboard on 1 Oct 2026 (universe 10768253986), managed pricing OFF so the
+-- Robux items were created on the Creator Dashboard on 1 Oct 2026 (universe 10768253986). 2 Oct 22:55: game copied to universe 10769117926 (owned by Kash's account) and every pass/product recreated there; ids below are the new ones, managed pricing OFF so the
 -- prices stay exactly as approved (charm prices ending in 9, bigger packs cheaper per item).
 local C = {}
 
 C.Version = "Alpha 0.3"
 
 C.Passes = {
-	FastConvoys = { id = 2006396309, name = "Express Logistics", desc = "Every convoy travels 2x faster.", price = 249 },
-	AutoDispatch = { id = 2005532295, name = "Auto Dispatch", desc = "Convoys pick the best load and keep trading while you are offline.", price = 399 },
-	ExtraConvoys = { id = 2005070299, name = "+2 Convoy Slots", desc = "Run two more convoys at once.", price = 199 },
-	ExtraLots = { id = 2004536361, name = "+3 Building Lots", desc = "Three more lots for properties.", price = 149 },
-	BonusOfficer = { id = 2007026302, name = "Bonus Officer Slot", desc = "One extra officer slot on top of the ones you buy.", price = 299 },
-	VIP = { id = 2008088291, name = "VIP", desc = "+10% cash from everything, +10% faster Influence regen and the VIP chat tag.", price = 499 },
-	MegaVIP = { id = 2005772319, name = "Mega VIP", desc = "+25% cash, +25% faster Influence regen, a unique LIMITED officer and the MEGA VIP chat tag.", price = 899 },
-	CustomFlag = { id = 2005904325, name = "Custom Flag", desc = "Design your own flag: extra layouts, emblems and colours, or use your own image.", price = 99 },
-	CrateLuck = { id = 2006090287, name = "2x Crate Luck", desc = "Double the odds of Legendary and better from every crate.", price = 349 },
+	FastConvoys = { id = 2005160720, name = "Express Logistics", desc = "Every convoy travels 2x faster.", price = 249 },
+	AutoDispatch = { id = 2005970704, name = "Auto Dispatch", desc = "Convoys pick the best load and keep trading while you are offline.", price = 399 },
+	ExtraConvoys = { id = 2006912670, name = "+2 Convoy Slots", desc = "Run two more convoys at once.", price = 199 },
+	ExtraLots = { id = 2006660680, name = "+3 Building Lots", desc = "Three more lots for properties.", price = 149 },
+	BonusOfficer = { id = 2005112703, name = "Bonus Officer Slot", desc = "One extra officer slot on top of the ones you buy.", price = 299 },
+	VIP = { id = 2006120681, name = "VIP", desc = "+10% cash from everything, +10% faster Influence regen and the VIP chat tag.", price = 499 },
+	MegaVIP = { id = 2006588683, name = "Mega VIP", desc = "+25% cash, +25% faster Influence regen, a unique LIMITED officer and the MEGA VIP chat tag.", price = 899 },
+	CustomFlag = { id = 2005754689, name = "Custom Flag", desc = "Design your own flag: extra layouts, emblems and colours, or use your own image.", price = 99 },
+	CrateLuck = { id = 2006210718, name = "2x Crate Luck", desc = "Double the odds of Legendary and better from every crate.", price = 349 },
 }
 C.PassOrder = { "FastConvoys", "AutoDispatch", "ExtraConvoys", "ExtraLots", "BonusOfficer", "VIP", "MegaVIP", "CrateLuck", "CustomFlag" }
 
@@ -29,30 +29,30 @@ C.NavUnlock = { map = 1, laws = 1, properties = 2, shop = 3, country = 4, tasks 
 
 C.Products = {
 	-- Founder's Crate: 49 R$ each (Kash 2 Oct), bulk cheaper per crate
-	Crate1 = { id = 3715911170, robux = 49, crates = 1 },
-	Crate3 = { id = 3715911208, robux = 129, crates = 3 },
-	Crate10 = { id = 3715911255, robux = 399, crates = 10 },
+	Crate1 = { id = 3716173429, robux = 49, crates = 1 },
+	Crate3 = { id = 3716173492, robux = 129, crates = 3 },
+	Crate10 = { id = 3716173495, robux = 399, crates = 10 },
 	-- Starter Pack (Kash 2 Oct): one time, new players only. A strong property for your era + elite troops + gold.
-	StarterPack = { id = 0, robux = 99, gold = 100, troops = 4, maxLevel = 40 },
-	GoldSmall = { id = 3715911284, robux = 49, gold = 50 },
-	GoldBig = { id = 3715911319, robux = 199, gold = 250 },
-	GoldHuge = { id = 3715911358, robux = 699, gold = 1000 },
-	TreasuryGrant = { id = 3715911479, robux = 49 },
-	InfluenceRefill = { id = 3715911506, robux = 19 },
-	InfluenceRefillFirst = { id = 3715930196, robux = 9 }, -- first refill ever is cheap (Kash 19:19)
-	SupplyRefill = { id = 3715911507, robux = 19 },
-	RaidShield = { id = 3715911508, robux = 39, hours = 4 },
-	InstantArmy = { id = 3715911510, robux = 49 },
-	RevengeStrike = { id = 3715911512, robux = 49 },
-	FinishConvoy1 = { id = 3715911514, robux = 9, maxMinutes = 10 },
-	FinishConvoy2 = { id = 3715911516, robux = 19, maxMinutes = 60 },
-	FinishConvoy3 = { id = 3715911518, robux = 29, maxMinutes = 240 },
-	FinishConvoy4 = { id = 3715911519, robux = 49, maxMinutes = math.huge },
-	ChallengeRefresh = { id = 3715911521, robux = 19 },
-	MoveCapital = { id = 3715911522, robux = 99 },
+	StarterPack = { id = 3716173499, robux = 99, gold = 100, troops = 4, maxLevel = 40 },
+	GoldSmall = { id = 3716173503, robux = 49, gold = 50 },
+	GoldBig = { id = 3716173507, robux = 199, gold = 250 },
+	GoldHuge = { id = 3716173510, robux = 699, gold = 1000 },
+	TreasuryGrant = { id = 3716173516, robux = 49 },
+	InfluenceRefill = { id = 3716173520, robux = 19 },
+	InfluenceRefillFirst = { id = 3716173525, robux = 9 }, -- first refill ever is cheap (Kash 19:19)
+	SupplyRefill = { id = 3716173528, robux = 19 },
+	RaidShield = { id = 3716173531, robux = 39, hours = 4 },
+	InstantArmy = { id = 3716173538, robux = 49 },
+	RevengeStrike = { id = 3716173541, robux = 49 },
+	FinishConvoy1 = { id = 3716173545, robux = 9, maxMinutes = 10 },
+	FinishConvoy2 = { id = 3716173550, robux = 19, maxMinutes = 60 },
+	FinishConvoy3 = { id = 3716173552, robux = 29, maxMinutes = 240 },
+	FinishConvoy4 = { id = 3716173557, robux = 49, maxMinutes = math.huge },
+	ChallengeRefresh = { id = 3716173558, robux = 19 },
+	MoveCapital = { id = 3716173563, robux = 99 },
 	-- Change Government (Kash 2 Oct): pick a different government later on. id 0 until the product is created.
-	ChangeGovernment = { id = 0, robux = 99 },
-	LimitedBundle = { id = 3715911526, robux = 999 },
+	ChangeGovernment = { id = 3716173564, robux = 99 },
+	LimitedBundle = { id = 3716173567, robux = 999 },
 }
 
 -- Studio testing: owners get every gamepass in Studio so the paid paths can be tested
