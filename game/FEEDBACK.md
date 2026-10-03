@@ -382,3 +382,6 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 - Fix all the small things too, and the phone top bar (bars not aligned, buttons not using the space, gold/merit icons outside their chips). Desktop must not change.
 - Phone-only top bar: Influence and Supply stacked as two equal, aligned bars with their icon on the left and the timer inside the bar; cash and income on the left with the gold and merit chips stacked beside them, icons fully inside the chips; bigger + button. Desktop geometry and text sizes are restored exactly when not on a phone.
 - Officer cards show one bonus per line (second bonus no longer cut). Raid names keep a gap before DEFENSE. Alliance tab opens at level 8 (same level founding one needs). Phone tutorial card is smaller and the final "You are ready" card closes itself after 8 seconds on phones.
+
+## 3 Oct 00:57 (Kash)
+- Asked me to change the 2x Convoy Speed price myself: Roblox price is now R$499 (confirmed on the API), matches the game. Kash publishing.
