@@ -346,12 +346,10 @@ function act.recall(plr, p, a)
 	local total = math.max(1, c.t1 - c.t0)
 	local f = math.clamp((t - c.t0) / total, 0.01, 0.99)
 	local back = math.max(3, (t - c.t0) * A.RecallSpeed)
-	local refund = 0
-	if c.load then
-		refund = math.floor(c.load.cost or 0)
-		if refund > 0 then d.cash += refund end
-		if c.load.ev and d.wev == c.load.ev then d.wev = nil end
-	end
+	local refund = c.load and math.floor(c.load.cost or 0) or 0
+	-- the original trip is kept so the recall can be cancelled (Kash 3 Oct); the cargo cost is refunded when the
+	-- convoy actually gets back (PS.Arrive), not now, so cancelling never needs to charge the player again
+	c.orig = { dur = total, load = c.load, empty = c.empty }
 	-- reverse the route; t0 is set so the convoy keeps its spot on the map and heads back at the faster pace
 	c.from, c.to = c.to, c.from
 	c.t1 = t + back
@@ -359,6 +357,23 @@ function act.recall(plr, p, a)
 	c.load = nil; c.empty = true; c.recall = true
 	c.kind = T.RouteKind(c.from, c.to)
 	return ok({ back = back, refund = refund })
+end
+
+-- cancel a recall: the convoy turns around again and carries on with its original trip and cargo at normal speed
+function act.recallCancel(plr, p, a)
+	local c = getConvoy(p, a)
+	if not c or not c.to then return no("That convoy is not travelling") end
+	if not c.recall or type(c.orig) ~= "table" then return no("That convoy is not being recalled") end
+	local t = now()
+	local fb = math.clamp((t - c.t0) / math.max(1, c.t1 - c.t0), 0, 1) -- how far back it has come
+	local po = 1 - fb -- where it sits on the original route
+	local dur = math.max(1, c.orig.dur or 1)
+	c.from, c.to = c.to, c.from
+	c.t1 = t + (1 - po) * dur
+	c.t0 = c.t1 - dur
+	c.load = c.orig.load; c.empty = c.orig.empty; c.recall = nil; c.orig = nil
+	c.kind = T.RouteKind(c.from, c.to)
+	return ok({ left = c.t1 - t })
 end
 
 function A.FinishGold(c) return Config.FinishGold(c.t1 - now()) end

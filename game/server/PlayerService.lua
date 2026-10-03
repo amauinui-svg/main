@@ -303,7 +303,14 @@ end
 function PS.Arrive(p, c, when, quiet)
 	local d = p.data
 	local load = c.load
-	c.at = c.to; c.to = nil; c.t0 = nil; c.t1 = nil; c.load = nil; c.empty = nil; c.recall = nil
+	-- a recalled convoy got home: refund the cargo it was carrying (Actions act.recall)
+	if c.recall and type(c.orig) == "table" and c.orig.load then
+		local cost = math.floor(c.orig.load.cost or 0)
+		if cost > 0 then d.cash += cost end
+		if c.orig.load.ev and d.wev == c.orig.load.ev then d.wev = nil end
+		if not quiet then PS.Note(p, { kind = "toast", text = "Convoy back home · cargo refunded " .. R.Money(cost), tone = "info" }) end
+	end
+	c.at = c.to; c.to = nil; c.t0 = nil; c.t1 = nil; c.load = nil; c.empty = nil; c.recall = nil; c.orig = nil
 	if load then
 		local got = PS.Earn(p, load.pay - load.tax, "convoy")
 		if load.owner and load.tax > 0 then WS.Credit(load.owner, load.tax) end
@@ -324,7 +331,7 @@ function PS.Dispatch(p, c, b, load, startAt)
 	local era = R.PlayerEra(d)
 	local fast = PS.Has(p, "FastConvoys")
 	local secs = T.TripSeconds(c.at, b, era, fast)
-	c.from = c.at; c.to = b; c.t0 = startAt or now(); c.t1 = c.t0 + secs; c.load = load; c.empty = load == nil or nil; c.recall = nil
+	c.from = c.at; c.to = b; c.t0 = startAt or now(); c.t1 = c.t0 + secs; c.load = load; c.empty = load == nil or nil; c.recall = nil; c.orig = nil
 	c.kind = T.RouteKind(c.from, b)
 	if load and load.good and (not startAt or startAt >= now() - 5) then WS.TickWant(b, load.good) end -- live sends only, not offline catch-up
 	return true

@@ -3284,7 +3284,14 @@ end
 function PS.Arrive(p, c, when, quiet)
 	local d = p.data
 	local load = c.load
-	c.at = c.to; c.to = nil; c.t0 = nil; c.t1 = nil; c.load = nil; c.empty = nil; c.recall = nil
+	-- a recalled convoy got home: refund the cargo it was carrying (Actions act.recall)
+	if c.recall and type(c.orig) == "table" and c.orig.load then
+		local cost = math.floor(c.orig.load.cost or 0)
+		if cost > 0 then d.cash += cost end
+		if c.orig.load.ev and d.wev == c.orig.load.ev then d.wev = nil end
+		if not quiet then PS.Note(p, { kind = "toast", text = "Convoy back home · cargo refunded " .. R.Money(cost), tone = "info" }) end
+	end
+	c.at = c.to; c.to = nil; c.t0 = nil; c.t1 = nil; c.load = nil; c.empty = nil; c.recall = nil; c.orig = nil
 	if load then
 		local got = PS.Earn(p, load.pay - load.tax, "convoy")
 		if load.owner and load.tax > 0 then WS.Credit(load.owner, load.tax) end
@@ -3305,7 +3312,7 @@ function PS.Dispatch(p, c, b, load, startAt)
 	local era = R.PlayerEra(d)
 	local fast = PS.Has(p, "FastConvoys")
 	local secs = T.TripSeconds(c.at, b, era, fast)
-	c.from = c.at; c.to = b; c.t0 = startAt or now(); c.t1 = c.t0 + secs; c.load = load; c.empty = load == nil or nil; c.recall = nil
+	c.from = c.at; c.to = b; c.t0 = startAt or now(); c.t1 = c.t0 + secs; c.load = load; c.empty = load == nil or nil; c.recall = nil; c.orig = nil
 	c.kind = T.RouteKind(c.from, b)
 	if load and load.good and (not startAt or startAt >= now() - 5) then WS.TickWant(b, load.good) end -- live sends only, not offline catch-up
 	return true
@@ -5733,12 +5740,10 @@ function act.recall(plr, p, a)
 	local total = math.max(1, c.t1 - c.t0)
 	local f = math.clamp((t - c.t0) / total, 0.01, 0.99)
 	local back = math.max(3, (t - c.t0) * A.RecallSpeed)
-	local refund = 0
-	if c.load then
-		refund = math.floor(c.load.cost or 0)
-		if refund > 0 then d.cash += refund end
-		if c.load.ev and d.wev == c.load.ev then d.wev = nil end
-	end
+	local refund = c.load and math.floor(c.load.cost or 0) or 0
+	-- the original trip is kept so the recall can be cancelled (Kash 3 Oct); the cargo cost is refunded when the
+	-- convoy actually gets back (PS.Arrive), not now, so cancelling never needs to charge the player again
+	c.orig = { dur = total, load = c.load, empty = c.empty }
 	-- reverse the route; t0 is set so the convoy keeps its spot on the map and heads back at the faster pace
 	c.from, c.to = c.to, c.from
 	c.t1 = t + back
@@ -5746,6 +5751,23 @@ function act.recall(plr, p, a)
 	c.load = nil; c.empty = true; c.recall = true
 	c.kind = T.RouteKind(c.from, c.to)
 	return ok({ back = back, refund = refund })
+end
+
+-- cancel a recall: the convoy turns around again and carries on with its original trip and cargo at normal speed
+function act.recallCancel(plr, p, a)
+	local c = getConvoy(p, a)
+	if not c or not c.to then return no("That convoy is not travelling") end
+	if not c.recall or type(c.orig) ~= "table" then return no("That convoy is not being recalled") end
+	local t = now()
+	local fb = math.clamp((t - c.t0) / math.max(1, c.t1 - c.t0), 0, 1) -- how far back it has come
+	local po = 1 - fb -- where it sits on the original route
+	local dur = math.max(1, c.orig.dur or 1)
+	c.from, c.to = c.to, c.from
+	c.t1 = t + (1 - po) * dur
+	c.t0 = c.t1 - dur
+	c.load = c.orig.load; c.empty = c.orig.empty; c.recall = nil; c.orig = nil
+	c.kind = T.RouteKind(c.from, c.to)
+	return ok({ left = c.t1 - t })
 end
 
 function A.FinishGold(c) return Config.FinishGold(c.t1 - now()) end
@@ -8347,12 +8369,20 @@ function Map.build(host, App)
 				local bar = UI.bar(brow, C.good, { sz = UDim2.new(1, 0, 1, 0), z = 28, textSize = 13 })
 				obj.panelBars.trip = { bar = bar, c = c }
 				-- RECALL (Kash 3 Oct): free, the way back takes half the time already travelled, cargo cost refunded
-				if not c.recall then
+				if c.recall then
+					-- cancel the recall (Kash 3 Oct): carry on to the original destination with the cargo
+					local rr = row(40, nx())
+					local dest = W.Cities[c.from] and W.Cities[c.from].name or "?"
+					UI.button(rr, "green", "CANCEL RECALL · CONTINUE TO " .. string.upper(dest), function(btn)
+						local res = App.req("recallCancel", { c = selConvoy }, btn)
+						if res.ok then App.toast("CONVOY " .. selConvoy .. " BACK ON ROUTE", "Arrives in " .. R.Duration(res.left or 0), "good") end
+					end, { sz = UDim2.fromScale(1, 1), z = 29, textSize = 14, icon = "icon_right" })
+				else
 					local back = math.max(3, (App.now() - c.t0) * 0.5)
 					local rr = row(40, nx())
 					UI.button(rr, "slate", "RECALL TO " .. string.upper(W.Cities[c.from].name) .. " · FREE · " .. R.Duration(back), function(btn)
 						local res = App.req("recall", { c = selConvoy }, btn)
-						if res.ok then App.toast("CONVOY " .. selConvoy .. " RECALLED", "Back in " .. R.Duration(res.back or back) .. ((res.refund or 0) > 0 and (" · cargo refunded " .. R.Money(res.refund)) or ""), "info") end
+						if res.ok then App.toast("CONVOY " .. selConvoy .. " RECALLED", "Back in " .. R.Duration(res.back or back) .. ((res.refund or 0) > 0 and (" · cargo refunded (" .. R.Money(res.refund) .. ") when it gets back") or ""), "info") end
 					end, { sz = UDim2.fromScale(1, 1), z = 29, textSize = 14, icon = "icon_home" })
 				end
 				local fin = row(40, nx())

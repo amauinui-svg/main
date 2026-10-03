@@ -474,3 +474,6 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 
 ## 3 Oct 11:02 (Kash)
 - Boss slash effect looked cheap and sat left of centre (bug: slash k was offset by (k-2)*16%). Replaced with a glowing sword-slash sprite (fx_slash, transparent PNG drawn in code, game/assets/fx) that pops in centred on the portrait: x1 one cut, x5 an X, ALL three fanned cuts.
+
+## 3 Oct 11:09 (Kash)
+- Recall can be cancelled: CANCEL RECALL · CONTINUE TO <city> turns the convoy around again with its original cargo at normal speed. The cargo refund now happens when a recalled convoy actually gets home, so cancelling never charges again.

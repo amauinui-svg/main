@@ -620,12 +620,20 @@ function Map.build(host, App)
 				local bar = UI.bar(brow, C.good, { sz = UDim2.new(1, 0, 1, 0), z = 28, textSize = 13 })
 				obj.panelBars.trip = { bar = bar, c = c }
 				-- RECALL (Kash 3 Oct): free, the way back takes half the time already travelled, cargo cost refunded
-				if not c.recall then
+				if c.recall then
+					-- cancel the recall (Kash 3 Oct): carry on to the original destination with the cargo
+					local rr = row(40, nx())
+					local dest = W.Cities[c.from] and W.Cities[c.from].name or "?"
+					UI.button(rr, "green", "CANCEL RECALL · CONTINUE TO " .. string.upper(dest), function(btn)
+						local res = App.req("recallCancel", { c = selConvoy }, btn)
+						if res.ok then App.toast("CONVOY " .. selConvoy .. " BACK ON ROUTE", "Arrives in " .. R.Duration(res.left or 0), "good") end
+					end, { sz = UDim2.fromScale(1, 1), z = 29, textSize = 14, icon = "icon_right" })
+				else
 					local back = math.max(3, (App.now() - c.t0) * 0.5)
 					local rr = row(40, nx())
 					UI.button(rr, "slate", "RECALL TO " .. string.upper(W.Cities[c.from].name) .. " · FREE · " .. R.Duration(back), function(btn)
 						local res = App.req("recall", { c = selConvoy }, btn)
-						if res.ok then App.toast("CONVOY " .. selConvoy .. " RECALLED", "Back in " .. R.Duration(res.back or back) .. ((res.refund or 0) > 0 and (" · cargo refunded " .. R.Money(res.refund)) or ""), "info") end
+						if res.ok then App.toast("CONVOY " .. selConvoy .. " RECALLED", "Back in " .. R.Duration(res.back or back) .. ((res.refund or 0) > 0 and (" · cargo refunded (" .. R.Money(res.refund) .. ") when it gets back") or ""), "info") end
 					end, { sz = UDim2.fromScale(1, 1), z = 29, textSize = 14, icon = "icon_home" })
 				end
 				local fin = row(40, nx())
