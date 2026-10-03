@@ -25,12 +25,15 @@ local RA = require(Server.Raids)
 local AD = require(Server.Admin)
 local AN = require(Server.Analytics)
 local BG = require(Server.Badges)
+local CH = require(Server.Chat)
 MK.Init(PS)
 RA.Init(PS)
 AD.Init(PS, WS, RA)
 PS.Admin = AD
 PS.AN = AN
 BG.Start(PS, WS)
+CH.Start()
+PS.Chat = CH
 A.Init(PS, MK, RA, AD)
 
 -- flood guard (audit M7): a token bucket per player, 8 requests a second with bursts of 15

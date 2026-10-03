@@ -40,11 +40,14 @@ function PS.Fresh()
 		crates = { limited = 0, basic = 0 }, login = { idx = 1, last = 0 },
 		refresh = { day = 0, tokens = 0 }, weekly = nil, bundle = false,
 		-- 1 Oct evening: seals (task currency) and takedown tickets
+		convoyBought = 0,
 		seals = 0, tickets = 0, -- tickets: legacy, always 0
 	}
 end
 
 local function sanitize(d)
+	-- convoys became a purchase (2 Oct): saves from before keep every convoy their level had already given them
+	if d.convoyBought == nil then d.convoyBought = d.onboarded and R.ConvoyGatesReached(d.lv or 1) or 0 end
 	local f = PS.Fresh()
 	for k, v in pairs(f) do if d[k] == nil then d[k] = v end end
 	for k, v in pairs(f.sk) do if d.sk[k] == nil then d.sk[k] = v end end
@@ -133,7 +136,7 @@ function PS.GrantVipOfficer(p)
 end
 function PS.IncHr(p, mods) return R.IncomePerHour(p.data.lots, (mods or PS.Mods(p)).props) end
 function PS.LotsMax(p) return R.Lots(p.data.sk, PS.Has(p, "ExtraLots")) end
-function PS.Slots(p) return R.ConvoySlots(p.data.lv, PS.Has(p, "ExtraConvoys")) end
+function PS.Slots(p) return R.ConvoySlots(p.data.lv, PS.Has(p, "ExtraConvoys"), p.data.convoyBought or 0) end
 function PS.Power(p, mods)
 	mods = mods or PS.Mods(p)
 	return M.Power(p.data.lv, p.data.sk, p.data.units, mods, p.data.elite)
@@ -568,7 +571,7 @@ function PS.Snapshot(p)
 		bank = d.bank, bankRate = Config.Bank.InterestPerHour * (1 + (mods.interest or 0)), bankCap = R.MinuteValue(d.lv) * R.BankCapMinutes, shield = d.shield, revenge = d.revenge,
 		inv = d.inv, cab = d.cab, officerSlots = PS.OfficerSlots(p), nextSlotCost = PS.NextSlotCost(p),
 		crates = d.crates, basicCratePrice = PS.BasicCratePrice(p), login = d.login, loginReady = PS.LoginReady(p),
-		weekly = d.weekly, refresh = d.refresh, bundle = d.bundle, starter = d.starter, wev = d.wev, wonder = d.wonder or 0, admin = PS.Admin and PS.Admin.IsAdmin(p.player) or nil, title = d.title, created = d.created, elite = d.elite, govCredit = d.govCredit, pity = d.pity or {}, tut = d.tut, groupGift = d.groupGift or false, duesRate = PS.DuesRate(p),
+		weekly = d.weekly, refresh = d.refresh, bundle = d.bundle, starter = d.starter, wev = d.wev, wonder = d.wonder or 0, admin = PS.Admin and PS.Admin.IsAdmin(p.player) or nil, title = d.title, created = d.created, elite = d.elite, govCredit = d.govCredit, pity = d.pity or {}, tut = d.tut, convoyBought = d.convoyBought or 0, convoyNext = R.ConvoyCost((d.convoyBought or 0) + 1), groupGift = d.groupGift or false, duesRate = PS.DuesRate(p),
 		targets = PS.Raids and PS.Raids.Targets(p) or {},
 		firstRefill = d.firstRefill or false, settings = d.settings or {}, meta = d.meta or {}, inGroup = p.inGroup or false, premium = p.premium or false, groupId = Config.Group.Id,
 		vip = (PS.VipTier(p) or {}).tag, version = Config.Version,

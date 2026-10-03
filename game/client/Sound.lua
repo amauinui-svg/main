@@ -137,24 +137,37 @@ M._sound = { init = function(App)
 	end)
 
 	---------------------------------------------------------------- settings
-	local function setting(key)
-		local v
+	-- volumes 0..1 from the settings sliders (musicVol / sfxVol). Older saves only have the on/off booleans
+	-- music / sfx: false there means 0, otherwise the default (music 0.5, effects 0.8) until a volume is saved.
+	local DEFAULT_VOL = { music = 0.5, sfx = 0.8 }
+	local function volume(key)
 		local st = App.state and App.state.settings
-		if st and st[key] ~= nil then v = st[key] end
-		if v == nil then v = plr:GetAttribute("IC_" .. key) end
-		if v == nil then return true end -- both default on
-		return v ~= false
+		local v = st and st[key .. "Vol"]
+		if type(v) ~= "number" then v = plr:GetAttribute("IC_" .. key .. "Vol") end
+		if type(v) == "number" and v == v then return math.clamp(v, 0, 1) end
+		local old = st and st[key]
+		if old == nil then old = plr:GetAttribute("IC_" .. key) end
+		if old == false then return 0 end
+		return DEFAULT_VOL[key]
 	end
-	local function sfxOn() return setting("sfx") end
-	local function musicOn() return setting("music") end
+	local function sfxOn() return volume("sfx") > 0 end
+	local function musicOn() return volume("music") > 0 end
 
 	---------------------------------------------------------------- music ducking
+	-- the Music group's volume is the slider level, lowered to 30% of it while a big sound plays
 	local duckUntil = 0
+	local groupTween
+	local function musicGroupTo(vol, t)
+		if groupTween then groupTween:Cancel(); groupTween = nil end
+		if not t or t <= 0 then gMusic.Volume = vol; return end
+		groupTween = TweenService:Create(gMusic, TweenInfo.new(t), { Volume = vol })
+		groupTween:Play()
+	end
 	local function duck(seconds)
 		duckUntil = math.max(duckUntil, os.clock() + seconds)
-		TweenService:Create(gMusic, TweenInfo.new(0.25), { Volume = 0.3 }):Play()
+		musicGroupTo(volume("music") * 0.3, 0.25)
 		task.delay(seconds + 0.05, function()
-			if os.clock() >= duckUntil then TweenService:Create(gMusic, TweenInfo.new(1.2), { Volume = 1 }):Play() end
+			if os.clock() >= duckUntil then musicGroupTo(volume("music"), 1.2) end
 		end)
 	end
 
@@ -269,18 +282,29 @@ M._sound = { init = function(App)
 		end
 	end
 
-	---------------------------------------------------------------- respond to the settings toggles
-	App.on("settings", function(key, value)
-		if key == "music" then App.music(value ~= false)
-		elseif key == "sfx" and value == false then stopAllSfx() end
+	---------------------------------------------------------------- respond to the volume sliders
+	-- volume 0 mutes and stops (no track keeps playing silently); raising it from 0 starts the music again
+	local musicStarted = false -- the first start waits for init's delay below
+	local function applyVolumes()
+		local mv, sv = volume("music"), volume("sfx")
+		gSFX.Volume = sv
+		if sv <= 0 then stopAllSfx() end
+		musicGroupTo(os.clock() < duckUntil and mv * 0.3 or mv)
+		if mv <= 0 then
+			if current then stopMusic() end
+		elseif musicStarted and not current then
+			App.music(true)
+		end
+	end
+	App.on("settings", function(key)
+		if key == "musicVol" or key == "sfxVol" or key == "music" or key == "sfx" then applyVolumes() end
 	end)
-	plr:GetAttributeChangedSignal("IC_music"):Connect(function()
-		local v = plr:GetAttribute("IC_music")
-		if v == false and current then stopMusic() elseif v ~= false and not current then App.music(true) end
-	end)
-	plr:GetAttributeChangedSignal("IC_sfx"):Connect(function()
-		if plr:GetAttribute("IC_sfx") == false then stopAllSfx() end
-	end)
+	App.on("full", applyVolumes)
+	for _, a in ipairs({ "IC_musicVol", "IC_sfxVol" }) do
+		plr:GetAttributeChangedSignal(a):Connect(applyVolumes)
+	end
+	gSFX.Volume = volume("sfx")
+	gMusic.Volume = volume("music")
 
 	---------------------------------------------------------------- generic UI sounds (no edits to other files)
 	local hooked = setmetatable({}, { __mode = "k" })
@@ -326,7 +350,10 @@ M._sound = { init = function(App)
 	end
 
 	---------------------------------------------------------------- go (init runs after the first full sync)
-	task.delay(1, function() if musicOn() then App.music(true) end end)
+	task.delay(1, function()
+		musicStarted = true
+		if musicOn() and not current then App.music(true) end
+	end)
 end }
 
 return M

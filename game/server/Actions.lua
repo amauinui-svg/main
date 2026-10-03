@@ -419,11 +419,17 @@ function act.taskRefresh(plr, p, a)
 end
 
 ---------------------------------------------------------------- settings + meta prompts
-local SETTINGS = { music = "bool", sfx = "bool", toasts = "bool", confirmBig = "bool", shortNumbers = "bool", autoClaim = "bool", reduceMotion = "bool", mapLabels = "bool" }
+local SETTINGS = { music = "bool", sfx = "bool", toasts = "bool", confirmBig = "bool", shortNumbers = "bool", autoClaim = "bool", reduceMotion = "bool", mapLabels = "bool",
+	musicVol = "vol", sfxVol = "vol" }
 function act.saveSettings(plr, p, a)
-	local kind = SETTINGS[a.key]
+	local kind = type(a.key) == "string" and SETTINGS[a.key]
 	if not kind then return no("Unknown setting") end
-	if type(a.value) ~= "boolean" then return no("Bad value") end
+	if kind == "vol" then
+		-- volume slider: a number from 0 to 1 (NaN fails both comparisons)
+		local v = a.value
+		if type(v) ~= "number" or not (v >= 0 and v <= 1) then return no("Bad value") end
+		a.value = math.floor(v * 100 + 0.5) / 100
+	elseif type(a.value) ~= "boolean" then return no("Bad value") end
 	p.data.settings = p.data.settings or {}
 	p.data.settings[a.key] = a.value
 	return ok()
@@ -1163,6 +1169,23 @@ function act.gearBuy(plr, p, a)
 	return ok({ gear = g })
 end
 
+function act.globalChat(plr, p, a) return PS.Chat and PS.Chat.Send(plr, p, a and a.text) or no("Chat is offline") end
+
+-- buy the next convoy (cash). The level gate must be reached first.
+function act.buyConvoy(plr, p)
+	local d = p.data
+	local k = (d.convoyBought or 0) + 1
+	local gate = R.ConvoyGates[k]
+	if not gate then return no("You own every convoy") end
+	if d.lv < gate then return no("The next convoy unlocks at level " .. gate) end
+	local cost = R.ConvoyCost(k)
+	if not PS.Spend(p, cost) then return no("Need " .. R.Money(cost)) end
+	d.convoyBought = k
+	PS.EnsureConvoys(p)
+	if PS.AN then PS.AN.Custom(p, "ConvoyBought", k) end
+	return ok({ convoys = PS.Slots(p) })
+end
+
 -- onboarding funnel steps reported by the onboarding screens (analytics only)
 local FUNNEL_UI = { name = "Named country", flag = "Designed flag", gov = "Chose government" }
 function act.funnel(plr, p, a)
@@ -1209,7 +1232,7 @@ function act.adminList(plr, p)
 	return ok({ list = AD.List() })
 end
 
-A.NoSync = { gearShop = true, funnel = true, tutorial = true, adRefill = true, allyList = true, rankings = true, profile = true, adminList = true }
+A.NoSync = { globalChat = true, gearShop = true, funnel = true, tutorial = true, adRefill = true, allyList = true, rankings = true, profile = true, adminList = true }
 -- requests allowed before onboarding finishes
 A.PreOnboard = { buyPass = true, sync = true, onboard = true, rankings = true, admin = true, adminList = true, funnel = true }
 return A

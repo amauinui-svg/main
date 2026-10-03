@@ -331,10 +331,14 @@ S.properties = { build = function(host, App)
 		if not tile.Parent then return end
 		pt.scale.Scale = 1.14
 		tw(pt.scale, 0.35, { Scale = 1 }, Enum.EasingStyle.Back)
+		if pt.flash and pt.flash.Parent then
+			pt.flash.BackgroundTransparency = 0.25
+			tw(pt.flash, 0.45, { BackgroundTransparency = 1 })
+		end
 		local f = text(tile, "+" .. R.Money(pt.amount), { font = "heavy", size = 18, color = C.good, align = Enum.TextXAlignment.Center, anchor = Vector2.new(0.5, 1),
-			pos = UDim2.new(0.5, 0, 1, -40), sz = UDim2.new(1, 0, 0, 22), z = 14, stroke = 1.4 })
+			pos = UDim2.new(0.5, 0, 1, -50), sz = UDim2.new(1, 0, 0, 22), z = 16, stroke = 1.4 })
 		local fs = f:FindFirstChildOfClass("UIStroke")
-		tw(f, 1.1, { Position = UDim2.new(0.5, 0, 1, -78), TextTransparency = 1 })
+		tw(f, 1.1, { Position = UDim2.new(0.5, 0, 1, -88), TextTransparency = 1 })
 		if fs then tw(fs, 1.1, { Transparency = 1 }) end
 		task.delay(1.15, function() f:Destroy() end)
 	end
@@ -359,6 +363,41 @@ S.properties = { build = function(host, App)
 		local l = text(f, s, { font = "bold", size = 13, color = color or C.ink, sz = UDim2.new(0, 0, 1, 0), z = z + 1, rich = true })
 		l.AutomaticSize = Enum.AutomaticSize.X
 		return f, l
+	end
+	-- hourly income pill on an owned tile: sized once to its text and never resized (the bar lives outside it)
+	local PAY_BAR_H, PAY_BAR_BOTTOM = 10, 10
+	local function incomePill(t, s)
+		local f = UI.mk("Frame", { Name = "IncomePill", BackgroundColor3 = Color3.fromHex("121417"), BackgroundTransparency = 0.08, BorderSizePixel = 0,
+			AutomaticSize = Enum.AutomaticSize.X, Size = UDim2.fromOffset(0, 24), AnchorPoint = Vector2.new(0.5, 1),
+			Position = UDim2.new(0.5, 0, 1, -(PAY_BAR_BOTTOM + PAY_BAR_H + 6)), ZIndex = 12 }, t)
+		UI.mk("UICorner", { CornerRadius = UDim.new(1, 0) }, f)
+		UI.mk("UIStroke", { Color = C.good, Thickness = 1, Transparency = 0.6, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, f)
+		UI.mk("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10) }, f)
+		local l = text(f, s, { font = "heavy", size = 14, color = C.good, sz = UDim2.new(0, 0, 1, 0), z = 13 })
+		l.AutomaticSize = Enum.AutomaticSize.X
+		return f, UI.mk("UIScale", {}, f)
+	end
+	-- the income progress bar: its own rounded track (dark inset, subtle border) across the tile's inner width,
+	-- with a green gradient fill and a soft top highlight. Returns the fill frame and the payout flash frame.
+	local function payBar(t)
+		local track = UI.mk("Frame", { Name = "PayBar", BackgroundColor3 = Color3.fromHex("0b0d10"), BackgroundTransparency = 0.05, BorderSizePixel = 0,
+			AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -PAY_BAR_BOTTOM), Size = UDim2.new(1, -28, 0, PAY_BAR_H), ZIndex = 12, ClipsDescendants = false }, t)
+		UI.mk("UICorner", { CornerRadius = UDim.new(1, 0) }, track)
+		UI.mk("UIStroke", { Color = Color3.fromHex("4a4f57"), Thickness = 1, Transparency = 0.25, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, track)
+		-- inset shading: darker at the top edge, like a groove
+		UI.mk("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.fromRGB(120, 120, 120), Color3.new(1, 1, 1)) }, track)
+		local inner = UI.mk("Frame", { Name = "Inner", BackgroundTransparency = 1, Position = UDim2.fromOffset(2, 2), Size = UDim2.new(1, -4, 1, -4), ZIndex = 13 }, track)
+		local fill = UI.mk("Frame", { Name = "Fill", BackgroundColor3 = C.white, BorderSizePixel = 0, Size = UDim2.fromScale((os.clock() % CYCLE) / CYCLE, 1), ZIndex = 13 }, inner)
+		UI.mk("UICorner", { CornerRadius = UDim.new(1, 0) }, fill)
+		UI.mk("UIGradient", { Rotation = 90, Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, Color3.fromHex("b4f29c")), ColorSequenceKeypoint.new(0.5, Color3.fromHex("8fd07a")), ColorSequenceKeypoint.new(1, Color3.fromHex("4f9a45")) }) }, fill)
+		local hi = UI.mk("Frame", { Name = "Highlight", BackgroundColor3 = C.white, BackgroundTransparency = 0.7, BorderSizePixel = 0,
+			Position = UDim2.new(0, 2, 0, 1), Size = UDim2.new(1, -4, 0.38, 0), ZIndex = 14 }, fill)
+		UI.mk("UICorner", { CornerRadius = UDim.new(1, 0) }, hi)
+		-- payout flash: the whole track glows green for a moment when the cycle pays
+		local flash = UI.mk("Frame", { Name = "Flash", BackgroundColor3 = C.good, BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ZIndex = 15 }, track)
+		UI.mk("UICorner", { CornerRadius = UDim.new(1, 0) }, flash)
+		return fill, flash
 	end
 
 	-- one square tile. kind = "owned" | "sale" | "locked"
@@ -481,15 +520,10 @@ S.properties = { build = function(host, App)
 				plate(t, P.n, UDim2.new(0.5, 0, 0, 8), Vector2.new(0.5, 0), 12)
 				if not obj.building[k] then
 					local inc = P.inc * propMod
-					local pl = plate(t, "<font color='#8fd07a'><b>" .. R.Money(inc) .. "/hr</b></font>", UDim2.new(0.5, 0, 1, -14), Vector2.new(0.5, 1), 12)
-					local psc = UI.mk("UIScale", {}, pl)
-					-- thin income bar under the price (like the reference), filled by the shared 7 s cycle
-					local track = UI.mk("Frame", { Name = "PayBar", BackgroundColor3 = C.black, BackgroundTransparency = 0.2, BorderSizePixel = 0,
-						Position = UDim2.new(0, 0, 1, 2), Size = UDim2.new(1, 0, 0, 4), ZIndex = 13 }, pl)
-					UI.mk("UICorner", { CornerRadius = UDim.new(1, 0) }, track)
-					local fill = UI.mk("Frame", { Name = "Fill", BackgroundColor3 = C.good, BorderSizePixel = 0, Size = UDim2.fromScale((os.clock() % CYCLE) / CYCLE, 1), ZIndex = 14 }, track)
-					UI.mk("UICorner", { CornerRadius = UDim.new(1, 0) }, fill)
-					table.insert(obj.payTiles, { tile = t, fill = fill, scale = psc, amount = inc / 3600 * CYCLE })
+					local pl, psc = incomePill(t, R.Money(inc) .. "/hr")
+					local fill, flash = payBar(t)
+					table.insert(obj.payTiles, { tile = t, fill = fill, flash = flash, scale = psc, amount = inc / 3600 * CYCLE })
+					local _ = pl
 				end
 			else
 				local t = tile(grid, 500 + k, "sale")

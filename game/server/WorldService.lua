@@ -607,23 +607,46 @@ local function initWants()
 	for i, C in ipairs(World.Cities) do WS.Wants[i] = { list = table.clone(C.demand), ticks = {} } end
 end
 function WS.WantsOf(i) return WS.Wants[i] and WS.Wants[i].list or World.Cities[i].demand end
+-- Wants are game wide (Kash 2 Oct 23:31): every server shares one copy in a MemoryStore hash map; a server that
+-- changes a want tells the others through MessagingService, and every server re-reads all wants each minute.
+local WANT_MAP = "IC_Wants_v1" .. SUFFIX
+local function wantDefault(i) return { list = table.clone(World.Cities[i].demand), ticks = {} } end
+function WS.RefreshWant(i)
+	local w = Store.MapGet(WANT_MAP, "w" .. i)
+	if type(w) == "table" and type(w.list) == "table" then
+		local old = WS.Wants[i] and table.concat(WS.Wants[i].list, ",")
+		WS.Wants[i] = w
+		w.ticks = w.ticks or {}
+		if old ~= table.concat(w.list, ",") then WS.Changed:Fire("w", i) end
+	end
+end
 function WS.TickWant(i, good)
 	local w = WS.Wants[i]
 	if not w or not table.find(w.list, good) then return end
-	w.ticks[good] = (w.ticks[good] or 0) + 1
-	if w.ticks[good] < Trade.WantTicks then return end
-	w.ticks[good] = nil
-	-- pick a new good this city does not export and does not already want
 	local C = World.Cities[i]
-	local pool = {}
-	for k, g in pairs(Trade.Goods) do
-		if k ~= "mixed" and not table.find(C.exports, k) and not table.find(w.list, k) then table.insert(pool, k) end
-	end
-	table.sort(pool)
-	if #pool == 0 then return end
-	local idx = table.find(w.list, good)
-	w.list[idx] = pool[math.random(1, #pool)]
-	WS.Changed:Fire("w", i)
+	task.spawn(function()
+		local changed = false
+		local new = Store.MapUpdate(WANT_MAP, "w" .. i, function(old)
+			local cur = (type(old) == "table" and type(old.list) == "table") and old or wantDefault(i)
+			cur.ticks = cur.ticks or {}
+			changed = false
+			if not table.find(cur.list, good) then return cur end
+			cur.ticks[good] = (cur.ticks[good] or 0) + 1
+			if cur.ticks[good] >= Trade.WantTicks then
+				cur.ticks[good] = nil
+				-- pick a new good this city does not export and does not already want
+				local pool = {}
+				for k in pairs(Trade.Goods) do
+					if k ~= "mixed" and not table.find(C.exports, k) and not table.find(cur.list, k) then table.insert(pool, k) end
+				end
+				table.sort(pool)
+				if #pool > 0 then cur.list[table.find(cur.list, good)] = pool[math.random(1, #pool)]; changed = true end
+			end
+			return cur
+		end)
+		if type(new) == "table" then WS.Wants[i] = new end
+		if changed then publish("w", i) end
+	end)
 end
 
 ---------------------------------------------------------------- popular capitals (Kash 2 Oct)
@@ -671,6 +694,12 @@ end
 function WS.Start()
 	for i = 1, #World.Cities do WS.Cities[i] = defaultCity(i) end
 	initWants()
+	task.spawn(function()
+		while true do
+			for i = 1, #World.Cities do task.spawn(pcall, WS.RefreshWant, i) end
+			task.wait(60)
+		end
+	end)
 	task.spawn(function() while true do pcall(WS.RefreshPopular); task.wait(600) end end)
 	task.spawn(function()
 		restoreCities()
@@ -684,6 +713,7 @@ function WS.Start()
 				local d = msg.Data
 				if type(d) ~= "table" then return end
 				if d.k == "c" and tonumber(d.id) then pcall(WS.RefreshCity, tonumber(d.id)); WS.Changed:Fire("c", d.id)
+				elseif d.k == "w" and tonumber(d.id) and World.Cities[tonumber(d.id)] then pcall(WS.RefreshWant, tonumber(d.id))
 				elseif d.k == "a" and type(d.id) == "string" then
 					-- only read alliances someone here belongs to, and only when the message is newer (audit M5)
 					local cur = WS.Alliances[d.id]

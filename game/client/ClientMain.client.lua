@@ -208,6 +208,14 @@ do
 	local plus = UI.img(right, "btn_gold", { button = true, name = "Refill", pos = UDim2.fromOffset(432, 8), sz = UDim2.fromOffset(36, 34), z = 22 })
 	UI.icon(plus, "icon_plus", 18, C.manilaInk, UDim2.new(0.5, 0, 0.5, -1), { z = 23, anchor = Vector2.new(0.5, 0.5) })
 	plus.Activated:Connect(function() App.open("shop") end)
+
+	-- UPGRADES (skill points) from any screen: sits between the energy bars and the settings gear,
+	-- appears with the Country tab (Config.NavUnlock.country)
+	local upg = mk("Frame", { Name = "Upgrades", BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -62, 0, 0), Size = UDim2.fromOffset(122, TOP), ZIndex = 21, Visible = false }, topBar)
+	top.upg = upg
+	top.upgBtn = UI.button(upg, "slate", "UPGRADES", function()
+		if App.showUpgrades then App.showUpgrades() end
+	end, { pos = UDim2.new(1, 0, 0.5, 0), anchor = Vector2.new(1, 0.5), sz = UDim2.fromOffset(118, 42), z = 22, icon = "icon_xp", iconSize = 20, textSize = 15 })
 end
 local topScales = {}
 local function scaleOf(f) topScales[f] = topScales[f] or mk("UIScale", {}, f); return topScales[f] end
@@ -216,18 +224,23 @@ local function layoutTop()
 	local x0 = robloxButtonsEnd()
 	top.id.Position = UDim2.fromOffset(x0, 0)
 	-- shrink the three groups together until cash fits between identity and the bars (phones)
+	-- the UPGRADES button (when shown) takes 122 px (scaled) between the energy group and the gear
+	local upgW = top.upg.Visible and 122 or 0
 	local k = 1
-	for _, try in ipairs({ 1, 0.9, 0.8, 0.72, 0.65 }) do
+	for _, try in ipairs({ 1, 0.9, 0.8, 0.72, 0.65, 0.58 }) do
 		k = try
-		local room = w - 62 - 470 * k - (x0 + 340 * k)
+		local room = w - 62 - (470 + upgW) * k - (x0 + 340 * k)
 		if room >= 300 * k then break end
 	end
-	scaleOf(top.id).Scale = k; scaleOf(top.right).Scale = k; scaleOf(top.mid).Scale = k
+	scaleOf(top.id).Scale = k; scaleOf(top.right).Scale = k; scaleOf(top.mid).Scale = k; scaleOf(top.upg).Scale = k
 	top.id.Size = UDim2.fromOffset(330, TOP / k)
 	top.right.Size = UDim2.fromOffset(470, TOP / k)
 	top.mid.Size = UDim2.fromOffset(300, TOP / k)
+	top.upg.Size = UDim2.fromOffset(122, TOP / k)
+	top.upg.Position = UDim2.new(1, -62, 0, 0)
+	top.right.Position = UDim2.new(1, -62 - math.floor(upgW * k), 0, 0)
 	local midX = x0 + 340 * k
-	local room = w - 62 - 470 * k - midX
+	local room = w - 62 - (470 + upgW) * k - midX
 	top.mid.Visible = room >= 290 * k
 	top.mid.Position = UDim2.fromOffset(midX + math.max(0, math.floor((room - 300 * k) / 2)), 0)
 end
@@ -426,6 +439,18 @@ function App.open(key)
 end
 
 App.runInits = function() runInits() end
+-- /g and /global send to every server (global chat, Kash 23:29)
+task.spawn(function()
+	local TCS = game:GetService("TextChatService")
+	local folder = TCS:WaitForChild("TextChatCommands", 30)
+	local cmd = folder and folder:WaitForChild("IC_Global", 30)
+	if not cmd then return end
+	cmd.Triggered:Connect(function(_, raw)
+		local body = tostring(raw or ""):gsub("^%s*/%a+%s*", "")
+		local res = App.req("globalChat", { text = body })
+		if not res.ok and res.msg then App.toast(res.msg, nil, "bad") end
+	end)
+end)
 local function refreshCurrent()
 	local s = App.current and App.screens[App.current]
 	if s and s.obj and s.obj.Refresh then
@@ -440,9 +465,26 @@ local function ideoTitle(st)
 	return string.upper(n)
 end
 local lastFlag
+-- the top bar UPGRADES button: shown from the Country unlock level, gold with a red badge while points are free
+local upgShownFree
+local function drawUpgradesButton(st)
+	local need = NAV_UNLOCK.country or 4
+	local show = st.onboarded == true and (st.lv or 1) >= need
+	if top.upg.Visible ~= show then
+		top.upg.Visible = show
+		layoutTop()
+	end
+	local free = tonumber(st.skillFree) or 0
+	if free == upgShownFree then return end
+	upgShownFree = free
+	top.upgBtn:Set(free > 0 and "gold" or "slate")
+	if top.upgBadge then top.upgBadge:Destroy(); top.upgBadge = nil end
+	if free > 0 then top.upgBadge = UI.badge(top.upgBtn.Inst, free > 99 and "99+" or free, UDim2.new(1, -4, 0, 4), 26) end
+end
 local function drawTop()
 	local st = App.state
 	if not st then return end
+	drawUpgradesButton(st)
 	top.name.Text = ideoTitle(st)
 	top.xp:Set(st.xp / math.max(1, st.xpReq), "LV " .. st.lv, R.Short(math.floor(st.xp)) .. " / " .. R.Short(st.xpReq) .. " XP")
 	top.cash.Text = R.Money(st.cash)
@@ -491,7 +533,7 @@ local function levelBanner(n)
 	if #n.laws > 0 then table.insert(bits, #n.laws .. " new law" .. (#n.laws > 1 and "s" or "")) end
 	if #n.props > 0 then table.insert(bits, "new property: " .. n.props[1]) end
 	if #n.units > 0 then table.insert(bits, "new unit: " .. n.units[1]) end
-	if n.slot then table.insert(bits, "+1 convoy slot") end
+	if n.slot then table.insert(bits, "a new convoy is for sale (WORLD)") end
 	table.insert(bits, "+" .. n.points .. " skill points")
 	App.toast("LEVEL " .. n.lv .. " · INFLUENCE REFILLED", table.concat(bits, " · "), "gold")
 	App.play("level_up")
@@ -584,6 +626,14 @@ Remotes.Sync.OnClientEvent:Connect(function(kind, data)
 		App.emit("tick", st)
 	elseif kind == "notes" then
 		handleNotes(data)
+	elseif kind == "gchat" then
+		pcall(function()
+			local d = data or {}
+			local TCS = game:GetService("TextChatService")
+			local ch = TCS:FindFirstChild("TextChannels") and TCS.TextChannels:FindFirstChild("RBXGeneral")
+			local function esc(x) return (tostring(x or ""):gsub("&", "&amp;"):gsub("<", "&lt;"):gsub(">", "&gt;")) end
+			if ch then ch:DisplaySystemMessage("<font color='#7fb0e6'><b>[GLOBAL] " .. esc(d.n) .. ":</b></font> " .. esc(d.t)) end
+		end)
 	elseif kind == "chat" then
 		-- purchase shout-out (Kash 2 Oct): a starred system message in chat
 		pcall(function()

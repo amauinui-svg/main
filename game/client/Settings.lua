@@ -3,6 +3,7 @@
 -- shown behind the scenes after a big achievement; our own polished join-group popup with the +10% cash bonus).
 -- ClientMain calls _settings.init(App) once after the first full sync. This entry has no build field on purpose.
 local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
 local RS = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 local TextService = game:GetService("TextService")
@@ -27,8 +28,9 @@ local plr = Players.LocalPlayer
 
 ---------------------------------------------------------------- settings definitions
 local DEFS = {
-	{ key = "music", name = "Music", desc = "Background music", icon = "icon_radio", default = true },
-	{ key = "sfx", name = "Sound effects", desc = "Clicks, coins, crates and battles", icon = "icon_sparkles", default = true },
+	-- volume sliders 0..1 (older saves only have the on/off booleans named in legacy: false there means 0)
+	{ key = "musicVol", legacy = "music", slider = true, name = "Music", desc = "Background music volume", icon = "icon_radio", default = 0.5 },
+	{ key = "sfxVol", legacy = "sfx", slider = true, name = "Sound effects", desc = "Clicks, coins, crates and battles", icon = "icon_sparkles", default = 0.8 },
 	{ key = "toasts", name = "Show pop-up notifications", desc = "Deliveries, raids, level-ups and rewards", icon = "icon_bell", default = true },
 	{ key = "confirmBig", name = "Confirm big purchases", desc = "Ask before spending a lot of cash or gold", icon = "icon_check", default = true },
 	{ key = "shortNumbers", name = "Short numbers (1.2M)", desc = "Off shows full numbers (1,200,000)", icon = "icon_coins", default = true },
@@ -123,15 +125,29 @@ M._settings = { init = function(App)
 		st.settings = st.settings or {}
 		return st.settings
 	end
+	local DEF = {}
+	for _, d in ipairs(DEFS) do DEF[d.key] = d end
 	local function value(key)
 		local s = getSettings()
+		local d = DEF[key]
+		if d and d.slider then
+			local v = s[key]
+			if type(v) == "number" and v == v then return math.clamp(v, 0, 1) end
+			if s[d.legacy] == false then return 0 end
+			return d.default
+		end
 		if s[key] ~= nil then return s[key] end
-		for _, d in ipairs(DEFS) do if d.key == key then return d.default end end
-		return nil
+		return d and d.default
 	end
 	App.setting = value -- other modules can read App.setting("reduceMotion") (or the IC_ player attributes)
+	local function setAttr(key, v)
+		pcall(function() plr:SetAttribute("IC_" .. key, v) end)
+		local d = DEF[key]
+		-- the old on/off attribute follows the slider (anything above 0 counts as on)
+		if d and d.slider then pcall(function() plr:SetAttribute("IC_" .. d.legacy, v > 0) end) end
+	end
 	local function applyAttributes()
-		for _, d in ipairs(DEFS) do pcall(function() plr:SetAttribute("IC_" .. d.key, value(d.key)) end) end
+		for _, d in ipairs(DEFS) do setAttr(d.key, value(d.key)) end
 	end
 	applyAttributes()
 	App.on("full", applyAttributes)
@@ -141,17 +157,23 @@ M._settings = { init = function(App)
 		TweenService:Create(o, TweenInfo.new(t, style or Enum.EasingStyle.Quad, dir or Enum.EasingDirection.Out), props):Play()
 	end
 
-	local function setSetting(key, v)
+	-- previewSetting applies a value locally (slider drags); setSetting applies it and saves it to the server
+	local function previewSetting(key, v)
+		getSettings()[key] = v
+		setAttr(key, v)
+		App.emit("settings", key, v)
+	end
+	local function setSetting(key, v, before)
 		local s = getSettings()
-		local before = value(key)
+		if before == nil then before = value(key) end
 		s[key] = v
-		pcall(function() plr:SetAttribute("IC_" .. key, v) end)
+		setAttr(key, v)
 		App.emit("settings", key, v)
 		task.spawn(function()
 			local res = App.req("saveSettings", { key = key, value = v })
 			if not res.ok then
 				s[key] = before
-				pcall(function() plr:SetAttribute("IC_" .. key, before) end)
+				setAttr(key, before)
 				App.emit("settings", key, before)
 			end
 		end)
@@ -216,6 +238,84 @@ M._settings = { init = function(App)
 		return obj
 	end
 
+	-- volume slider (mouse and touch): track, gold fill, knob and a percentage label.
+	-- onChange(v) runs live while dragging, onCommit(v, before) once on release. Returns obj { Inst, Set(v) }
+	local function slider(parent, v, z, onChange, onCommit)
+		local box = mk("TextButton", { Name = "Slider", Text = "", AutoButtonColor = false, BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, -84, 0.5, 0), Size = UDim2.new(0.5, -60, 0, 36), ZIndex = z }, parent)
+		box:SetAttribute("IC_NoClick", true)
+		local track = mk("Frame", { Name = "Track", BackgroundColor3 = Color3.fromHex("14171b"), BorderSizePixel = 0, AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.new(1, 0, 0, 12), ZIndex = z }, box)
+		mk("UICorner", { CornerRadius = UDim.new(1, 0) }, track)
+		mk("UIStroke", { Color = Color3.fromHex("4a4f57"), Thickness = 1, Transparency = 0.2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, track)
+		mk("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.fromRGB(150, 150, 150), Color3.new(1, 1, 1)) }, track)
+		local fill = mk("Frame", { Name = "Fill", BackgroundColor3 = C.white, BorderSizePixel = 0, Size = UDim2.fromScale(v, 1), ZIndex = z + 1 }, track)
+		mk("UICorner", { CornerRadius = UDim.new(1, 0) }, fill)
+		mk("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.fromHex("f6dc8a"), Color3.fromHex("c99a32")) }, fill)
+		local knob = mk("Frame", { Name = "Knob", BackgroundColor3 = C.manila, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(v, 0.5), Size = UDim2.fromOffset(24, 24), ZIndex = z + 3 }, track)
+		mk("UICorner", { CornerRadius = UDim.new(1, 0) }, knob)
+		mk("UIStroke", { Color = C.black, Thickness = 2, Transparency = 0.3 }, knob)
+		mk("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(200, 200, 200)) }, knob)
+		local dot = mk("Frame", { BackgroundColor3 = C.manilaInk, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(8, 8), ZIndex = z + 4 }, knob)
+		mk("UICorner", { CornerRadius = UDim.new(1, 0) }, dot)
+		local ks = mk("UIScale", {}, knob)
+		local pct = text(parent, "", { font = "heavy", size = 18, color = C.manila, align = Enum.TextXAlignment.Right, anchor = Vector2.new(1, 0.5),
+			pos = UDim2.new(1, -16, 0.5, 0), sz = UDim2.fromOffset(60, 26), z = z })
+
+		local obj = { Inst = box, v = v }
+		local function show(x)
+			fill.Size = UDim2.fromScale(x, 1)
+			fill.Visible = x > 0.001
+			knob.Position = UDim2.fromScale(x, 0.5)
+			pct.Text = math.floor(x * 100 + 0.5) .. "%"
+			pct.TextColor3 = x > 0 and C.manila or C.dim
+		end
+		function obj:Set(x) self.v = x; show(x) end
+		show(v)
+
+		local dragging, before, scroller = false, nil, nil
+		local function at(px)
+			local w = track.AbsoluteSize.X
+			if w <= 0 then return obj.v end
+			local x = math.clamp((px - track.AbsolutePosition.X) / w, 0, 1)
+			return math.floor(x * 100 + 0.5) / 100
+		end
+		local function move(px)
+			local x = at(px)
+			if x == obj.v then return end
+			obj.v = x
+			show(x)
+			onChange(x)
+		end
+		local function isPress(io) return io.UserInputType == Enum.UserInputType.MouseButton1 or io.UserInputType == Enum.UserInputType.Touch end
+		box.InputBegan:Connect(function(io)
+			if dragging or not isPress(io) then return end
+			dragging, before = true, obj.v
+			-- a drag inside the settings list must not scroll it
+			scroller = box:FindFirstAncestorWhichIsA("ScrollingFrame")
+			if scroller then scroller.ScrollingEnabled = false end
+			tween(ks, 0.12, { Scale = 1.2 }, Enum.EasingStyle.Back)
+			move(io.Position.X)
+		end)
+		local conns = {}
+		table.insert(conns, UserInputService.InputChanged:Connect(function(io)
+			if not dragging then return end
+			if io.UserInputType == Enum.UserInputType.MouseMovement or io.UserInputType == Enum.UserInputType.Touch then move(io.Position.X) end
+		end))
+		table.insert(conns, UserInputService.InputEnded:Connect(function(io)
+			if not dragging or not isPress(io) then return end
+			dragging = false
+			if scroller then scroller.ScrollingEnabled = true; scroller = nil end
+			tween(ks, 0.15, { Scale = 1 })
+			onCommit(obj.v, before)
+		end))
+		box.Destroying:Connect(function()
+			for _, c in ipairs(conns) do c:Disconnect() end
+		end)
+		return obj
+	end
+
 	local function chip(parent, s, bg, fg, p)
 		p = p or {}
 		local f = mk("Frame", { Name = "Chip", BackgroundColor3 = bg, BorderSizePixel = 0, Size = UDim2.fromOffset(0, p.h or 26), AutomaticSize = Enum.AutomaticSize.X,
@@ -269,6 +369,26 @@ M._settings = { init = function(App)
 		text(hdr, "PREFERENCES", { font = "heavy", size = 14, color = C.muted, sz = UDim2.fromScale(1, 1), z = 74, pos = UDim2.fromOffset(4, 0) })
 
 		for i, d in ipairs(DEFS) do
+			if d.slider then
+				-- volume row: name and description on the left, slider and percentage on the right
+				local card = UI.card(list, { sz = UDim2.new(1, 0, 0, 62), z = 73, order = 1 + i })
+				local ib = mk("Frame", { BackgroundColor3 = Color3.fromHex("20252c"), BorderSizePixel = 0, Position = UDim2.fromOffset(12, 11), Size = UDim2.fromOffset(40, 40), ZIndex = 74 }, card)
+				mk("UICorner", { CornerRadius = UDim.new(0, 8) }, ib)
+				local v0 = value(d.key)
+				local ic = UI.icon(ib, d.icon, 24, v0 > 0 and C.manila or C.dim, UDim2.fromScale(0.5, 0.5), { z = 75, anchor = Vector2.new(0.5, 0.5) })
+				text(card, d.name, { font = "heavy", size = 18, pos = UDim2.fromOffset(64, 8), sz = UDim2.new(0.5, -90, 0, 24), z = 74, truncate = true })
+				text(card, d.desc, { size = 14, color = C.muted, pos = UDim2.fromOffset(64, 32), sz = UDim2.new(0.5, -90, 0, 20), z = 74, truncate = true })
+				slider(card, v0, 76, function(v)
+					ic.ImageColor3 = v > 0 and C.manila or C.dim
+					previewSetting(d.key, v)
+				end, function(v, before)
+					ic.ImageColor3 = v > 0 and C.manila or C.dim
+					if v ~= before then setSetting(d.key, v, before) end
+					-- let the player hear the new effects level
+					if d.key == "sfxVol" and v > 0 then App.play("ui_click") end
+				end)
+				continue
+			end
 			local card = UI.card(list, { button = true, sz = UDim2.new(1, 0, 0, 62), z = 73, order = 1 + i })
 			local glow = mk("Frame", { BackgroundColor3 = C.manila, BackgroundTransparency = 1, BorderSizePixel = 0, Position = UDim2.fromOffset(4, 4), Size = UDim2.new(1, -8, 1, -8), ZIndex = 73 }, card)
 			mk("UICorner", { CornerRadius = UDim.new(0, 6) }, glow)

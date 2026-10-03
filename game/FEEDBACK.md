@@ -322,3 +322,10 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 ## 2 Oct 23:26 (Kash)
 - Normal players must never see or use TEST: it only shows for the owner account (or anyone in Studio); every command is checked on the server.
 - SHOP gets a GEAR SHOP tab: restocks every 5 minutes, 3 random items of every rarity, 1 of each per player per restock, rarer gear needs high levels (Common 1, Uncommon 10, Rare 25, Epic 50, Legendary 80, Mythic 110, Secret 140, Forbidden 170). Cash prices scale with level.
+
+## 2 Oct 23:29-23:35 (Kash)
+- Property income bar redesigned (fixed pill + separate bar), UPGRADES button in the top bar opens the skill upgrades popup from any tab (level 4+), music and SFX volume sliders.
+- Global chat: "/g message" (or /global) shows in every server's chat as "[GLOBAL] Name: message" (filtered, 1 per 4 s).
+- Convoys must be BOUGHT: the first is free; each extra convoy is bought with cash (about an hour of law income) once its level (5, 12, 20, 30, 45) is reached. Existing saves keep the convoys they already had.
+- World events were already game wide (same clock in every server). City WANTS are now game wide too (shared MemoryStore + cross-server messages).
+- Overlaps and off-style buttons/pills/panels (e.g. ARMY/OFFICERS sub tabs over the subtitle, the LIMITED "always active" pill) must be fixed across the whole game.

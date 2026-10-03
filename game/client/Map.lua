@@ -383,13 +383,20 @@ function Map.build(host, App)
 			end)
 		end
 		-- locked slots: show the next level gate (and the pass) so players know what is coming
-		local nextGate
-		for _, g in ipairs(R.ConvoySlotLevels) do if g > st.lv then nextGate = g; break end end
-		if nextGate then
+		-- the next convoy is BOUGHT with cash once its level is reached (Kash 2 Oct 23:31)
+		local k = (st.convoyBought or 0) + 1
+		local nextGate = R.ConvoyGates and R.ConvoyGates[k]
+		if nextGate and st.lv >= nextGate then
+			local cost = R.ConvoyCost(k)
+			UI.button(dock, (st.cash or 0) >= cost and "green" or "slate", "NEW CONVOY\n" .. R.Money(cost), function(btn)
+				local res = App.req("buyConvoy", {}, btn)
+				if res.ok then App.toast("NEW CONVOY!", "Send it from your capital", "gold"); App.play("purchase", { volume = 0.45 }) end
+			end, { sz = UDim2.fromOffset(150, 80), z = 21, order = 50, icon = "icon_plus", textSize = 14 })
+		elseif nextGate then
 			local card = UI.card(dock, { sz = UDim2.fromOffset(150, 80), z = 21, order = 50 })
 			UI.icon(card, "icon_lock", 22, C.dim, UDim2.fromOffset(10, 10), { z = 22 })
 			text(card, "NEXT CONVOY", { font = "heavy", size = 13, color = C.muted, pos = UDim2.fromOffset(38, 12), sz = UDim2.new(1, -44, 0, 16), z = 22 })
-			text(card, "Unlocks at level " .. nextGate, { size = 14, pos = UDim2.fromOffset(10, 40), sz = UDim2.new(1, -20, 0, 30), z = 22, wrap = true })
+			text(card, "Buy it at level " .. nextGate, { size = 14, pos = UDim2.fromOffset(10, 40), sz = UDim2.new(1, -20, 0, 30), z = 22, wrap = true })
 		end
 		if not (st.gp and st.gp.ExtraConvoys) then
 			local b = UI.button(dock, "gold", "+2 CONVOYS", function(btn) App.req("buyPass", { key = "ExtraConvoys" }, btn) end, { sz = UDim2.fromOffset(140, 80), z = 21, order = 60, icon = "icon_plus", textSize = 14 })

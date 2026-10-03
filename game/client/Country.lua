@@ -494,12 +494,111 @@ local function showFlagEditor(App)
 	end)
 end
 
+---------------------------------------------------------------- YOUR UPGRADES (shared by the Country screen and the top bar popup)
+-- buildUpgrades(App, parent, { z = base ZIndex, scroll = rows in a scrolling list }) -> obj { Refresh(st), Inst }
+local function buildUpgrades(App, parent, opts)
+	opts = opts or {}
+	local UI = App.UI
+	local C = UI.C
+	local text = UI.text
+	local z = opts.z or 9
+	local freeCard = UI.card(parent, { sz = UDim2.new(1, 0, 0, 58), z = z, hot = true })
+	local freeN = text(freeCard, "0", { font = "display", size = 36, color = C.gold, pos = UDim2.fromOffset(14, 0), sz = UDim2.fromOffset(80, 58), z = z + 1, align = Enum.TextXAlignment.Center, scaled = true })
+	text(freeCard, "SKILL POINTS FREE", { font = "heavy", size = 17, color = C.gold, pos = UDim2.fromOffset(100, 8), sz = UDim2.new(1, -110, 0, 22), z = z + 1, truncate = true })
+	local freeSub = text(freeCard, "", { size = 13, color = C.muted, pos = UDim2.fromOffset(100, 30), sz = UDim2.new(1, -110, 0, 18), z = z + 1, truncate = true })
+	local freeStroke = UI.mk("UIStroke", { Color = C.gold, Thickness = 2, Transparency = 1 }, freeCard)
+	task.spawn(function()
+		while freeCard.Parent do
+			if (App.state and App.state.skillFree or 0) > 0 then
+				tween(freeStroke, 0.8, { Transparency = 0.1 }, Enum.EasingStyle.Sine); task.wait(0.8)
+				tween(freeStroke, 0.8, { Transparency = 0.8 }, Enum.EasingStyle.Sine); task.wait(0.8)
+			else
+				freeStroke.Transparency = 1; task.wait(1)
+			end
+		end
+	end)
+	local upRows
+	if opts.scroll then
+		upRows = UI.list(parent, { pos = UDim2.fromOffset(0, 66), sz = UDim2.new(1, 0, 1, -66), gap = 6, z = z })
+	else
+		upRows = UI.mk("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(0, 66), Size = UDim2.new(1, 0, 1, -66), ZIndex = z }, parent)
+		UI.mk("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }, upRows)
+	end
+
+	local function effect(s, n, st)
+		if s.key == "inf" then return "Max Influence " .. R.MaxInfluence(st.lv, st.sk) end
+		if s.key == "sup" then return "Max Supply " .. R.MaxSupply(st.lv, st.sk) end
+		if s.key == "atk" then return "+" .. (n * 4) .. " attack" end
+		if s.key == "def" then return "+" .. (n * 4) .. " defense" end
+		return (st.lotsMax or 0) .. " building lots"
+	end
+	local function drawUpgrades(st)
+		UI.clear(upRows)
+		local free = st.skillFree or 0
+		for k, s in ipairs(R.Skills) do
+			local n = (st.sk and st.sk[s.key]) or 0
+			local cost = s.cost(n)
+			local can = free >= cost
+			local row = UI.card(upRows, { sz = UDim2.new(1, 0, 0, 56), z = z + 1, order = k })
+			hoverStroke(UI, row, can and C.gold or C.rule)
+			local iconBg = UI.img(row, "circle", { sz = UDim2.fromOffset(38, 38), pos = UDim2.new(0, 8, 0.5, 0), anchor = Vector2.new(0, 0.5), color = C.slate, z = z + 2, slice = false })
+			UI.icon(iconBg, s.icon, 22, can and C.gold or C.manila, UDim2.fromScale(0.5, 0.5), { z = z + 3, anchor = Vector2.new(0.5, 0.5) })
+			text(row, s.name, { font = "heavy", size = 16, pos = UDim2.fromOffset(54, 6), sz = UDim2.new(1, -54 - 176, 0, 20), z = z + 2, truncate = true })
+			text(row, effect(s, n, st) .. "  <font color='#6b7179'>· " .. s.desc .. "</font>", { size = 13, color = C.ink, rich = true, pos = UDim2.fromOffset(54, 28), sz = UDim2.new(1, -54 - 120, 0, 18), z = z + 2, truncate = true })
+			UI.chip(row, "LV " .. n, { pos = UDim2.new(1, -124, 0, 6), anchor = Vector2.new(1, 0), h = 22, size = 13, z = z + 2, manila = n > 0 })
+			UI.button(row, can and "gold" or "locked", "+  " .. cost .. " PT" .. (cost > 1 and "S" or ""), function(btn)
+				local res = App.req("skill", { key = s.key }, btn)
+				if res.ok then App.float(btn.Inst, s.name .. " UP", C.gold) end
+			end, { pos = UDim2.new(1, -8, 0.5, 0), anchor = Vector2.new(1, 0.5), sz = UDim2.fromOffset(108, 40), z = z + 3, textSize = 15 })
+		end
+	end
+
+	local obj = { Inst = freeCard }
+	function obj:Refresh(st)
+		if not st then return end
+		countTo(freeN, st.skillFree or 0, function(v) return tostring(math.floor(v + 0.5)) end)
+		freeSub.Text = "+3 every level · +1 per Gold law (" .. (st.goldLaws or 0) .. " so far)"
+		drawUpgrades(st)
+	end
+	return obj
+end
+
+-- UPGRADES POPUP: opened from the top bar button on any screen; refreshes on every full sync while open
+local upgradesPopup -- { panel, obj } of the open popup
+local function showUpgrades(App)
+	local UI = App.UI
+	local C = UI.C
+	local st = App.state
+	if not st then return end
+	local host = App.modalHost
+	UI.clear(host)
+	host.Visible = true
+	local W = math.min(App.W() - 40, 640)
+	local H = math.min(App.H() - 40, 520)
+	local panel, body = UI.panel(host, "UPGRADES", { sz = UDim2.fromOffset(W, H), pos = UDim2.fromScale(0.5, 0.5), anchor = Vector2.new(0.5, 0.5), z = 71 })
+	local sc = FX.popIn(panel, 0.6, 0.3)
+	local closed = false
+	local function close()
+		if closed then return end
+		closed = true
+		upgradesPopup = nil
+		local tw = tween(sc, 0.15, { Scale = 0.9 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+		tw.Completed:Connect(function() if panel.Parent then host.Visible = false; UI.clear(host) end end)
+	end
+	UI.button(panel, "slate", "", function() close() end, { pos = UDim2.new(1, -14, 0, 12), anchor = Vector2.new(1, 0), sz = UDim2.fromOffset(38, 36), z = 75, icon = "icon_x", iconSize = 18 })
+	infoButton(UI, App, panel, UDim2.new(1, -84, 0, 30), "SKILL POINTS", "You get +3 skill points every level and +1 for every law you take to Gold mastery. Spend them here on permanent upgrades.", 75)
+	local obj = buildUpgrades(App, body, { z = 73, scroll = true })
+	obj:Refresh(st)
+	upgradesPopup = { panel = panel, obj = obj }
+end
+
 ---------------------------------------------------------------- COUNTRY
 S.country = { build = function(host, App)
 	local UI = App.UI
 	local C = UI.C
 	local text = UI.text
 	App.showLogin = function() showLogin(App) end
+	App.showUpgrades = function() showUpgrades(App) end
 
 	local panel, body = UI.panel(host, "COUNTRY", { sz = UDim2.new(1, -20, 1, -20), pos = UDim2.fromOffset(10, 10), z = 5, titleSize = 26 })
 	local sub = text(panel, "", { font = "bold", size = 15, color = C.muted, pos = UDim2.new(0, 18, 0, 16), sz = UDim2.new(1, -36, 0, 22), z = 7, align = Enum.TextXAlignment.Right, rich = true })
@@ -631,52 +730,8 @@ S.country = { build = function(host, App)
 		row.MouseLeave:Connect(function() tween(row, 0.2, { BackgroundTransparency = k % 2 == 0 and 0.97 or 1 }) end)
 	end
 
-	-- upgrades: free points banner + one row per skill (same actions and numbers as the old Skills screen)
-	local freeCard = UI.card(upB, { sz = UDim2.new(1, 0, 0, 58), z = 9, hot = true })
-	local freeN = text(freeCard, "0", { font = "display", size = 36, color = C.gold, pos = UDim2.fromOffset(14, 0), sz = UDim2.fromOffset(80, 58), z = 10, align = Enum.TextXAlignment.Center, scaled = true })
-	text(freeCard, "SKILL POINTS FREE", { font = "heavy", size = 17, color = C.gold, pos = UDim2.fromOffset(100, 8), sz = UDim2.new(1, -110, 0, 22), z = 10, truncate = true })
-	local freeSub = text(freeCard, "", { size = 13, color = C.muted, pos = UDim2.fromOffset(100, 30), sz = UDim2.new(1, -110, 0, 18), z = 10, truncate = true })
-	local freeStroke = UI.mk("UIStroke", { Color = C.gold, Thickness = 2, Transparency = 1 }, freeCard)
-	task.spawn(function()
-		while freeCard.Parent do
-			if (App.state and App.state.skillFree or 0) > 0 then
-				tween(freeStroke, 0.8, { Transparency = 0.1 }, Enum.EasingStyle.Sine); task.wait(0.8)
-				tween(freeStroke, 0.8, { Transparency = 0.8 }, Enum.EasingStyle.Sine); task.wait(0.8)
-			else
-				freeStroke.Transparency = 1; task.wait(1)
-			end
-		end
-	end)
-	local upRows = UI.mk("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(0, 66), Size = UDim2.new(1, 0, 1, -66), ZIndex = 9 }, upB)
-	UI.mk("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }, upRows)
-
-	local function effect(s, n, st)
-		if s.key == "inf" then return "Max Influence " .. R.MaxInfluence(st.lv, st.sk) end
-		if s.key == "sup" then return "Max Supply " .. R.MaxSupply(st.lv, st.sk) end
-		if s.key == "atk" then return "+" .. (n * 4) .. " attack" end
-		if s.key == "def" then return "+" .. (n * 4) .. " defense" end
-		return (st.lotsMax or 0) .. " building lots"
-	end
-	local function drawUpgrades(st)
-		UI.clear(upRows)
-		local free = st.skillFree or 0
-		for k, s in ipairs(R.Skills) do
-			local n = (st.sk and st.sk[s.key]) or 0
-			local cost = s.cost(n)
-			local can = free >= cost
-			local row = UI.card(upRows, { sz = UDim2.new(1, 0, 0, 56), z = 10, order = k })
-			hoverStroke(UI, row, can and C.gold or C.rule)
-			local iconBg = UI.img(row, "circle", { sz = UDim2.fromOffset(38, 38), pos = UDim2.new(0, 8, 0.5, 0), anchor = Vector2.new(0, 0.5), color = C.slate, z = 11, slice = false })
-			UI.icon(iconBg, s.icon, 22, can and C.gold or C.manila, UDim2.fromScale(0.5, 0.5), { z = 12, anchor = Vector2.new(0.5, 0.5) })
-			text(row, s.name, { font = "heavy", size = 16, pos = UDim2.fromOffset(54, 6), sz = UDim2.new(1, -54 - 176, 0, 20), z = 11, truncate = true })
-			text(row, effect(s, n, st) .. "  <font color='#6b7179'>· " .. s.desc .. "</font>", { size = 13, color = C.ink, rich = true, pos = UDim2.fromOffset(54, 28), sz = UDim2.new(1, -54 - 120, 0, 18), z = 11, truncate = true })
-			UI.chip(row, "LV " .. n, { pos = UDim2.new(1, -124, 0, 6), anchor = Vector2.new(1, 0), h = 22, size = 13, z = 11, manila = n > 0 })
-			UI.button(row, can and "gold" or "locked", "+  " .. cost .. " PT" .. (cost > 1 and "S" or ""), function(btn)
-				local res = App.req("skill", { key = s.key }, btn)
-				if res.ok then App.float(btn.Inst, s.name .. " UP", C.gold) end
-			end, { pos = UDim2.new(1, -8, 0.5, 0), anchor = Vector2.new(1, 0.5), sz = UDim2.fromOffset(108, 40), z = 12, textSize = 15 })
-		end
-	end
+	-- upgrades: free points banner + one row per skill (shared with the top bar UPGRADES popup)
+	local upgrades = buildUpgrades(App, upB, { z = 9 })
 
 	------------------------------------------------ refresh
 	local function drawLogin(st)
@@ -743,9 +798,7 @@ S.country = { build = function(host, App)
 		end
 
 		-- upgrades
-		countTo(freeN, st.skillFree or 0, function(v) return tostring(math.floor(v + 0.5)) end)
-		freeSub.Text = "+3 every level · +1 per Gold law (" .. (st.goldLaws or 0) .. " so far)"
-		drawUpgrades(st)
+		upgrades:Refresh(st)
 
 		-- login row (rebuild only when it changed so the hover state does not flicker)
 		local idx = math.clamp((st.login and st.login.idx) or 1, 1, #TK.Login)
@@ -773,6 +826,15 @@ end }
 S._init = { init = function(App)
 	App.showLogin = function() showLogin(App) end
 	App.showFlagEditor = function() showFlagEditor(App) end
+	App.showUpgrades = function() showUpgrades(App) end
+	-- keep the open UPGRADES popup live on every full sync (after buying, level-ups, Gold mastery points)
+	App.on("full", function(st)
+		local p = upgradesPopup
+		if not p then return end
+		if not (p.panel.Parent and App.modalHost.Visible) then upgradesPopup = nil; return end
+		local ok, err = pcall(p.obj.Refresh, p.obj, st)
+		if not ok then warn("[Idle Country] upgrades popup: " .. tostring(err)) end
+	end)
 end }
 
 return S

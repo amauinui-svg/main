@@ -48,12 +48,21 @@ function R.MaxInfluence(lv, sk) return 20 + 2 * (lv - 1) + 2 * ((sk and sk.inf) 
 function R.MaxSupply(lv, sk) return 10 + math.floor(lv / 4) + ((sk and sk.sup) or 0) end
 R.BaseLots = 4
 function R.Lots(sk, extraPass) return R.BaseLots + ((sk and sk.lot) or 0) + (extraPass and 3 or 0) end
-function R.ConvoySlots(lv, extraPass)
-	local n = 1
-	for _, gate in ipairs({ 5, 12, 20, 30, 45 }) do if lv >= gate then n += 1 end end
-	return n + (extraPass and 2 or 0)
-end
+-- Convoys (Kash 2 Oct 23:31): players BUY each extra convoy with cash; the level gates only make the next one buyable.
+-- bought = how many extra convoys were bought (nil = old callers: count every gate reached, as before)
+R.ConvoyGates = { 5, 12, 20, 30, 45 }
 R.ConvoySlotLevels = { 1, 5, 12, 20, 30, 45 }
+function R.ConvoyGatesReached(lv) local n = 0; for _, g in ipairs(R.ConvoyGates) do if lv >= g then n += 1 end end; return n end
+function R.ConvoySlots(lv, extraPass, bought)
+	local reached = R.ConvoyGatesReached(lv)
+	return 1 + math.min(bought or reached, reached) + (extraPass and 2 or 0)
+end
+-- price of extra convoy k (1..5): about an hour of law income at its gate level
+function R.ConvoyCost(k)
+	local g = R.ConvoyGates[k]
+	if not g then return nil end
+	return math.max(500, math.floor(R.MinuteValue(g) * 60 / 100 + 0.5) * 100)
+end
 
 ---------------------------------------------------------------- XP curve (26 Sep 2026)
 -- A level costs a multiple of what one FULL Influence bar earns at that level with the best law you have,
