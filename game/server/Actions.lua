@@ -11,8 +11,8 @@ local O = require(RS.Shared.Officers)
 local TK = require(RS.Shared.Tasks)
 
 local A = {}
-local PS, MK, RA
-function A.Init(ps, mk, ra) PS, MK, RA = ps, mk, ra end
+local PS, MK, RA, AD
+function A.Init(ps, mk, ra, ad) PS, MK, RA, AD = ps, mk, ra, ad end
 
 local function ok(t) t = t or {}; t.ok = true; return t end
 local function no(msg) return { ok = false, msg = msg } end
@@ -75,6 +75,20 @@ function act.eraUp(plr, p)
 	d.era = nxt
 	PS.Note(p, { kind = "toast", text = "Welcome to the " .. E.name .. " Era! New laws, properties and units unlocked", tone = "gold" })
 	return ok({ era = nxt })
+end
+
+-- build the next stage of your Wonder
+function act.wonderBuild(plr, p)
+	local d = p.data
+	local era = R.PlayerEra(d)
+	if era < 2 then return no("Advance to the " .. D.Eras[2].name .. " Era to unlock your Wonder") end
+	local k = (d.wonder or 0) + 1
+	if k > R.WonderMax(era) then return no("Advance to the next era to keep building") end
+	local cost = R.WonderCost(k)
+	if not PS.Spend(p, cost) then return no("Need " .. R.Money(cost)) end
+	d.wonder = k
+	PS.AddXp(p, math.floor(R.MinuteXp(d.lv) * 10))
+	return ok({ wonder = k })
 end
 
 ---------------------------------------------------------------- laws
@@ -293,7 +307,8 @@ function act.send(plr, p, a)
 	if d.cash < L.cost then return no("Not enough cash for this load") end
 	local taxPct, owner = PS.TaxFor(p, b)
 	d.cash -= L.cost
-	PS.Dispatch(p, c, b, { good = L.good, cost = L.cost, pay = L.pay, tax = L.tax, xp = L.xp, owner = owner, taxPct = taxPct })
+	PS.Dispatch(p, c, b, { good = L.good, cost = L.cost, pay = L.pay, tax = L.tax, xp = L.xp, owner = owner, taxPct = taxPct, ev = L.ev })
+	if L.ev then d.wev = L.ev; PS.Note(p, { kind = "toast", text = "World event bonus locked in! This convoy pays big.", tone = "gold" }) end
 	p.sentTo = p.sentTo or {}
 	if not p.sentTo[b] then p.sentTo[b] = true; PS.TaskProgress(p, "moves", 1) end
 	return ok()
@@ -1031,7 +1046,33 @@ function act.rankings(plr, p, a)
 end
 
 -- requests that return data the client shows, without needing a full resync
-A.NoSync = { allyList = true, rankings = true }
+-- player profiles
+function act.profile(plr, p, a)
+	local uid = tonumber(a and a.uid) or plr.UserId
+	local cd = allyCd(p, "profile", 0.5); if cd then return no(cd) end
+	local pf = RA.Profile(uid)
+	if not pf then return no("That player has no profile yet") end
+	pf.uid = uid
+	return ok({ profile = pf })
+end
+function act.setTitle(plr, p, a)
+	local key = a and a.key
+	if key ~= nil and (type(key) ~= "string" or not R.AchByKey[key] or not table.find(R.AchievementsOf(p.data), key)) then return no("You have not earned that title") end
+	p.data.title = key
+	return ok()
+end
+
+-- tester panel (owner only; AD.Run checks again)
+function act.admin(plr, p, a)
+	if not AD or not AD.IsAdmin(plr) then return no("Not allowed") end
+	return AD.Run(plr, p, a and a.cmd)
+end
+function act.adminList(plr, p)
+	if not AD or not AD.IsAdmin(plr) then return no("Not allowed") end
+	return ok({ list = AD.List() })
+end
+
+A.NoSync = { allyList = true, rankings = true, profile = true, adminList = true }
 -- requests allowed before onboarding finishes
-A.PreOnboard = { sync = true, onboard = true, rankings = true }
+A.PreOnboard = { sync = true, onboard = true, rankings = true, admin = true, adminList = true }
 return A

@@ -8,12 +8,13 @@ Military.lua|ReplicatedStorage.Shared|Military|ModuleScript
 Officers.lua|ReplicatedStorage.Shared|Officers|ModuleScript
 Tasks.lua|ReplicatedStorage.Shared|Tasks|ModuleScript
 Changelog.lua|ReplicatedStorage.Shared|Changelog|ModuleScript
+Events.lua|ReplicatedStorage.Shared|Events|ModuleScript
 server/Store.lua|ServerScriptService.Server|Store|ModuleScript
 server/WorldService.lua|ServerScriptService.Server|WorldService|ModuleScript
 server/PlayerService.lua|ServerScriptService.Server|PlayerService|ModuleScript
 server/Market.lua|ServerScriptService.Server|Market|ModuleScript
 server/Raids.lua|ServerScriptService.Server|Raids|ModuleScript
-server/Takedown.lua|ServerScriptService.Server|Takedown|ModuleScript
+server/Admin.lua|ServerScriptService.Server|Admin|ModuleScript
 server/Actions.lua|ServerScriptService.Server|Actions|ModuleScript
 server/GameServer.server.lua|ServerScriptService|GameServer|Script
 client/UI.lua|ReplicatedStorage.Client|UI|ModuleScript

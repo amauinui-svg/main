@@ -22,9 +22,12 @@ local PS = require(Server.PlayerService)
 local MK = require(Server.Market)
 local A = require(Server.Actions)
 local RA = require(Server.Raids)
+local AD = require(Server.Admin)
 MK.Init(PS)
 RA.Init(PS)
-A.Init(PS, MK, RA)
+AD.Init(PS, WS, RA)
+PS.Admin = AD
+A.Init(PS, MK, RA, AD)
 
 -- flood guard (audit M7): a token bucket per player, 8 requests a second with bursts of 15
 local budget = {}

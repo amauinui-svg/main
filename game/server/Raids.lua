@@ -258,9 +258,23 @@ function RA.PublishCard(plr, p)
 	local qm = PS.Mods(p)
 	local atk, def = PS.Power(p, qm)
 	local card = { n = d.name, f = d.flag, lv = d.lv, atk = atk, def = def, cash = math.floor(d.cash), sh = d.shield or 0, w = weaponOf(d),
-		u = M.UnitCount(d.units), loss = qm.losses or 0, t = now(), ht = d.hitApplied or 0 }
+		u = M.UnitCount(d.units), loss = qm.losses or 0, t = now(), ht = d.hitApplied or 0, pf = RA.ProfileOf(p) }
 	local ok, err = pcall(function() Store.DS(CARD_DS):SetAsync(tostring(plr.UserId), card) end)
 	if ok then cardCache[plr.UserId] = { t = os.clock(), card = card } else warn("[Idle Country] war card publish failed: " .. tostring(err)) end
+end
+-- public profile (Kash 2 Oct: player profiles like the competitor's). Small: it rides on the war card.
+function RA.ProfileOf(p)
+	local d = p.data
+	local st = d.stats or {}
+	local atk, def = PS.Power(p)
+	return {
+		n = d.name, f = d.flag, lv = d.lv, era = R.PlayerEra(d), title = R.TitleOf(d), ach = R.AchievementsOf(d),
+		tag = d.alliance and PS.AllianceTag(d.alliance) or nil, wonder = d.wonder or 0, home = d.home, ideo = d.ideo,
+		atk = atk, def = def, inc = math.floor(PS.IncHr(p)),
+		st = { laws = st.laws or 0, trips = st.trips or 0, wins = st.wins or 0, battles = st.battles or 0, bosses = st.bosses or 0,
+			built = st.built or 0, earned = st.earned or 0, stolen = st.stolen or 0 },
+		since = d.created,
+	}
 end
 local function getCard(uid)
 	local c = cardCache[uid]
@@ -274,6 +288,18 @@ remoteUid = function(id)
 	local uid = type(id) == "string" and tonumber(id:match("^u(%d+)$"))
 	if not uid or Players:GetPlayerByUserId(uid) then return nil end
 	return uid
+end
+function RA.Profile(uid)
+	uid = tonumber(uid)
+	if not uid then return nil end
+	local plr = Players:GetPlayerByUserId(uid)
+	local p = plr and PS.Profiles[plr]
+	if p and p.data and p.data.onboarded then local pf = RA.ProfileOf(p); pf.online = true; pf.here = true; return pf end
+	local card = getCard(uid)
+	if not card then return nil end
+	local pf = card.pf or { n = card.n, f = card.f, lv = card.lv, atk = card.atk, def = card.def }
+	pf.lastSeen = card.t
+	return pf
 end
 function RA.RemoteOk(id)
 	local uid = remoteUid(id)

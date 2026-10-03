@@ -126,13 +126,15 @@ function T.Loads(a, b, ctx)
 		local mult = g[4] * (demand and 1.3 or 1) * (key == hot and 1.25 or 1) * (ctx.convoyMult or 1)
 		local profit = value * K[kind] * base ^ T.DistExp * rmult * mult * math.sqrt(T.EraSpeed[era])
 		local cost = math.floor(profit * 0.6 + 0.5)
+		local ev = ctx.event and ctx.event.city == b and ctx.event.mult or nil
+		if ev then profit *= ev end -- world event bonus (locked at send like the rest of the pay)
 		local pay = math.floor(cost + profit + 0.5)
 		local tax = ctx.taxFree and 0 or math.floor(pay * (ctx.taxPct or 0) / 100 + 0.5)
 		local tons = math.floor(T.Vehicles[era].cap * (0.6 + 0.4 * (g[4] - 0.9) / 0.5) + 0.5)
 		table.insert(list, {
 			good = key, name = g[1], icon = g[2], cost = cost, pay = pay, tax = tax, net = pay - tax - cost,
 			xp = math.max(1, math.floor(Rules.MinuteXp(ctx.lv) * base * 0.04 + 0.5)),
-			demand = demand, hot = key == hot, tons = tons, region = rkind,
+			demand = demand, hot = key == hot, tons = tons, region = rkind, ev = ev and ctx.event.id or nil,
 		})
 	end
 	-- 1) what the origin exports, 2) what the destination wants, 3) era staples, until there are 3 loads

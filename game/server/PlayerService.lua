@@ -9,6 +9,7 @@ local R = require(RS.Shared.Rules)
 local T = require(RS.Shared.Trade)
 local M = require(RS.Shared.Military)
 local World = require(RS.Shared.World)
+local Events = require(RS.Shared.Events)
 local Config = require(RS.Shared.Config)
 local O = require(RS.Shared.Officers)
 local TK = require(RS.Shared.Tasks)
@@ -96,7 +97,7 @@ function PS.Mods(p)
 	local vip = (vt and vt.cash or 0) + (p.premium and Config.PremiumBonus or 0) + (p.inGroup and Config.Group.Bonus or 0)
 	local vipRegen = vt and vt.regen or 0
 	return {
-		law = 1 + (ideo.law or 0) + perks.law + b.law + vip, props = 1 + (ideo.props or 0) + perks.props + b.props + vip,
+		law = 1 + (ideo.law or 0) + perks.law + b.law + vip, props = 1 + (ideo.props or 0) + perks.props + b.props + vip + R.WonderBonus(d.wonder),
 		convoy = 1 + (ideo.convoy or 0) + perks.convoy + b.convoy + vip, regen = 1 + perks.regen + b.regen + vipRegen,
 		xp = 1 + b.xp + vip,
 		attack = (ideo.attack or 0) + perks.attack + b.attack + b.gearAtk, defense = (ideo.defense or 0) + perks.defense + b.defense + b.gearDef,
@@ -285,6 +286,8 @@ function PS.LoadsFor(p, a, b, mods)
 	local ctx = PS.TradeCtx(p, mods)
 	ctx.taxPct = PS.TaxFor(p, b)
 	ctx.wants = WS.WantsOf(b)
+	local ev = Events.Active(os.time())
+	if ev and ev.city == b and p.data.wev ~= ev.id then ctx.event = ev end
 	return T.Loads(a, b, ctx)
 end
 
@@ -562,7 +565,7 @@ function PS.Snapshot(p)
 		bank = d.bank, bankRate = Config.Bank.InterestPerHour * (1 + (mods.interest or 0)), bankCap = R.MinuteValue(d.lv) * R.BankCapMinutes, shield = d.shield, revenge = d.revenge,
 		inv = d.inv, cab = d.cab, officerSlots = PS.OfficerSlots(p), nextSlotCost = PS.NextSlotCost(p),
 		crates = d.crates, basicCratePrice = PS.BasicCratePrice(p), login = d.login, loginReady = PS.LoginReady(p),
-		weekly = d.weekly, refresh = d.refresh, bundle = d.bundle, starter = d.starter, duesRate = PS.DuesRate(p),
+		weekly = d.weekly, refresh = d.refresh, bundle = d.bundle, starter = d.starter, wev = d.wev, wonder = d.wonder or 0, admin = PS.Admin and PS.Admin.IsAdmin(p.player) or nil, title = d.title, created = d.created, duesRate = PS.DuesRate(p),
 		targets = PS.Raids and PS.Raids.Targets(p) or {},
 		firstRefill = d.firstRefill or false, settings = d.settings or {}, meta = d.meta or {}, inGroup = p.inGroup or false, premium = p.premium or false, groupId = Config.Group.Id,
 		vip = (PS.VipTier(p) or {}).tag, version = Config.Version,
@@ -888,4 +891,5 @@ function PS.Rankings(kind)
 	return list
 end
 
+PS._sanitize = sanitize
 return PS

@@ -107,6 +107,70 @@ function R.EraOf(lv) local e = 1; for i, E in ipairs(D.Eras) do if lv >= E.start
 -- Paid eras (2 Oct, Kash): reaching an era's level only unlocks the option; the player advances by paying cash.
 -- d.era is the paid era; the effective era can never be above what the level allows.
 function R.PlayerEra(d) if not d then return 1 end; return math.clamp(math.min(R.EraOf(d.lv or 1), d.era or 1), 1, #D.Eras) end
+-- WONDERS (Kash 2 Oct): unlocked by your first era advance. Built in stages, 5 per era you have reached;
+-- every stage adds +2% property income. The wonder itself changes with the era of its newest stage.
+R.WonderNames = { "Ancient Wonder", "Colossus of the Harbor", "Grand Cathedral", "Royal Palace", "Iron Tower", "Sky Tower", "Data Spire", "Orbital Elevator" }
+R.WonderStagesPerEra = 5
+R.WonderPct = 0.02
+function R.WonderMax(era) return R.WonderStagesPerEra * math.max(0, (era or 1) - 1) end
+function R.WonderEra(k) return math.clamp(1 + math.ceil((k or 0) / R.WonderStagesPerEra), 2, #D.Eras) end
+function R.WonderName(k) return R.WonderNames[R.WonderEra(math.max(1, k or 1))] end
+function R.WonderCost(k)
+	local E = D.Eras[R.WonderEra(k)]
+	return math.floor(R.MinuteValue(E.start) * 60 * (1 + 0.5 * ((k - 1) % R.WonderStagesPerEra)) / 100 + 0.5) * 100
+end
+function R.WonderBonus(k) return R.WonderPct * (k or 0) end
+-- ACHIEVEMENTS and TITLES (Kash 2 Oct: another way to feel progress). Worked out from lifetime stats, so nothing
+-- extra is stored except the title you picked. stat "lv" is your level, "era" your paid era, "wonder" your Wonder stage.
+R.Achievements = {
+	{ key = "law1", name = "First Decree", desc = "Pass 100 laws", stat = "laws", need = 100, title = "Lawmaker" },
+	{ key = "law2", name = "Legislator", desc = "Pass 2,500 laws", stat = "laws", need = 2500, title = "Legislator" },
+	{ key = "law3", name = "Iron Statute", desc = "Pass 25,000 laws", stat = "laws", need = 25000, title = "Supreme Legislator" },
+	{ key = "trip1", name = "Trader", desc = "Deliver 25 convoys", stat = "trips", need = 25, title = "Merchant" },
+	{ key = "trip2", name = "Trade Baron", desc = "Deliver 500 convoys", stat = "trips", need = 500, title = "Trade Baron" },
+	{ key = "trip3", name = "Master of Routes", desc = "Deliver 5,000 convoys", stat = "trips", need = 5000, title = "Master of Routes" },
+	{ key = "war1", name = "First Blood", desc = "Win 10 raids", stat = "wins", need = 10, title = "Raider" },
+	{ key = "war2", name = "Warlord", desc = "Win 250 raids", stat = "wins", need = 250, title = "Warlord" },
+	{ key = "war3", name = "Conqueror", desc = "Win 2,500 raids", stat = "wins", need = 2500, title = "Conqueror" },
+	{ key = "boss1", name = "Giant Slayer", desc = "Defeat 5 bosses", stat = "bosses", need = 5, title = "Slayer" },
+	{ key = "boss2", name = "Bane of Tyrants", desc = "Defeat 50 bosses", stat = "bosses", need = 50, title = "Tyrant's Bane" },
+	{ key = "build1", name = "Builder", desc = "Build 25 properties", stat = "built", need = 25, title = "Builder" },
+	{ key = "build2", name = "Architect", desc = "Build 250 properties", stat = "built", need = 250, title = "Architect" },
+	{ key = "rich1", name = "Millionaire", desc = "Earn $1M in total", stat = "earned", need = 1e6, title = "Millionaire" },
+	{ key = "rich2", name = "Billionaire", desc = "Earn $1B in total", stat = "earned", need = 1e9, title = "Billionaire" },
+	{ key = "rich3", name = "Trillionaire", desc = "Earn $1T in total", stat = "earned", need = 1e12, title = "Tycoon" },
+	{ key = "lv1", name = "Rising Nation", desc = "Reach level 25", stat = "lv", need = 25, title = "Governor" },
+	{ key = "lv2", name = "Great Power", desc = "Reach level 100", stat = "lv", need = 100, title = "Chancellor" },
+	{ key = "lv3", name = "Superpower", desc = "Reach level 175", stat = "lv", need = 175, title = "Emperor" },
+	{ key = "era1", name = "New Age", desc = "Advance to the Classical Era", stat = "era", need = 2, title = "Visionary" },
+	{ key = "era2", name = "Industrialist", desc = "Advance to the Industrial Era", stat = "era", need = 5, title = "Industrialist" },
+	{ key = "era3", name = "To the Stars", desc = "Advance to the Space Age", stat = "era", need = 8, title = "Star Admiral" },
+	{ key = "won1", name = "Wonder of the World", desc = "Build 5 Wonder stages", stat = "wonder", need = 5, title = "Wonder Builder" },
+}
+function R.AchStat(d, stat)
+	if stat == "lv" then return d.lv or 1 elseif stat == "era" then return R.PlayerEra(d) elseif stat == "wonder" then return d.wonder or 0 end
+	return (d.stats and d.stats[stat]) or 0
+end
+-- list of achievement keys earned
+function R.AchievementsOf(d)
+	local out = {}
+	for _, A in ipairs(R.Achievements) do if R.AchStat(d, A.stat) >= A.need then table.insert(out, A.key) end end
+	return out
+end
+R.AchByKey = {}
+for _, A in ipairs(R.Achievements) do R.AchByKey[A.key] = A end
+-- the title shown on your profile: the one you picked if you still have it, else your newest
+function R.TitleOf(d)
+	local got = R.AchievementsOf(d)
+	if d.title and table.find(got, d.title) then return R.AchByKey[d.title].title end
+	local best, bestNeed
+	for _, k in ipairs(got) do
+		local A = R.AchByKey[k]
+		local rank = A.need / (R.AchByKey[A.key:gsub("%d$", "1")] or A).need
+		if not bestNeed or rank >= bestNeed then best, bestNeed = A, rank end
+	end
+	return best and best.title or "Citizen"
+end
 -- price to advance into era e: about two hours of law income at that era's starting level
 function R.EraCost(e) local E = D.Eras[e]; if not E then return nil end; return math.floor(R.MinuteValue(E.start) * 120 / 1000 + 0.5) * 1000 end
 
