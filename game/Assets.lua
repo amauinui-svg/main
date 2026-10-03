@@ -129,7 +129,7 @@ local A = {
 	["boss_1"] = "rbxassetid://79643217062561", ["boss_2"] = "rbxassetid://123415271395714", ["boss_3"] = "rbxassetid://88536653696741",
 	-- boss_5 (Robber Baron) and boss_6 (Rogue General) removed: both had a cigar, and Roblox moderated boss_6 as tobacco.
 	-- RULE: no tobacco, alcohol, drugs, real-world extremist symbols or armbands in any uploaded image.
-	["boss_4"] = "rbxassetid://127288730006626",
+	["boss_4"] = "rbxassetid://127288730006626", ["boss_5"] = "rbxassetid://92448380776261", ["boss_6"] = "rbxassetid://125980950380980", -- 5/6 remade clean 3 Oct
 	["boss_7"] = "rbxassetid://119123100044901", ["boss_8"] = "rbxassetid://85854489349266",
 	["map_world"] = "rbxassetid://114973255343938", -- v2 3 Oct, 1536x584 (2x): country borders, full coverage (v1 115782743034253; 131032198234520 never loaded)
 	["nav_off"] = "rbxassetid://111653649833653",

@@ -464,3 +464,10 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 
 ## 3 Oct 10:41 (Kash)
 - Roblox moderated IC_boss_rogue_general (103274986913008) as "Illegal and Regulated Content" (the cigar = tobacco) and the account is temporarily moderated. Removed boss_5 (Robber Baron, also had a cigar) and boss_6 from the game; those bosses show the skull icon until clean versions exist. RULE for all future art: no tobacco/cigars, alcohol, drugs, weapons-making, or real-world extremist symbols/armbands in anything uploaded to Roblox. Asked Kash to delete/archive 117230554201741 (Robber Baron) before it gets reviewed.
+
+## 3 Oct 10:50 (Kash)
+- Map didn't load: the new map upload (131032198234520) never loaded in Studio. Uploaded a 2x version (1536x584, 114973255343938) that loads; map_world points at it.
+- Remade Robber Baron (money sack + cane) and Rogue General (binoculars, gold star cap, no armband) with no cigars or insignia; uploaded as boss_5/boss_6. Cigar versions deleted from the repo.
+
+## 3 Oct 10:53 (Kash)
+- Boss takes-damage animation: each hit shows slash marks (1/2/3 for x1/x5/ALL), a red flash, a squash punch, a shake and a big damage number on the portrait, with a blade or crit sound. A killing blow shakes harder and greys the portrait out.
