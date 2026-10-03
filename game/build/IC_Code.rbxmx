@@ -16123,7 +16123,10 @@ S._tutorial = { init = function(App)
 			for _, f in pairs(spot) do f.Visible = vis and true or false end
 			if not vis then return end
 			local pad = 6
-			local p0, sz = target.AbsolutePosition - Vector2.new(pad, pad), target.AbsoluteSize + Vector2.new(pad * 2, pad * 2)
+			-- AbsolutePosition does not include the top bar inset but this ScreenGui ignores it, so measure from the
+			-- root frame (which sits at 0,0 of the same ScreenGui) instead of using raw screen numbers
+			local origin = App.root.AbsolutePosition
+			local p0, sz = target.AbsolutePosition - origin - Vector2.new(pad, pad), target.AbsoluteSize + Vector2.new(pad * 2, pad * 2)
 			local W, H = host.AbsoluteSize.X, host.AbsoluteSize.Y
 			top.Position = UDim2.fromOffset(0, 0); top.Size = UDim2.fromOffset(W, math.max(0, p0.Y))
 			bottom.Position = UDim2.fromOffset(0, p0.Y + sz.Y); bottom.Size = UDim2.fromOffset(W, math.max(0, H - p0.Y - sz.Y))
@@ -16252,9 +16255,10 @@ function App.on(ev, fn) App.listeners[ev] = App.listeners[ev] or {}; table.inser
 function App.emit(ev, ...) for _, fn in ipairs(App.listeners[ev] or {}) do task.spawn(fn, ...) end end
 
 ---------------------------------------------------------------- fit to screen
+local fakeVp -- Studio test hook: emulate a phone or tablet viewport (IC_Cmd "vp:844x390", "vp:" resets)
 local function fit()
 	local cam = workspace.CurrentCamera
-	local vp = cam and cam.ViewportSize or Vector2.new(1280, 720)
+	local vp = fakeVp or (cam and cam.ViewportSize) or Vector2.new(1280, 720)
 	-- phones (short screens) use a 560-tall design so text stays readable; everything else 720
 	local refH = vp.Y < 600 and 560 or 720
 	local s = math.clamp(math.min(vp.X / (refH * 16 / 9), vp.Y / refH), 0.45, 1.6)
@@ -16896,6 +16900,78 @@ end)
 
 App.req("sync")
 
+-- Studio layout audit: visible text that overflows its box, spills outside its panel, or sits on top of other text
+function App.auditLayout()
+	local HttpService = game:GetService("HttpService")
+	local function shown(g)
+		local o = g
+		while o and o ~= sg do
+			if o:IsA("GuiObject") and not o.Visible then return false end
+			o = o.Parent
+		end
+		return true
+	end
+	local function rect(g) return g.AbsolutePosition, g.AbsolutePosition + g.AbsoluteSize end
+	local function inter(a0, a1, b0, b1)
+		local w = math.min(a1.X, b1.X) - math.max(a0.X, b0.X)
+		local h = math.min(a1.Y, b1.Y) - math.max(a0.Y, b0.Y)
+		return (w > 3 and h > 3) and w * h or 0
+	end
+	local function clipper(g)
+		local o = g.Parent
+		while o and o ~= sg do
+			if o:IsA("GuiObject") and (o.ClipsDescendants or o:IsA("ScrollingFrame")) then return o end
+			o = o.Parent
+		end
+	end
+	local function nameOf(g) local n = g:GetFullName():gsub("^.-IdleCountryHUD%.", ""); return n end
+	local texts, issues = {}, {}
+	for _, g in ipairs(sg:GetDescendants()) do
+		if (g:IsA("TextLabel") or g:IsA("TextButton")) and g.Text ~= "" and g.TextTransparency < 0.9 and shown(g) and g.AbsoluteSize.X > 2 then
+			local c = clipper(g)
+			local a0, a1 = rect(g)
+			local visible = true
+			if c then local c0, c1 = rect(c); visible = inter(a0, a1, c0, c1) > 0 end
+			if visible then
+				table.insert(texts, g)
+				local plain = g.ContentText
+				if not g.TextScaled and not g.TextWrapped and g.TextTruncate == Enum.TextTruncate.None and g.TextBounds.X > g.AbsoluteSize.X + 4 then
+					table.insert(issues, { k = "overflow", n = nameOf(g), t = plain, need = math.floor(g.TextBounds.X), have = math.floor(g.AbsoluteSize.X) })
+				elseif not g.TextFits and not g.TextScaled then
+					table.insert(issues, { k = "nofit", n = nameOf(g), t = plain })
+				end
+				local vp = sg.AbsoluteSize
+				if a1.X > vp.X + 2 or a1.Y > vp.Y + 2 or a0.X < -2 then
+					table.insert(issues, { k = "offscreen", n = nameOf(g), t = plain })
+				end
+			end
+		end
+	end
+	-- text on text (actual glyph boxes, not the label boxes)
+	local function glyph(g)
+		local a0 = g.AbsolutePosition
+		local sz, tb = g.AbsoluteSize, g.TextBounds
+		local w, h = math.min(tb.X, sz.X), math.min(tb.Y, sz.Y)
+		local x = a0.X + (g.TextXAlignment == Enum.TextXAlignment.Left and 0 or g.TextXAlignment == Enum.TextXAlignment.Right and sz.X - w or (sz.X - w) / 2)
+		local y = a0.Y + (g.TextYAlignment == Enum.TextYAlignment.Top and 0 or g.TextYAlignment == Enum.TextYAlignment.Bottom and sz.Y - h or (sz.Y - h) / 2)
+		return Vector2.new(x, y), Vector2.new(x + w, y + h)
+	end
+	for i = 1, #texts do
+		local a = texts[i]
+		local a0, a1 = glyph(a)
+		for j = i + 1, #texts do
+			local b = texts[j]
+			if not a:IsAncestorOf(b) and not b:IsAncestorOf(a) and a.Text ~= b.Text then
+				local b0, b1 = glyph(b)
+				if inter(a0, a1, b0, b1) > 20 then
+					table.insert(issues, { k = "overlap", n = nameOf(a), t = a.ContentText, n2 = nameOf(b), t2 = b.ContentText })
+				end
+			end
+		end
+	end
+	return HttpService:JSONEncode({ vp = { sg.AbsoluteSize.X, sg.AbsoluteSize.Y }, scale = uiScale.Scale, n = #texts, issues = issues })
+end
+
 -- Studio-only test hook: tools set LocalPlayer attribute IC_Cmd = "open:<screen>" | "close" | "login" | "settings"
 if game:GetService("RunService"):IsStudio() then
 	plr:GetAttributeChangedSignal("IC_Cmd"):Connect(function()
@@ -16911,7 +16987,12 @@ if game:GetService("RunService"):IsStudio() then
 			elseif k == "afk" and App.openAfk then App.openAfk()
 			elseif k == "sounds" and App.soundBoard then App.soundBoard()
 			elseif k == "profile" and App.showProfile then App.showProfile(tonumber(arg) or plr.UserId)
-			elseif k == "emit" then App.emit(arg) end
+			elseif k == "emit" then App.emit(arg)
+			elseif k == "vp" then
+				local w, h = arg:match("(%d+)x(%d+)")
+				fakeVp = w and Vector2.new(tonumber(w), tonumber(h)) or nil
+				fit()
+			elseif k == "audit" then plr:SetAttribute("IC_Audit", App.auditLayout()) end
 		end)
 	end)
 end

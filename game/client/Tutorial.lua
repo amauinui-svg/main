@@ -89,7 +89,10 @@ S._tutorial = { init = function(App)
 			for _, f in pairs(spot) do f.Visible = vis and true or false end
 			if not vis then return end
 			local pad = 6
-			local p0, sz = target.AbsolutePosition - Vector2.new(pad, pad), target.AbsoluteSize + Vector2.new(pad * 2, pad * 2)
+			-- AbsolutePosition does not include the top bar inset but this ScreenGui ignores it, so measure from the
+			-- root frame (which sits at 0,0 of the same ScreenGui) instead of using raw screen numbers
+			local origin = App.root.AbsolutePosition
+			local p0, sz = target.AbsolutePosition - origin - Vector2.new(pad, pad), target.AbsoluteSize + Vector2.new(pad * 2, pad * 2)
 			local W, H = host.AbsoluteSize.X, host.AbsoluteSize.Y
 			top.Position = UDim2.fromOffset(0, 0); top.Size = UDim2.fromOffset(W, math.max(0, p0.Y))
 			bottom.Position = UDim2.fromOffset(0, p0.Y + sz.Y); bottom.Size = UDim2.fromOffset(W, math.max(0, H - p0.Y - sz.Y))
