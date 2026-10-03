@@ -437,3 +437,6 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 
 ## 3 Oct 09:41 (Kash)
 - v3/v4 art style drifted away from what he wants (too grungy/painted). Keep the layouts and concepts, but match the 2 Oct thumbnails (N04 Steal Their Cash, the Idle Country icon): those used real references. Variants can be better too. Plan in art/ads/v5/PROMPTS.md. Blocked: Flow usage limit on both Nano Banana Pro and Nano Banana 2.
+
+## 3 Oct 09:53 (Kash)
+- Nano Banana 2 has no limit (Pro was the limited one). Use the references from yesterday / the live thumbnails, not the image I used last (he dislikes its style). Uploaded the live thumbnails (art/ads/v2 N04-N10) to Flow as thumbref_* and made 16 concepts x2 in that style (art/ads/v5). trade_world_a has a typo ("VORLD"): do not use.
