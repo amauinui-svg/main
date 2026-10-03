@@ -1171,12 +1171,21 @@ function R.MaxInfluence(lv, sk) return 20 + 2 * (lv - 1) + 2 * ((sk and sk.inf) 
 function R.MaxSupply(lv, sk) return 10 + math.floor(lv / 4) + ((sk and sk.sup) or 0) end
 R.BaseLots = 4
 function R.Lots(sk, extraPass) return R.BaseLots + ((sk and sk.lot) or 0) + (extraPass and 3 or 0) end
-function R.ConvoySlots(lv, extraPass)
-	local n = 1
-	for _, gate in ipairs({ 5, 12, 20, 30, 45 }) do if lv >= gate then n += 1 end end
-	return n + (extraPass and 2 or 0)
-end
+-- Convoys (Kash 2 Oct 23:31): players BUY each extra convoy with cash; the level gates only make the next one buyable.
+-- bought = how many extra convoys were bought (nil = old callers: count every gate reached, as before)
+R.ConvoyGates = { 5, 12, 20, 30, 45 }
 R.ConvoySlotLevels = { 1, 5, 12, 20, 30, 45 }
+function R.ConvoyGatesReached(lv) local n = 0; for _, g in ipairs(R.ConvoyGates) do if lv >= g then n += 1 end end; return n end
+function R.ConvoySlots(lv, extraPass, bought)
+	local reached = R.ConvoyGatesReached(lv)
+	return 1 + math.min(bought or reached, reached) + (extraPass and 2 or 0)
+end
+-- price of extra convoy k (1..5): about an hour of law income at its gate level
+function R.ConvoyCost(k)
+	local g = R.ConvoyGates[k]
+	if not g then return nil end
+	return math.max(500, math.floor(R.MinuteValue(g) * 60 / 100 + 0.5) * 100)
+end
 
 ---------------------------------------------------------------- XP curve (26 Sep 2026)
 -- A level costs a multiple of what one FULL Influence bar earns at that level with the best law you have,
@@ -2746,23 +2755,46 @@ local function initWants()
 	for i, C in ipairs(World.Cities) do WS.Wants[i] = { list = table.clone(C.demand), ticks = {} } end
 end
 function WS.WantsOf(i) return WS.Wants[i] and WS.Wants[i].list or World.Cities[i].demand end
+-- Wants are game wide (Kash 2 Oct 23:31): every server shares one copy in a MemoryStore hash map; a server that
+-- changes a want tells the others through MessagingService, and every server re-reads all wants each minute.
+local WANT_MAP = "IC_Wants_v1" .. SUFFIX
+local function wantDefault(i) return { list = table.clone(World.Cities[i].demand), ticks = {} } end
+function WS.RefreshWant(i)
+	local w = Store.MapGet(WANT_MAP, "w" .. i)
+	if type(w) == "table" and type(w.list) == "table" then
+		local old = WS.Wants[i] and table.concat(WS.Wants[i].list, ",")
+		WS.Wants[i] = w
+		w.ticks = w.ticks or {}
+		if old ~= table.concat(w.list, ",") then WS.Changed:Fire("w", i) end
+	end
+end
 function WS.TickWant(i, good)
 	local w = WS.Wants[i]
 	if not w or not table.find(w.list, good) then return end
-	w.ticks[good] = (w.ticks[good] or 0) + 1
-	if w.ticks[good] < Trade.WantTicks then return end
-	w.ticks[good] = nil
-	-- pick a new good this city does not export and does not already want
 	local C = World.Cities[i]
-	local pool = {}
-	for k, g in pairs(Trade.Goods) do
-		if k ~= "mixed" and not table.find(C.exports, k) and not table.find(w.list, k) then table.insert(pool, k) end
-	end
-	table.sort(pool)
-	if #pool == 0 then return end
-	local idx = table.find(w.list, good)
-	w.list[idx] = pool[math.random(1, #pool)]
-	WS.Changed:Fire("w", i)
+	task.spawn(function()
+		local changed = false
+		local new = Store.MapUpdate(WANT_MAP, "w" .. i, function(old)
+			local cur = (type(old) == "table" and type(old.list) == "table") and old or wantDefault(i)
+			cur.ticks = cur.ticks or {}
+			changed = false
+			if not table.find(cur.list, good) then return cur end
+			cur.ticks[good] = (cur.ticks[good] or 0) + 1
+			if cur.ticks[good] >= Trade.WantTicks then
+				cur.ticks[good] = nil
+				-- pick a new good this city does not export and does not already want
+				local pool = {}
+				for k in pairs(Trade.Goods) do
+					if k ~= "mixed" and not table.find(C.exports, k) and not table.find(cur.list, k) then table.insert(pool, k) end
+				end
+				table.sort(pool)
+				if #pool > 0 then cur.list[table.find(cur.list, good)] = pool[math.random(1, #pool)]; changed = true end
+			end
+			return cur
+		end)
+		if type(new) == "table" then WS.Wants[i] = new end
+		if changed then publish("w", i) end
+	end)
 end
 
 ---------------------------------------------------------------- popular capitals (Kash 2 Oct)
@@ -2810,6 +2842,12 @@ end
 function WS.Start()
 	for i = 1, #World.Cities do WS.Cities[i] = defaultCity(i) end
 	initWants()
+	task.spawn(function()
+		while true do
+			for i = 1, #World.Cities do task.spawn(pcall, WS.RefreshWant, i) end
+			task.wait(60)
+		end
+	end)
 	task.spawn(function() while true do pcall(WS.RefreshPopular); task.wait(600) end end)
 	task.spawn(function()
 		restoreCities()
@@ -2823,6 +2861,7 @@ function WS.Start()
 				local d = msg.Data
 				if type(d) ~= "table" then return end
 				if d.k == "c" and tonumber(d.id) then pcall(WS.RefreshCity, tonumber(d.id)); WS.Changed:Fire("c", d.id)
+				elseif d.k == "w" and tonumber(d.id) and World.Cities[tonumber(d.id)] then pcall(WS.RefreshWant, tonumber(d.id))
 				elseif d.k == "a" and type(d.id) == "string" then
 					-- only read alliances someone here belongs to, and only when the message is newer (audit M5)
 					local cur = WS.Alliances[d.id]
@@ -2900,11 +2939,14 @@ function PS.Fresh()
 		crates = { limited = 0, basic = 0 }, login = { idx = 1, last = 0 },
 		refresh = { day = 0, tokens = 0 }, weekly = nil, bundle = false,
 		-- 1 Oct evening: seals (task currency) and takedown tickets
+		convoyBought = 0,
 		seals = 0, tickets = 0, -- tickets: legacy, always 0
 	}
 end
 
 local function sanitize(d)
+	-- convoys became a purchase (2 Oct): saves from before keep every convoy their level had already given them
+	if d.convoyBought == nil then d.convoyBought = d.onboarded and R.ConvoyGatesReached(d.lv or 1) or 0 end
 	local f = PS.Fresh()
 	for k, v in pairs(f) do if d[k] == nil then d[k] = v end end
 	for k, v in pairs(f.sk) do if d.sk[k] == nil then d.sk[k] = v end end
@@ -2993,7 +3035,7 @@ function PS.GrantVipOfficer(p)
 end
 function PS.IncHr(p, mods) return R.IncomePerHour(p.data.lots, (mods or PS.Mods(p)).props) end
 function PS.LotsMax(p) return R.Lots(p.data.sk, PS.Has(p, "ExtraLots")) end
-function PS.Slots(p) return R.ConvoySlots(p.data.lv, PS.Has(p, "ExtraConvoys")) end
+function PS.Slots(p) return R.ConvoySlots(p.data.lv, PS.Has(p, "ExtraConvoys"), p.data.convoyBought or 0) end
 function PS.Power(p, mods)
 	mods = mods or PS.Mods(p)
 	return M.Power(p.data.lv, p.data.sk, p.data.units, mods, p.data.elite)
@@ -3428,7 +3470,7 @@ function PS.Snapshot(p)
 		bank = d.bank, bankRate = Config.Bank.InterestPerHour * (1 + (mods.interest or 0)), bankCap = R.MinuteValue(d.lv) * R.BankCapMinutes, shield = d.shield, revenge = d.revenge,
 		inv = d.inv, cab = d.cab, officerSlots = PS.OfficerSlots(p), nextSlotCost = PS.NextSlotCost(p),
 		crates = d.crates, basicCratePrice = PS.BasicCratePrice(p), login = d.login, loginReady = PS.LoginReady(p),
-		weekly = d.weekly, refresh = d.refresh, bundle = d.bundle, starter = d.starter, wev = d.wev, wonder = d.wonder or 0, admin = PS.Admin and PS.Admin.IsAdmin(p.player) or nil, title = d.title, created = d.created, elite = d.elite, govCredit = d.govCredit, pity = d.pity or {}, tut = d.tut, groupGift = d.groupGift or false, duesRate = PS.DuesRate(p),
+		weekly = d.weekly, refresh = d.refresh, bundle = d.bundle, starter = d.starter, wev = d.wev, wonder = d.wonder or 0, admin = PS.Admin and PS.Admin.IsAdmin(p.player) or nil, title = d.title, created = d.created, elite = d.elite, govCredit = d.govCredit, pity = d.pity or {}, tut = d.tut, convoyBought = d.convoyBought or 0, convoyNext = R.ConvoyCost((d.convoyBought or 0) + 1), groupGift = d.groupGift or false, duesRate = PS.DuesRate(p),
 		targets = PS.Raids and PS.Raids.Targets(p) or {},
 		firstRefill = d.firstRefill or false, settings = d.settings or {}, meta = d.meta or {}, inGroup = p.inGroup or false, premium = p.premium or false, groupId = Config.Group.Id,
 		vip = (PS.VipTier(p) or {}).tag, version = Config.Version,
@@ -4915,7 +4957,58 @@ function BG.Start(ps, ws)
 end
 
 return BG
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX19"><Properties><string name="Name">ServerScriptService.Server|Admin|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- TESTER PANEL (Kash 2 Oct): owner-only commands. Every command goes through act.admin, which checks IsAdmin first.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX19"><Properties><string name="Name">ServerScriptService.Server|Chat|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- GLOBAL CHAT (Kash 2 Oct 23:29): "/g message" (or "/global") is sent to every server and shows in the normal chat
+-- as "[GLOBAL] Name: message". Text is filtered for broadcast; 1 message every 4 seconds per player.
+local MessagingService = game:GetService("MessagingService")
+local TextService = game:GetService("TextService")
+local Players = game:GetService("Players")
+local RS = game:GetService("ReplicatedStorage")
+local CH = {}
+local TOPIC = "IC_GlobalChat"
+local last = {}
+
+function CH.Send(plr, p, text)
+	if type(text) ~= "string" then return { ok = false, msg = "Nothing to send" } end
+	text = text:gsub("^%s+", ""):gsub("%s+$", "")
+	if #text == 0 then return { ok = false, msg = "Type a message after /g" } end
+	if #text > 150 then text = text:sub(1, 150) end
+	if (last[plr] or 0) + 4 > os.clock() then return { ok = false, msg = "Slow down (global chat)" } end
+	last[plr] = os.clock()
+	local okF, filtered = pcall(function()
+		return TextService:FilterStringAsync(text, plr.UserId):GetNonChatStringForBroadcastAsync()
+	end)
+	if not okF or type(filtered) ~= "string" then return { ok = false, msg = "Could not send that message" } end
+	local name = (p and p.data and p.data.name ~= "" and p.data.name) or plr.DisplayName
+	local msg = { n = name, u = plr.Name, t = filtered }
+	local okP = pcall(function() MessagingService:PublishAsync(TOPIC, msg) end)
+	if not okP then CH.Deliver(msg) end -- Studio / messaging down: at least this server sees it
+	return { ok = true }
+end
+
+function CH.Deliver(msg)
+	local Sync = RS:FindFirstChild("Remotes") and RS.Remotes:FindFirstChild("Sync")
+	if Sync and type(msg) == "table" then Sync:FireAllClients("gchat", msg) end
+end
+
+function CH.Start()
+	pcall(function()
+		MessagingService:SubscribeAsync(TOPIC, function(m) CH.Deliver(m.Data) end)
+	end)
+	Players.PlayerRemoving:Connect(function(plr) last[plr] = nil end)
+	-- the /g and /global chat commands (they fire on the client that typed them; the client forwards the text)
+	local TCS = game:GetService("TextChatService")
+	local folder = TCS:FindFirstChild("TextChatCommands")
+	if folder and not folder:FindFirstChild("IC_Global") then
+		local c = Instance.new("TextChatCommand")
+		c.Name = "IC_Global"
+		c.PrimaryAlias = "/g"
+		c.SecondaryAlias = "/global"
+		c.Parent = folder
+	end
+end
+
+return CH
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX20"><Properties><string name="Name">ServerScriptService.Server|Admin|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- TESTER PANEL (Kash 2 Oct): owner-only commands. Every command goes through act.admin, which checks IsAdmin first.
 -- Typed as "/reset", "/cash 1m", "/level 50" etc. The client panel buttons send the same strings.
 local RS = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -5149,7 +5242,7 @@ function AD.Run(plr, p, line)
 end
 
 return AD
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX20"><Properties><string name="Name">ServerScriptService.Server|Actions|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- Actions: every request a client can make. Each one re-checks the rules; the client is never trusted.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX21"><Properties><string name="Name">ServerScriptService.Server|Actions|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- Actions: every request a client can make. Each one re-checks the rules; the client is never trusted.
 local RS = game:GetService("ReplicatedStorage")
 local D = require(RS.Shared.GameData)
 local R = require(RS.Shared.Rules)
@@ -5570,11 +5663,17 @@ function act.taskRefresh(plr, p, a)
 end
 
 ---------------------------------------------------------------- settings + meta prompts
-local SETTINGS = { music = "bool", sfx = "bool", toasts = "bool", confirmBig = "bool", shortNumbers = "bool", autoClaim = "bool", reduceMotion = "bool", mapLabels = "bool" }
+local SETTINGS = { music = "bool", sfx = "bool", toasts = "bool", confirmBig = "bool", shortNumbers = "bool", autoClaim = "bool", reduceMotion = "bool", mapLabels = "bool",
+	musicVol = "vol", sfxVol = "vol" }
 function act.saveSettings(plr, p, a)
-	local kind = SETTINGS[a.key]
+	local kind = type(a.key) == "string" and SETTINGS[a.key]
 	if not kind then return no("Unknown setting") end
-	if type(a.value) ~= "boolean" then return no("Bad value") end
+	if kind == "vol" then
+		-- volume slider: a number from 0 to 1 (NaN fails both comparisons)
+		local v = a.value
+		if type(v) ~= "number" or not (v >= 0 and v <= 1) then return no("Bad value") end
+		a.value = math.floor(v * 100 + 0.5) / 100
+	elseif type(a.value) ~= "boolean" then return no("Bad value") end
 	p.data.settings = p.data.settings or {}
 	p.data.settings[a.key] = a.value
 	return ok()
@@ -6314,6 +6413,23 @@ function act.gearBuy(plr, p, a)
 	return ok({ gear = g })
 end
 
+function act.globalChat(plr, p, a) return PS.Chat and PS.Chat.Send(plr, p, a and a.text) or no("Chat is offline") end
+
+-- buy the next convoy (cash). The level gate must be reached first.
+function act.buyConvoy(plr, p)
+	local d = p.data
+	local k = (d.convoyBought or 0) + 1
+	local gate = R.ConvoyGates[k]
+	if not gate then return no("You own every convoy") end
+	if d.lv < gate then return no("The next convoy unlocks at level " .. gate) end
+	local cost = R.ConvoyCost(k)
+	if not PS.Spend(p, cost) then return no("Need " .. R.Money(cost)) end
+	d.convoyBought = k
+	PS.EnsureConvoys(p)
+	if PS.AN then PS.AN.Custom(p, "ConvoyBought", k) end
+	return ok({ convoys = PS.Slots(p) })
+end
+
 -- onboarding funnel steps reported by the onboarding screens (analytics only)
 local FUNNEL_UI = { name = "Named country", flag = "Designed flag", gov = "Chose government" }
 function act.funnel(plr, p, a)
@@ -6360,11 +6476,11 @@ function act.adminList(plr, p)
 	return ok({ list = AD.List() })
 end
 
-A.NoSync = { gearShop = true, funnel = true, tutorial = true, adRefill = true, allyList = true, rankings = true, profile = true, adminList = true }
+A.NoSync = { globalChat = true, gearShop = true, funnel = true, tutorial = true, adRefill = true, allyList = true, rankings = true, profile = true, adminList = true }
 -- requests allowed before onboarding finishes
 A.PreOnboard = { buyPass = true, sync = true, onboard = true, rankings = true, admin = true, adminList = true, funnel = true }
 return A
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX21"><Properties><string name="Name">ServerScriptService|GameServer|Script</string><ProtectedString name="Source"><![CDATA[-- GameServer: wires the services together. All game rules live in ServerScriptService.Server and ReplicatedStorage.Shared.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX22"><Properties><string name="Name">ServerScriptService|GameServer|Script</string><ProtectedString name="Source"><![CDATA[-- GameServer: wires the services together. All game rules live in ServerScriptService.Server and ReplicatedStorage.Shared.
 local Players = game:GetService("Players")
 local RS = game:GetService("ReplicatedStorage")
 local Server = script.Parent:WaitForChild("Server")
@@ -6391,12 +6507,15 @@ local RA = require(Server.Raids)
 local AD = require(Server.Admin)
 local AN = require(Server.Analytics)
 local BG = require(Server.Badges)
+local CH = require(Server.Chat)
 MK.Init(PS)
 RA.Init(PS)
 AD.Init(PS, WS, RA)
 PS.Admin = AD
 PS.AN = AN
 BG.Start(PS, WS)
+CH.Start()
+PS.Chat = CH
 A.Init(PS, MK, RA, AD)
 
 -- flood guard (audit M7): a token bucket per player, 8 requests a second with bursts of 15
@@ -6545,7 +6664,7 @@ if game:GetService("RunService"):IsStudio() then
 		end
 	end
 end
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX22"><Properties><string name="Name">ReplicatedStorage.Client|UI|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- UI: the State Dossier kit built from the rendered images in Shared.Assets (no Luau-drawn plates).
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX23"><Properties><string name="Name">ReplicatedStorage.Client|UI|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- UI: the State Dossier kit built from the rendered images in Shared.Assets (no Luau-drawn plates).
 -- Every plate is a 9-slice ImageLabel; text is always a TextLabel (never baked into an image).
 local TweenService = game:GetService("TweenService")
 local RS = game:GetService("ReplicatedStorage")
@@ -6866,7 +6985,7 @@ UI.Short = R.Short
 UI.Clock = R.Clock
 UI.Duration = R.Duration
 return UI
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX23"><Properties><string name="Name">ReplicatedStorage.Client|Sound|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- Sound: every sound effect and the background music for Idle Country.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX24"><Properties><string name="Name">ReplicatedStorage.Client|Sound|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- Sound: every sound effect and the background music for Idle Country.
 -- ClientMain calls _sound.init(App) once after the first full sync (same pattern as Settings). No build field on purpose.
 --
 -- Other code plays sounds with:   if App.sfx then App.sfx("purchase") end
@@ -7005,24 +7124,37 @@ M._sound = { init = function(App)
 	end)
 
 	---------------------------------------------------------------- settings
-	local function setting(key)
-		local v
+	-- volumes 0..1 from the settings sliders (musicVol / sfxVol). Older saves only have the on/off booleans
+	-- music / sfx: false there means 0, otherwise the default (music 0.5, effects 0.8) until a volume is saved.
+	local DEFAULT_VOL = { music = 0.5, sfx = 0.8 }
+	local function volume(key)
 		local st = App.state and App.state.settings
-		if st and st[key] ~= nil then v = st[key] end
-		if v == nil then v = plr:GetAttribute("IC_" .. key) end
-		if v == nil then return true end -- both default on
-		return v ~= false
+		local v = st and st[key .. "Vol"]
+		if type(v) ~= "number" then v = plr:GetAttribute("IC_" .. key .. "Vol") end
+		if type(v) == "number" and v == v then return math.clamp(v, 0, 1) end
+		local old = st and st[key]
+		if old == nil then old = plr:GetAttribute("IC_" .. key) end
+		if old == false then return 0 end
+		return DEFAULT_VOL[key]
 	end
-	local function sfxOn() return setting("sfx") end
-	local function musicOn() return setting("music") end
+	local function sfxOn() return volume("sfx") > 0 end
+	local function musicOn() return volume("music") > 0 end
 
 	---------------------------------------------------------------- music ducking
+	-- the Music group's volume is the slider level, lowered to 30% of it while a big sound plays
 	local duckUntil = 0
+	local groupTween
+	local function musicGroupTo(vol, t)
+		if groupTween then groupTween:Cancel(); groupTween = nil end
+		if not t or t <= 0 then gMusic.Volume = vol; return end
+		groupTween = TweenService:Create(gMusic, TweenInfo.new(t), { Volume = vol })
+		groupTween:Play()
+	end
 	local function duck(seconds)
 		duckUntil = math.max(duckUntil, os.clock() + seconds)
-		TweenService:Create(gMusic, TweenInfo.new(0.25), { Volume = 0.3 }):Play()
+		musicGroupTo(volume("music") * 0.3, 0.25)
 		task.delay(seconds + 0.05, function()
-			if os.clock() >= duckUntil then TweenService:Create(gMusic, TweenInfo.new(1.2), { Volume = 1 }):Play() end
+			if os.clock() >= duckUntil then musicGroupTo(volume("music"), 1.2) end
 		end)
 	end
 
@@ -7137,18 +7269,29 @@ M._sound = { init = function(App)
 		end
 	end
 
-	---------------------------------------------------------------- respond to the settings toggles
-	App.on("settings", function(key, value)
-		if key == "music" then App.music(value ~= false)
-		elseif key == "sfx" and value == false then stopAllSfx() end
+	---------------------------------------------------------------- respond to the volume sliders
+	-- volume 0 mutes and stops (no track keeps playing silently); raising it from 0 starts the music again
+	local musicStarted = false -- the first start waits for init's delay below
+	local function applyVolumes()
+		local mv, sv = volume("music"), volume("sfx")
+		gSFX.Volume = sv
+		if sv <= 0 then stopAllSfx() end
+		musicGroupTo(os.clock() < duckUntil and mv * 0.3 or mv)
+		if mv <= 0 then
+			if current then stopMusic() end
+		elseif musicStarted and not current then
+			App.music(true)
+		end
+	end
+	App.on("settings", function(key)
+		if key == "musicVol" or key == "sfxVol" or key == "music" or key == "sfx" then applyVolumes() end
 	end)
-	plr:GetAttributeChangedSignal("IC_music"):Connect(function()
-		local v = plr:GetAttribute("IC_music")
-		if v == false and current then stopMusic() elseif v ~= false and not current then App.music(true) end
-	end)
-	plr:GetAttributeChangedSignal("IC_sfx"):Connect(function()
-		if plr:GetAttribute("IC_sfx") == false then stopAllSfx() end
-	end)
+	App.on("full", applyVolumes)
+	for _, a in ipairs({ "IC_musicVol", "IC_sfxVol" }) do
+		plr:GetAttributeChangedSignal(a):Connect(applyVolumes)
+	end
+	gSFX.Volume = volume("sfx")
+	gMusic.Volume = volume("music")
 
 	---------------------------------------------------------------- generic UI sounds (no edits to other files)
 	local hooked = setmetatable({}, { __mode = "k" })
@@ -7194,11 +7337,14 @@ M._sound = { init = function(App)
 	end
 
 	---------------------------------------------------------------- go (init runs after the first full sync)
-	task.delay(1, function() if musicOn() then App.music(true) end end)
+	task.delay(1, function()
+		musicStarted = true
+		if musicOn() and not current then App.music(true) end
+	end)
 end }
 
 return M
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX24"><Properties><string name="Name">ReplicatedStorage.Client|Map|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- Map: the CAPITOL screen. One shared pixel-art world map (Kash, 1 Oct 2026): 41 real capitals, territory tints for
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX25"><Properties><string name="Name">ReplicatedStorage.Client|Map|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- Map: the CAPITOL screen. One shared pixel-art world map (Kash, 1 Oct 2026): 41 real capitals, territory tints for
 -- alliance-held cities, your convoys visibly travelling (Fleet Simulator style), a convoy dock and a city dossier panel
 -- listing every load with cost, pay, tax, distance and time. Convoys never fail; they stay where they arrive.
 local RS = game:GetService("ReplicatedStorage")
@@ -7583,13 +7729,20 @@ function Map.build(host, App)
 			end)
 		end
 		-- locked slots: show the next level gate (and the pass) so players know what is coming
-		local nextGate
-		for _, g in ipairs(R.ConvoySlotLevels) do if g > st.lv then nextGate = g; break end end
-		if nextGate then
+		-- the next convoy is BOUGHT with cash once its level is reached (Kash 2 Oct 23:31)
+		local k = (st.convoyBought or 0) + 1
+		local nextGate = R.ConvoyGates and R.ConvoyGates[k]
+		if nextGate and st.lv >= nextGate then
+			local cost = R.ConvoyCost(k)
+			UI.button(dock, (st.cash or 0) >= cost and "green" or "slate", "NEW CONVOY\n" .. R.Money(cost), function(btn)
+				local res = App.req("buyConvoy", {}, btn)
+				if res.ok then App.toast("NEW CONVOY!", "Send it from your capital", "gold"); App.play("purchase", { volume = 0.45 }) end
+			end, { sz = UDim2.fromOffset(150, 80), z = 21, order = 50, icon = "icon_plus", textSize = 14 })
+		elseif nextGate then
 			local card = UI.card(dock, { sz = UDim2.fromOffset(150, 80), z = 21, order = 50 })
 			UI.icon(card, "icon_lock", 22, C.dim, UDim2.fromOffset(10, 10), { z = 22 })
 			text(card, "NEXT CONVOY", { font = "heavy", size = 13, color = C.muted, pos = UDim2.fromOffset(38, 12), sz = UDim2.new(1, -44, 0, 16), z = 22 })
-			text(card, "Unlocks at level " .. nextGate, { size = 14, pos = UDim2.fromOffset(10, 40), sz = UDim2.new(1, -20, 0, 30), z = 22, wrap = true })
+			text(card, "Buy it at level " .. nextGate, { size = 14, pos = UDim2.fromOffset(10, 40), sz = UDim2.new(1, -20, 0, 30), z = 22, wrap = true })
 		end
 		if not (st.gp and st.gp.ExtraConvoys) then
 			local b = UI.button(dock, "gold", "+2 CONVOYS", function(btn) App.req("buyPass", { key = "ExtraConvoys" }, btn) end, { sz = UDim2.fromOffset(140, 80), z = 21, order = 60, icon = "icon_plus", textSize = 14 })
@@ -8016,7 +8169,7 @@ function Map.build(host, App)
 end
 
 return { map = { build = Map.build } }
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX25"><Properties><string name="Name">ReplicatedStorage.Client|Economy|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- Economy screens: LAWS, PROPERTIES (Your Block + Build, Idle Mafia rework), SKILLS, BANK, TASKS.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX26"><Properties><string name="Name">ReplicatedStorage.Client|Economy|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- Economy screens: LAWS, PROPERTIES (Your Block + Build, Idle Mafia rework), SKILLS, BANK, TASKS.
 local RS = game:GetService("ReplicatedStorage")
 local Shared = RS:WaitForChild("Shared")
 local D = require(Shared.GameData)
@@ -8349,10 +8502,14 @@ S.properties = { build = function(host, App)
 		if not tile.Parent then return end
 		pt.scale.Scale = 1.14
 		tw(pt.scale, 0.35, { Scale = 1 }, Enum.EasingStyle.Back)
+		if pt.flash and pt.flash.Parent then
+			pt.flash.BackgroundTransparency = 0.25
+			tw(pt.flash, 0.45, { BackgroundTransparency = 1 })
+		end
 		local f = text(tile, "+" .. R.Money(pt.amount), { font = "heavy", size = 18, color = C.good, align = Enum.TextXAlignment.Center, anchor = Vector2.new(0.5, 1),
-			pos = UDim2.new(0.5, 0, 1, -40), sz = UDim2.new(1, 0, 0, 22), z = 14, stroke = 1.4 })
+			pos = UDim2.new(0.5, 0, 1, -50), sz = UDim2.new(1, 0, 0, 22), z = 16, stroke = 1.4 })
 		local fs = f:FindFirstChildOfClass("UIStroke")
-		tw(f, 1.1, { Position = UDim2.new(0.5, 0, 1, -78), TextTransparency = 1 })
+		tw(f, 1.1, { Position = UDim2.new(0.5, 0, 1, -88), TextTransparency = 1 })
 		if fs then tw(fs, 1.1, { Transparency = 1 }) end
 		task.delay(1.15, function() f:Destroy() end)
 	end
@@ -8377,6 +8534,41 @@ S.properties = { build = function(host, App)
 		local l = text(f, s, { font = "bold", size = 13, color = color or C.ink, sz = UDim2.new(0, 0, 1, 0), z = z + 1, rich = true })
 		l.AutomaticSize = Enum.AutomaticSize.X
 		return f, l
+	end
+	-- hourly income pill on an owned tile: sized once to its text and never resized (the bar lives outside it)
+	local PAY_BAR_H, PAY_BAR_BOTTOM = 10, 10
+	local function incomePill(t, s)
+		local f = UI.mk("Frame", { Name = "IncomePill", BackgroundColor3 = Color3.fromHex("121417"), BackgroundTransparency = 0.08, BorderSizePixel = 0,
+			AutomaticSize = Enum.AutomaticSize.X, Size = UDim2.fromOffset(0, 24), AnchorPoint = Vector2.new(0.5, 1),
+			Position = UDim2.new(0.5, 0, 1, -(PAY_BAR_BOTTOM + PAY_BAR_H + 6)), ZIndex = 12 }, t)
+		UI.mk("UICorner", { CornerRadius = UDim.new(1, 0) }, f)
+		UI.mk("UIStroke", { Color = C.good, Thickness = 1, Transparency = 0.6, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, f)
+		UI.mk("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10) }, f)
+		local l = text(f, s, { font = "heavy", size = 14, color = C.good, sz = UDim2.new(0, 0, 1, 0), z = 13 })
+		l.AutomaticSize = Enum.AutomaticSize.X
+		return f, UI.mk("UIScale", {}, f)
+	end
+	-- the income progress bar: its own rounded track (dark inset, subtle border) across the tile's inner width,
+	-- with a green gradient fill and a soft top highlight. Returns the fill frame and the payout flash frame.
+	local function payBar(t)
+		local track = UI.mk("Frame", { Name = "PayBar", BackgroundColor3 = Color3.fromHex("0b0d10"), BackgroundTransparency = 0.05, BorderSizePixel = 0,
+			AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -PAY_BAR_BOTTOM), Size = UDim2.new(1, -28, 0, PAY_BAR_H), ZIndex = 12, ClipsDescendants = false }, t)
+		UI.mk("UICorner", { CornerRadius = UDim.new(1, 0) }, track)
+		UI.mk("UIStroke", { Color = Color3.fromHex("4a4f57"), Thickness = 1, Transparency = 0.25, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, track)
+		-- inset shading: darker at the top edge, like a groove
+		UI.mk("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.fromRGB(120, 120, 120), Color3.new(1, 1, 1)) }, track)
+		local inner = UI.mk("Frame", { Name = "Inner", BackgroundTransparency = 1, Position = UDim2.fromOffset(2, 2), Size = UDim2.new(1, -4, 1, -4), ZIndex = 13 }, track)
+		local fill = UI.mk("Frame", { Name = "Fill", BackgroundColor3 = C.white, BorderSizePixel = 0, Size = UDim2.fromScale((os.clock() % CYCLE) / CYCLE, 1), ZIndex = 13 }, inner)
+		UI.mk("UICorner", { CornerRadius = UDim.new(1, 0) }, fill)
+		UI.mk("UIGradient", { Rotation = 90, Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, Color3.fromHex("b4f29c")), ColorSequenceKeypoint.new(0.5, Color3.fromHex("8fd07a")), ColorSequenceKeypoint.new(1, Color3.fromHex("4f9a45")) }) }, fill)
+		local hi = UI.mk("Frame", { Name = "Highlight", BackgroundColor3 = C.white, BackgroundTransparency = 0.7, BorderSizePixel = 0,
+			Position = UDim2.new(0, 2, 0, 1), Size = UDim2.new(1, -4, 0.38, 0), ZIndex = 14 }, fill)
+		UI.mk("UICorner", { CornerRadius = UDim.new(1, 0) }, hi)
+		-- payout flash: the whole track glows green for a moment when the cycle pays
+		local flash = UI.mk("Frame", { Name = "Flash", BackgroundColor3 = C.good, BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ZIndex = 15 }, track)
+		UI.mk("UICorner", { CornerRadius = UDim.new(1, 0) }, flash)
+		return fill, flash
 	end
 
 	-- one square tile. kind = "owned" | "sale" | "locked"
@@ -8499,15 +8691,10 @@ S.properties = { build = function(host, App)
 				plate(t, P.n, UDim2.new(0.5, 0, 0, 8), Vector2.new(0.5, 0), 12)
 				if not obj.building[k] then
 					local inc = P.inc * propMod
-					local pl = plate(t, "<font color='#8fd07a'><b>" .. R.Money(inc) .. "/hr</b></font>", UDim2.new(0.5, 0, 1, -14), Vector2.new(0.5, 1), 12)
-					local psc = UI.mk("UIScale", {}, pl)
-					-- thin income bar under the price (like the reference), filled by the shared 7 s cycle
-					local track = UI.mk("Frame", { Name = "PayBar", BackgroundColor3 = C.black, BackgroundTransparency = 0.2, BorderSizePixel = 0,
-						Position = UDim2.new(0, 0, 1, 2), Size = UDim2.new(1, 0, 0, 4), ZIndex = 13 }, pl)
-					UI.mk("UICorner", { CornerRadius = UDim.new(1, 0) }, track)
-					local fill = UI.mk("Frame", { Name = "Fill", BackgroundColor3 = C.good, BorderSizePixel = 0, Size = UDim2.fromScale((os.clock() % CYCLE) / CYCLE, 1), ZIndex = 14 }, track)
-					UI.mk("UICorner", { CornerRadius = UDim.new(1, 0) }, fill)
-					table.insert(obj.payTiles, { tile = t, fill = fill, scale = psc, amount = inc / 3600 * CYCLE })
+					local pl, psc = incomePill(t, R.Money(inc) .. "/hr")
+					local fill, flash = payBar(t)
+					table.insert(obj.payTiles, { tile = t, fill = fill, flash = flash, scale = psc, amount = inc / 3600 * CYCLE })
+					local _ = pl
 				end
 			else
 				local t = tile(grid, 500 + k, "sale")
@@ -8891,7 +9078,7 @@ S.tasks = { build = function(host, App)
 end }
 
 return S
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX26"><Properties><string name="Name">ReplicatedStorage.Client|War|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- War screens: MILITARY (recruit units), BATTLE (rival nations), BOSSES.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX27"><Properties><string name="Name">ReplicatedStorage.Client|War|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- War screens: MILITARY (recruit units), BATTLE (rival nations), BOSSES.
 local RS = game:GetService("ReplicatedStorage")
 local Shared = RS:WaitForChild("Shared")
 local D = require(Shared.GameData)
@@ -9071,7 +9258,7 @@ S.bosses = { build = function(host, App)
 end }
 
 return S
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX27"><Properties><string name="Name">ReplicatedStorage.Client|Social|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- Social screens: ALLIANCE (clans are alliances, Kash Q11), RANKINGS, SHOP, and the PLAYER PROFILE popup.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX28"><Properties><string name="Name">ReplicatedStorage.Client|Social|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- Social screens: ALLIANCE (clans are alliances, Kash Q11), RANKINGS, SHOP, and the PLAYER PROFILE popup.
 local RS = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -9816,7 +10003,7 @@ end }
 
 S.input = nil
 return S
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX28"><Properties><string name="Name">ReplicatedStorage.Client|Onboard|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- Onboard: found your country. Name (filtered by Roblox), flag, form of government, home capital.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX29"><Properties><string name="Name">ReplicatedStorage.Client|Onboard|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- Onboard: found your country. Name (filtered by Roblox), flag, form of government, home capital.
 local RS = game:GetService("ReplicatedStorage")
 local Shared = RS:WaitForChild("Shared")
 local R = require(Shared.Rules)
@@ -10028,7 +10215,7 @@ function O.show(App)
 	App.on("full", function(st) if st.onboarded and cover.Parent then cover:Destroy(); App.open("laws") end end)
 end
 return O
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX29"><Properties><string name="Name">ReplicatedStorage.Client|Warfare|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- Warfare screens: RAIDS (key "battle", replaces the old rival list in War.lua: Kash 1 Oct 2026, raid only players in your server
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX30"><Properties><string name="Name">ReplicatedStorage.Client|Warfare|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- Warfare screens: RAIDS (key "battle", replaces the old rival list in War.lua: Kash 1 Oct 2026, raid only players in your server
 -- plus 3 AI nations, no refresh, 10% of cash on hand capped at ~1 h of law income, 1 minute cooldown, soldiers die).
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -11023,7 +11210,7 @@ S.battle = { build = function(host, App)
 end }
 
 return S
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX30"><Properties><string name="Name">ReplicatedStorage.Client|Cabinet|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- Cabinet screens: OFFICERS (you, LIMITED slots, seated officers, gear slots, hiring, slots) and INVENTORY (gear,
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX31"><Properties><string name="Name">ReplicatedStorage.Client|Cabinet|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- Cabinet screens: OFFICERS (you, LIMITED slots, seated officers, gear slots, hiring, slots) and INVENTORY (gear,
 -- officers, crates, elite troops). Layouts copied from the reference game's CREW and INVENTORY tabs (Kash 1 Oct 16:45).
 -- NO BENCH (Kash 2 Oct): officers only join into an open slot; limited officers live in their own slots (cab.ltd).
 -- Also owns the crate / hire REVEAL popup, exposed as App.crateReveal(App, result, opts) for other screens (Shop),
@@ -12422,7 +12609,7 @@ end }
 S._cabinetHooks = { init = function(App) installReveal(App) end }
 
 return S
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX31"><Properties><string name="Name">ReplicatedStorage.Client|Country|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- Country screen (Kash 1 Oct 16:40/16:45): modelled on Idle Mafia's SAFEHOUSE tab.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX32"><Properties><string name="Name">ReplicatedStorage.Client|Country|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- Country screen (Kash 1 Oct 16:40/16:45): modelled on Idle Mafia's SAFEHOUSE tab.
 -- A big era scene, the era title bar (ERA n OF 8, LEVEL, NEXT ERA), the 7-day login sheet, then YOUR STATS and
 -- YOUR UPGRADES (the skill point upgrades live here, so there is no separate Skills tab).
 -- Also exports the login sheet POPUP: App.showLogin() (set by _init.init at load and again inside build).
@@ -12918,12 +13105,111 @@ local function showFlagEditor(App)
 	end)
 end
 
+---------------------------------------------------------------- YOUR UPGRADES (shared by the Country screen and the top bar popup)
+-- buildUpgrades(App, parent, { z = base ZIndex, scroll = rows in a scrolling list }) -> obj { Refresh(st), Inst }
+local function buildUpgrades(App, parent, opts)
+	opts = opts or {}
+	local UI = App.UI
+	local C = UI.C
+	local text = UI.text
+	local z = opts.z or 9
+	local freeCard = UI.card(parent, { sz = UDim2.new(1, 0, 0, 58), z = z, hot = true })
+	local freeN = text(freeCard, "0", { font = "display", size = 36, color = C.gold, pos = UDim2.fromOffset(14, 0), sz = UDim2.fromOffset(80, 58), z = z + 1, align = Enum.TextXAlignment.Center, scaled = true })
+	text(freeCard, "SKILL POINTS FREE", { font = "heavy", size = 17, color = C.gold, pos = UDim2.fromOffset(100, 8), sz = UDim2.new(1, -110, 0, 22), z = z + 1, truncate = true })
+	local freeSub = text(freeCard, "", { size = 13, color = C.muted, pos = UDim2.fromOffset(100, 30), sz = UDim2.new(1, -110, 0, 18), z = z + 1, truncate = true })
+	local freeStroke = UI.mk("UIStroke", { Color = C.gold, Thickness = 2, Transparency = 1 }, freeCard)
+	task.spawn(function()
+		while freeCard.Parent do
+			if (App.state and App.state.skillFree or 0) > 0 then
+				tween(freeStroke, 0.8, { Transparency = 0.1 }, Enum.EasingStyle.Sine); task.wait(0.8)
+				tween(freeStroke, 0.8, { Transparency = 0.8 }, Enum.EasingStyle.Sine); task.wait(0.8)
+			else
+				freeStroke.Transparency = 1; task.wait(1)
+			end
+		end
+	end)
+	local upRows
+	if opts.scroll then
+		upRows = UI.list(parent, { pos = UDim2.fromOffset(0, 66), sz = UDim2.new(1, 0, 1, -66), gap = 6, z = z })
+	else
+		upRows = UI.mk("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(0, 66), Size = UDim2.new(1, 0, 1, -66), ZIndex = z }, parent)
+		UI.mk("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }, upRows)
+	end
+
+	local function effect(s, n, st)
+		if s.key == "inf" then return "Max Influence " .. R.MaxInfluence(st.lv, st.sk) end
+		if s.key == "sup" then return "Max Supply " .. R.MaxSupply(st.lv, st.sk) end
+		if s.key == "atk" then return "+" .. (n * 4) .. " attack" end
+		if s.key == "def" then return "+" .. (n * 4) .. " defense" end
+		return (st.lotsMax or 0) .. " building lots"
+	end
+	local function drawUpgrades(st)
+		UI.clear(upRows)
+		local free = st.skillFree or 0
+		for k, s in ipairs(R.Skills) do
+			local n = (st.sk and st.sk[s.key]) or 0
+			local cost = s.cost(n)
+			local can = free >= cost
+			local row = UI.card(upRows, { sz = UDim2.new(1, 0, 0, 56), z = z + 1, order = k })
+			hoverStroke(UI, row, can and C.gold or C.rule)
+			local iconBg = UI.img(row, "circle", { sz = UDim2.fromOffset(38, 38), pos = UDim2.new(0, 8, 0.5, 0), anchor = Vector2.new(0, 0.5), color = C.slate, z = z + 2, slice = false })
+			UI.icon(iconBg, s.icon, 22, can and C.gold or C.manila, UDim2.fromScale(0.5, 0.5), { z = z + 3, anchor = Vector2.new(0.5, 0.5) })
+			text(row, s.name, { font = "heavy", size = 16, pos = UDim2.fromOffset(54, 6), sz = UDim2.new(1, -54 - 176, 0, 20), z = z + 2, truncate = true })
+			text(row, effect(s, n, st) .. "  <font color='#6b7179'>· " .. s.desc .. "</font>", { size = 13, color = C.ink, rich = true, pos = UDim2.fromOffset(54, 28), sz = UDim2.new(1, -54 - 120, 0, 18), z = z + 2, truncate = true })
+			UI.chip(row, "LV " .. n, { pos = UDim2.new(1, -124, 0, 6), anchor = Vector2.new(1, 0), h = 22, size = 13, z = z + 2, manila = n > 0 })
+			UI.button(row, can and "gold" or "locked", "+  " .. cost .. " PT" .. (cost > 1 and "S" or ""), function(btn)
+				local res = App.req("skill", { key = s.key }, btn)
+				if res.ok then App.float(btn.Inst, s.name .. " UP", C.gold) end
+			end, { pos = UDim2.new(1, -8, 0.5, 0), anchor = Vector2.new(1, 0.5), sz = UDim2.fromOffset(108, 40), z = z + 3, textSize = 15 })
+		end
+	end
+
+	local obj = { Inst = freeCard }
+	function obj:Refresh(st)
+		if not st then return end
+		countTo(freeN, st.skillFree or 0, function(v) return tostring(math.floor(v + 0.5)) end)
+		freeSub.Text = "+3 every level · +1 per Gold law (" .. (st.goldLaws or 0) .. " so far)"
+		drawUpgrades(st)
+	end
+	return obj
+end
+
+-- UPGRADES POPUP: opened from the top bar button on any screen; refreshes on every full sync while open
+local upgradesPopup -- { panel, obj } of the open popup
+local function showUpgrades(App)
+	local UI = App.UI
+	local C = UI.C
+	local st = App.state
+	if not st then return end
+	local host = App.modalHost
+	UI.clear(host)
+	host.Visible = true
+	local W = math.min(App.W() - 40, 640)
+	local H = math.min(App.H() - 40, 520)
+	local panel, body = UI.panel(host, "UPGRADES", { sz = UDim2.fromOffset(W, H), pos = UDim2.fromScale(0.5, 0.5), anchor = Vector2.new(0.5, 0.5), z = 71 })
+	local sc = FX.popIn(panel, 0.6, 0.3)
+	local closed = false
+	local function close()
+		if closed then return end
+		closed = true
+		upgradesPopup = nil
+		local tw = tween(sc, 0.15, { Scale = 0.9 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+		tw.Completed:Connect(function() if panel.Parent then host.Visible = false; UI.clear(host) end end)
+	end
+	UI.button(panel, "slate", "", function() close() end, { pos = UDim2.new(1, -14, 0, 12), anchor = Vector2.new(1, 0), sz = UDim2.fromOffset(38, 36), z = 75, icon = "icon_x", iconSize = 18 })
+	infoButton(UI, App, panel, UDim2.new(1, -84, 0, 30), "SKILL POINTS", "You get +3 skill points every level and +1 for every law you take to Gold mastery. Spend them here on permanent upgrades.", 75)
+	local obj = buildUpgrades(App, body, { z = 73, scroll = true })
+	obj:Refresh(st)
+	upgradesPopup = { panel = panel, obj = obj }
+end
+
 ---------------------------------------------------------------- COUNTRY
 S.country = { build = function(host, App)
 	local UI = App.UI
 	local C = UI.C
 	local text = UI.text
 	App.showLogin = function() showLogin(App) end
+	App.showUpgrades = function() showUpgrades(App) end
 
 	local panel, body = UI.panel(host, "COUNTRY", { sz = UDim2.new(1, -20, 1, -20), pos = UDim2.fromOffset(10, 10), z = 5, titleSize = 26 })
 	local sub = text(panel, "", { font = "bold", size = 15, color = C.muted, pos = UDim2.new(0, 18, 0, 16), sz = UDim2.new(1, -36, 0, 22), z = 7, align = Enum.TextXAlignment.Right, rich = true })
@@ -13055,52 +13341,8 @@ S.country = { build = function(host, App)
 		row.MouseLeave:Connect(function() tween(row, 0.2, { BackgroundTransparency = k % 2 == 0 and 0.97 or 1 }) end)
 	end
 
-	-- upgrades: free points banner + one row per skill (same actions and numbers as the old Skills screen)
-	local freeCard = UI.card(upB, { sz = UDim2.new(1, 0, 0, 58), z = 9, hot = true })
-	local freeN = text(freeCard, "0", { font = "display", size = 36, color = C.gold, pos = UDim2.fromOffset(14, 0), sz = UDim2.fromOffset(80, 58), z = 10, align = Enum.TextXAlignment.Center, scaled = true })
-	text(freeCard, "SKILL POINTS FREE", { font = "heavy", size = 17, color = C.gold, pos = UDim2.fromOffset(100, 8), sz = UDim2.new(1, -110, 0, 22), z = 10, truncate = true })
-	local freeSub = text(freeCard, "", { size = 13, color = C.muted, pos = UDim2.fromOffset(100, 30), sz = UDim2.new(1, -110, 0, 18), z = 10, truncate = true })
-	local freeStroke = UI.mk("UIStroke", { Color = C.gold, Thickness = 2, Transparency = 1 }, freeCard)
-	task.spawn(function()
-		while freeCard.Parent do
-			if (App.state and App.state.skillFree or 0) > 0 then
-				tween(freeStroke, 0.8, { Transparency = 0.1 }, Enum.EasingStyle.Sine); task.wait(0.8)
-				tween(freeStroke, 0.8, { Transparency = 0.8 }, Enum.EasingStyle.Sine); task.wait(0.8)
-			else
-				freeStroke.Transparency = 1; task.wait(1)
-			end
-		end
-	end)
-	local upRows = UI.mk("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(0, 66), Size = UDim2.new(1, 0, 1, -66), ZIndex = 9 }, upB)
-	UI.mk("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }, upRows)
-
-	local function effect(s, n, st)
-		if s.key == "inf" then return "Max Influence " .. R.MaxInfluence(st.lv, st.sk) end
-		if s.key == "sup" then return "Max Supply " .. R.MaxSupply(st.lv, st.sk) end
-		if s.key == "atk" then return "+" .. (n * 4) .. " attack" end
-		if s.key == "def" then return "+" .. (n * 4) .. " defense" end
-		return (st.lotsMax or 0) .. " building lots"
-	end
-	local function drawUpgrades(st)
-		UI.clear(upRows)
-		local free = st.skillFree or 0
-		for k, s in ipairs(R.Skills) do
-			local n = (st.sk and st.sk[s.key]) or 0
-			local cost = s.cost(n)
-			local can = free >= cost
-			local row = UI.card(upRows, { sz = UDim2.new(1, 0, 0, 56), z = 10, order = k })
-			hoverStroke(UI, row, can and C.gold or C.rule)
-			local iconBg = UI.img(row, "circle", { sz = UDim2.fromOffset(38, 38), pos = UDim2.new(0, 8, 0.5, 0), anchor = Vector2.new(0, 0.5), color = C.slate, z = 11, slice = false })
-			UI.icon(iconBg, s.icon, 22, can and C.gold or C.manila, UDim2.fromScale(0.5, 0.5), { z = 12, anchor = Vector2.new(0.5, 0.5) })
-			text(row, s.name, { font = "heavy", size = 16, pos = UDim2.fromOffset(54, 6), sz = UDim2.new(1, -54 - 176, 0, 20), z = 11, truncate = true })
-			text(row, effect(s, n, st) .. "  <font color='#6b7179'>· " .. s.desc .. "</font>", { size = 13, color = C.ink, rich = true, pos = UDim2.fromOffset(54, 28), sz = UDim2.new(1, -54 - 120, 0, 18), z = 11, truncate = true })
-			UI.chip(row, "LV " .. n, { pos = UDim2.new(1, -124, 0, 6), anchor = Vector2.new(1, 0), h = 22, size = 13, z = 11, manila = n > 0 })
-			UI.button(row, can and "gold" or "locked", "+  " .. cost .. " PT" .. (cost > 1 and "S" or ""), function(btn)
-				local res = App.req("skill", { key = s.key }, btn)
-				if res.ok then App.float(btn.Inst, s.name .. " UP", C.gold) end
-			end, { pos = UDim2.new(1, -8, 0.5, 0), anchor = Vector2.new(1, 0.5), sz = UDim2.fromOffset(108, 40), z = 12, textSize = 15 })
-		end
-	end
+	-- upgrades: free points banner + one row per skill (shared with the top bar UPGRADES popup)
+	local upgrades = buildUpgrades(App, upB, { z = 9 })
 
 	------------------------------------------------ refresh
 	local function drawLogin(st)
@@ -13167,9 +13409,7 @@ S.country = { build = function(host, App)
 		end
 
 		-- upgrades
-		countTo(freeN, st.skillFree or 0, function(v) return tostring(math.floor(v + 0.5)) end)
-		freeSub.Text = "+3 every level · +1 per Gold law (" .. (st.goldLaws or 0) .. " so far)"
-		drawUpgrades(st)
+		upgrades:Refresh(st)
 
 		-- login row (rebuild only when it changed so the hover state does not flicker)
 		local idx = math.clamp((st.login and st.login.idx) or 1, 1, #TK.Login)
@@ -13197,10 +13437,19 @@ end }
 S._init = { init = function(App)
 	App.showLogin = function() showLogin(App) end
 	App.showFlagEditor = function() showFlagEditor(App) end
+	App.showUpgrades = function() showUpgrades(App) end
+	-- keep the open UPGRADES popup live on every full sync (after buying, level-ups, Gold mastery points)
+	App.on("full", function(st)
+		local p = upgradesPopup
+		if not p then return end
+		if not (p.panel.Parent and App.modalHost.Visible) then upgradesPopup = nil; return end
+		local ok, err = pcall(p.obj.Refresh, p.obj, st)
+		if not ok then warn("[Idle Country] upgrades popup: " .. tostring(err)) end
+	end)
 end }
 
 return S
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX32"><Properties><string name="Name">ReplicatedStorage.Client|Contracts|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- CONTRACTS (screen key "tasks"), modelled on Idle Mafia's CONTRACTS tab (Kash 1 Oct 16:47):
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX33"><Properties><string name="Name">ReplicatedStorage.Client|Contracts|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- CONTRACTS (screen key "tasks"), modelled on Idle Mafia's CONTRACTS tab (Kash 1 Oct 16:47):
 -- daily orders (easy/medium/hard + a bonus for all 5) and weekly challenges (+ a bonus chest for all 5) that pay SEALS
 -- and cash, a REPLACE per order (1 free a day, then 19 R$), and the SEALS SHOP where seals buy tickets, refills, crates.
 local RS = game:GetService("ReplicatedStorage")
@@ -13578,11 +13827,12 @@ S.tasks = { build = function(host, App)
 end }
 
 return S
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX33"><Properties><string name="Name">ReplicatedStorage.Client|Settings|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- Settings: the top-right gear button and its big modal (SETTINGS / GAME GUIDE / CHANGELOG), plus the
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX34"><Properties><string name="Name">ReplicatedStorage.Client|Settings|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- Settings: the top-right gear button and its big modal (SETTINGS / GAME GUIDE / CHANGELOG), plus the
 -- favorite + group prompts after big moments (Kash 1 Oct 17:22: max once per session, never if already favorited,
 -- shown behind the scenes after a big achievement; our own polished join-group popup with the +10% cash bonus).
 -- ClientMain calls _settings.init(App) once after the first full sync. This entry has no build field on purpose.
 local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
 local RS = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 local TextService = game:GetService("TextService")
@@ -13607,8 +13857,9 @@ local plr = Players.LocalPlayer
 
 ---------------------------------------------------------------- settings definitions
 local DEFS = {
-	{ key = "music", name = "Music", desc = "Background music", icon = "icon_radio", default = true },
-	{ key = "sfx", name = "Sound effects", desc = "Clicks, coins, crates and battles", icon = "icon_sparkles", default = true },
+	-- volume sliders 0..1 (older saves only have the on/off booleans named in legacy: false there means 0)
+	{ key = "musicVol", legacy = "music", slider = true, name = "Music", desc = "Background music volume", icon = "icon_radio", default = 0.5 },
+	{ key = "sfxVol", legacy = "sfx", slider = true, name = "Sound effects", desc = "Clicks, coins, crates and battles", icon = "icon_sparkles", default = 0.8 },
 	{ key = "toasts", name = "Show pop-up notifications", desc = "Deliveries, raids, level-ups and rewards", icon = "icon_bell", default = true },
 	{ key = "confirmBig", name = "Confirm big purchases", desc = "Ask before spending a lot of cash or gold", icon = "icon_check", default = true },
 	{ key = "shortNumbers", name = "Short numbers (1.2M)", desc = "Off shows full numbers (1,200,000)", icon = "icon_coins", default = true },
@@ -13703,15 +13954,29 @@ M._settings = { init = function(App)
 		st.settings = st.settings or {}
 		return st.settings
 	end
+	local DEF = {}
+	for _, d in ipairs(DEFS) do DEF[d.key] = d end
 	local function value(key)
 		local s = getSettings()
+		local d = DEF[key]
+		if d and d.slider then
+			local v = s[key]
+			if type(v) == "number" and v == v then return math.clamp(v, 0, 1) end
+			if s[d.legacy] == false then return 0 end
+			return d.default
+		end
 		if s[key] ~= nil then return s[key] end
-		for _, d in ipairs(DEFS) do if d.key == key then return d.default end end
-		return nil
+		return d and d.default
 	end
 	App.setting = value -- other modules can read App.setting("reduceMotion") (or the IC_ player attributes)
+	local function setAttr(key, v)
+		pcall(function() plr:SetAttribute("IC_" .. key, v) end)
+		local d = DEF[key]
+		-- the old on/off attribute follows the slider (anything above 0 counts as on)
+		if d and d.slider then pcall(function() plr:SetAttribute("IC_" .. d.legacy, v > 0) end) end
+	end
 	local function applyAttributes()
-		for _, d in ipairs(DEFS) do pcall(function() plr:SetAttribute("IC_" .. d.key, value(d.key)) end) end
+		for _, d in ipairs(DEFS) do setAttr(d.key, value(d.key)) end
 	end
 	applyAttributes()
 	App.on("full", applyAttributes)
@@ -13721,17 +13986,23 @@ M._settings = { init = function(App)
 		TweenService:Create(o, TweenInfo.new(t, style or Enum.EasingStyle.Quad, dir or Enum.EasingDirection.Out), props):Play()
 	end
 
-	local function setSetting(key, v)
+	-- previewSetting applies a value locally (slider drags); setSetting applies it and saves it to the server
+	local function previewSetting(key, v)
+		getSettings()[key] = v
+		setAttr(key, v)
+		App.emit("settings", key, v)
+	end
+	local function setSetting(key, v, before)
 		local s = getSettings()
-		local before = value(key)
+		if before == nil then before = value(key) end
 		s[key] = v
-		pcall(function() plr:SetAttribute("IC_" .. key, v) end)
+		setAttr(key, v)
 		App.emit("settings", key, v)
 		task.spawn(function()
 			local res = App.req("saveSettings", { key = key, value = v })
 			if not res.ok then
 				s[key] = before
-				pcall(function() plr:SetAttribute("IC_" .. key, before) end)
+				setAttr(key, before)
 				App.emit("settings", key, before)
 			end
 		end)
@@ -13796,6 +14067,84 @@ M._settings = { init = function(App)
 		return obj
 	end
 
+	-- volume slider (mouse and touch): track, gold fill, knob and a percentage label.
+	-- onChange(v) runs live while dragging, onCommit(v, before) once on release. Returns obj { Inst, Set(v) }
+	local function slider(parent, v, z, onChange, onCommit)
+		local box = mk("TextButton", { Name = "Slider", Text = "", AutoButtonColor = false, BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, -84, 0.5, 0), Size = UDim2.new(0.5, -60, 0, 36), ZIndex = z }, parent)
+		box:SetAttribute("IC_NoClick", true)
+		local track = mk("Frame", { Name = "Track", BackgroundColor3 = Color3.fromHex("14171b"), BorderSizePixel = 0, AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.new(1, 0, 0, 12), ZIndex = z }, box)
+		mk("UICorner", { CornerRadius = UDim.new(1, 0) }, track)
+		mk("UIStroke", { Color = Color3.fromHex("4a4f57"), Thickness = 1, Transparency = 0.2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, track)
+		mk("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.fromRGB(150, 150, 150), Color3.new(1, 1, 1)) }, track)
+		local fill = mk("Frame", { Name = "Fill", BackgroundColor3 = C.white, BorderSizePixel = 0, Size = UDim2.fromScale(v, 1), ZIndex = z + 1 }, track)
+		mk("UICorner", { CornerRadius = UDim.new(1, 0) }, fill)
+		mk("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.fromHex("f6dc8a"), Color3.fromHex("c99a32")) }, fill)
+		local knob = mk("Frame", { Name = "Knob", BackgroundColor3 = C.manila, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(v, 0.5), Size = UDim2.fromOffset(24, 24), ZIndex = z + 3 }, track)
+		mk("UICorner", { CornerRadius = UDim.new(1, 0) }, knob)
+		mk("UIStroke", { Color = C.black, Thickness = 2, Transparency = 0.3 }, knob)
+		mk("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(200, 200, 200)) }, knob)
+		local dot = mk("Frame", { BackgroundColor3 = C.manilaInk, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(8, 8), ZIndex = z + 4 }, knob)
+		mk("UICorner", { CornerRadius = UDim.new(1, 0) }, dot)
+		local ks = mk("UIScale", {}, knob)
+		local pct = text(parent, "", { font = "heavy", size = 18, color = C.manila, align = Enum.TextXAlignment.Right, anchor = Vector2.new(1, 0.5),
+			pos = UDim2.new(1, -16, 0.5, 0), sz = UDim2.fromOffset(60, 26), z = z })
+
+		local obj = { Inst = box, v = v }
+		local function show(x)
+			fill.Size = UDim2.fromScale(x, 1)
+			fill.Visible = x > 0.001
+			knob.Position = UDim2.fromScale(x, 0.5)
+			pct.Text = math.floor(x * 100 + 0.5) .. "%"
+			pct.TextColor3 = x > 0 and C.manila or C.dim
+		end
+		function obj:Set(x) self.v = x; show(x) end
+		show(v)
+
+		local dragging, before, scroller = false, nil, nil
+		local function at(px)
+			local w = track.AbsoluteSize.X
+			if w <= 0 then return obj.v end
+			local x = math.clamp((px - track.AbsolutePosition.X) / w, 0, 1)
+			return math.floor(x * 100 + 0.5) / 100
+		end
+		local function move(px)
+			local x = at(px)
+			if x == obj.v then return end
+			obj.v = x
+			show(x)
+			onChange(x)
+		end
+		local function isPress(io) return io.UserInputType == Enum.UserInputType.MouseButton1 or io.UserInputType == Enum.UserInputType.Touch end
+		box.InputBegan:Connect(function(io)
+			if dragging or not isPress(io) then return end
+			dragging, before = true, obj.v
+			-- a drag inside the settings list must not scroll it
+			scroller = box:FindFirstAncestorWhichIsA("ScrollingFrame")
+			if scroller then scroller.ScrollingEnabled = false end
+			tween(ks, 0.12, { Scale = 1.2 }, Enum.EasingStyle.Back)
+			move(io.Position.X)
+		end)
+		local conns = {}
+		table.insert(conns, UserInputService.InputChanged:Connect(function(io)
+			if not dragging then return end
+			if io.UserInputType == Enum.UserInputType.MouseMovement or io.UserInputType == Enum.UserInputType.Touch then move(io.Position.X) end
+		end))
+		table.insert(conns, UserInputService.InputEnded:Connect(function(io)
+			if not dragging or not isPress(io) then return end
+			dragging = false
+			if scroller then scroller.ScrollingEnabled = true; scroller = nil end
+			tween(ks, 0.15, { Scale = 1 })
+			onCommit(obj.v, before)
+		end))
+		box.Destroying:Connect(function()
+			for _, c in ipairs(conns) do c:Disconnect() end
+		end)
+		return obj
+	end
+
 	local function chip(parent, s, bg, fg, p)
 		p = p or {}
 		local f = mk("Frame", { Name = "Chip", BackgroundColor3 = bg, BorderSizePixel = 0, Size = UDim2.fromOffset(0, p.h or 26), AutomaticSize = Enum.AutomaticSize.X,
@@ -13849,6 +14198,26 @@ M._settings = { init = function(App)
 		text(hdr, "PREFERENCES", { font = "heavy", size = 14, color = C.muted, sz = UDim2.fromScale(1, 1), z = 74, pos = UDim2.fromOffset(4, 0) })
 
 		for i, d in ipairs(DEFS) do
+			if d.slider then
+				-- volume row: name and description on the left, slider and percentage on the right
+				local card = UI.card(list, { sz = UDim2.new(1, 0, 0, 62), z = 73, order = 1 + i })
+				local ib = mk("Frame", { BackgroundColor3 = Color3.fromHex("20252c"), BorderSizePixel = 0, Position = UDim2.fromOffset(12, 11), Size = UDim2.fromOffset(40, 40), ZIndex = 74 }, card)
+				mk("UICorner", { CornerRadius = UDim.new(0, 8) }, ib)
+				local v0 = value(d.key)
+				local ic = UI.icon(ib, d.icon, 24, v0 > 0 and C.manila or C.dim, UDim2.fromScale(0.5, 0.5), { z = 75, anchor = Vector2.new(0.5, 0.5) })
+				text(card, d.name, { font = "heavy", size = 18, pos = UDim2.fromOffset(64, 8), sz = UDim2.new(0.5, -90, 0, 24), z = 74, truncate = true })
+				text(card, d.desc, { size = 14, color = C.muted, pos = UDim2.fromOffset(64, 32), sz = UDim2.new(0.5, -90, 0, 20), z = 74, truncate = true })
+				slider(card, v0, 76, function(v)
+					ic.ImageColor3 = v > 0 and C.manila or C.dim
+					previewSetting(d.key, v)
+				end, function(v, before)
+					ic.ImageColor3 = v > 0 and C.manila or C.dim
+					if v ~= before then setSetting(d.key, v, before) end
+					-- let the player hear the new effects level
+					if d.key == "sfxVol" and v > 0 then App.play("ui_click") end
+				end)
+				continue
+			end
 			local card = UI.card(list, { button = true, sz = UDim2.new(1, 0, 0, 62), z = 73, order = 1 + i })
 			local glow = mk("Frame", { BackgroundColor3 = C.manila, BackgroundTransparency = 1, BorderSizePixel = 0, Position = UDim2.fromOffset(4, 4), Size = UDim2.new(1, -8, 1, -8), ZIndex = 73 }, card)
 			mk("UICorner", { CornerRadius = UDim.new(0, 6) }, glow)
@@ -14163,7 +14532,7 @@ M._settings = { init = function(App)
 end }
 
 return M
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX34"><Properties><string name="Name">ReplicatedStorage.Client|Shop|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- Shop: the store screen (key "shop", replaces the old list in Social.lua because this module loads later) and the
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX35"><Properties><string name="Name">ReplicatedStorage.Client|Shop|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- Shop: the store screen (key "shop", replaces the old list in Social.lua because this module loads later) and the
 -- VIP / MEGA VIP chat tags (_vipTags init). Layout: STARTER PACK (new players only), LIMITED hero row (Limited Bundle +
 -- Founder's Crate), Supply Crate, VIP passes, game passes, gold packs + gold spends, repeatable boosts. Built once per
 -- width, then Refresh/Tick only update owned states, prices and timers so hover/shine animations keep running.
@@ -15149,7 +15518,7 @@ S._vipTags = { init = function(App)
 end }
 
 return S
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX35"><Properties><string name="Name">ReplicatedStorage.Client|GearShop|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- GEAR SHOP (Kash 2 Oct 23:26): a second tab inside SHOP. Restocks every 5 minutes with 3 random items of every
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX36"><Properties><string name="Name">ReplicatedStorage.Client|GearShop|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- GEAR SHOP (Kash 2 Oct 23:26): a second tab inside SHOP. Restocks every 5 minutes with 3 random items of every
 -- rarity, one of each per player. Higher rarities unlock at higher levels. Bought with cash.
 local RS = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
@@ -15274,7 +15643,7 @@ S.gearshop = { build = function(host, App)
 end }
 
 return S
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX36"><Properties><string name="Name">ReplicatedStorage.Client|Tester|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- TESTER PANEL (Kash 2 Oct): owner only. A TEST button (and F2) opens a panel of quick buttons plus a command line.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX37"><Properties><string name="Name">ReplicatedStorage.Client|Tester|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- TESTER PANEL (Kash 2 Oct): owner only. A TEST button (and F2) opens a panel of quick buttons plus a command line.
 -- Every button just sends the same text you could type, e.g. "/cash 1m". The server checks the owner again.
 local UIS = game:GetService("UserInputService")
 
@@ -15403,7 +15772,7 @@ S._tester = { init = function(App)
 end }
 
 return S
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX37"><Properties><string name="Name">ReplicatedStorage.Client|Tutorial|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- TUTORIAL (Kash 2 Oct): offered at the end of onboarding. A small guide card at the bottom of the screen and a
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX38"><Properties><string name="Name">ReplicatedStorage.Client|Tutorial|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- TUTORIAL (Kash 2 Oct): offered at the end of onboarding. A small guide card at the bottom of the screen and a
 -- pulsing frame on the tab to open. It never blocks the game and can be skipped any time.
 -- Progress is saved on the server (App.state.tut: step number, -1 = skipped or finished, nil = never offered).
 local TweenService = game:GetService("TweenService")
@@ -15586,7 +15955,7 @@ S._tutorial = { init = function(App)
 end }
 
 return S
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX38"><Properties><string name="Name">StarterPlayer.StarterPlayerScripts|ClientMain|LocalScript</string><ProtectedString name="Source"><![CDATA[-- ClientMain: the shell. Top bar, the left nav (flush with the screen's left edge, Kash 26 Sep), the screen host,
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX39"><Properties><string name="Name">StarterPlayer.StarterPlayerScripts|ClientMain|LocalScript</string><ProtectedString name="Source"><![CDATA[-- ClientMain: the shell. Top bar, the left nav (flush with the screen's left edge, Kash 26 Sep), the screen host,
 -- toasts and level-up banners. The Capitol world map is the home screen (Kash, 1 Oct 2026, Q12).
 -- Everything is laid out in design pixels on a top-left anchored root scaled by ONE UIScale
 -- (LESSONS: a UIScale scales about the AnchorPoint; read TopbarInset lazily).
@@ -15796,6 +16165,14 @@ do
 	local plus = UI.img(right, "btn_gold", { button = true, name = "Refill", pos = UDim2.fromOffset(432, 8), sz = UDim2.fromOffset(36, 34), z = 22 })
 	UI.icon(plus, "icon_plus", 18, C.manilaInk, UDim2.new(0.5, 0, 0.5, -1), { z = 23, anchor = Vector2.new(0.5, 0.5) })
 	plus.Activated:Connect(function() App.open("shop") end)
+
+	-- UPGRADES (skill points) from any screen: sits between the energy bars and the settings gear,
+	-- appears with the Country tab (Config.NavUnlock.country)
+	local upg = mk("Frame", { Name = "Upgrades", BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -62, 0, 0), Size = UDim2.fromOffset(122, TOP), ZIndex = 21, Visible = false }, topBar)
+	top.upg = upg
+	top.upgBtn = UI.button(upg, "slate", "UPGRADES", function()
+		if App.showUpgrades then App.showUpgrades() end
+	end, { pos = UDim2.new(1, 0, 0.5, 0), anchor = Vector2.new(1, 0.5), sz = UDim2.fromOffset(118, 42), z = 22, icon = "icon_xp", iconSize = 20, textSize = 15 })
 end
 local topScales = {}
 local function scaleOf(f) topScales[f] = topScales[f] or mk("UIScale", {}, f); return topScales[f] end
@@ -15804,18 +16181,23 @@ local function layoutTop()
 	local x0 = robloxButtonsEnd()
 	top.id.Position = UDim2.fromOffset(x0, 0)
 	-- shrink the three groups together until cash fits between identity and the bars (phones)
+	-- the UPGRADES button (when shown) takes 122 px (scaled) between the energy group and the gear
+	local upgW = top.upg.Visible and 122 or 0
 	local k = 1
-	for _, try in ipairs({ 1, 0.9, 0.8, 0.72, 0.65 }) do
+	for _, try in ipairs({ 1, 0.9, 0.8, 0.72, 0.65, 0.58 }) do
 		k = try
-		local room = w - 62 - 470 * k - (x0 + 340 * k)
+		local room = w - 62 - (470 + upgW) * k - (x0 + 340 * k)
 		if room >= 300 * k then break end
 	end
-	scaleOf(top.id).Scale = k; scaleOf(top.right).Scale = k; scaleOf(top.mid).Scale = k
+	scaleOf(top.id).Scale = k; scaleOf(top.right).Scale = k; scaleOf(top.mid).Scale = k; scaleOf(top.upg).Scale = k
 	top.id.Size = UDim2.fromOffset(330, TOP / k)
 	top.right.Size = UDim2.fromOffset(470, TOP / k)
 	top.mid.Size = UDim2.fromOffset(300, TOP / k)
+	top.upg.Size = UDim2.fromOffset(122, TOP / k)
+	top.upg.Position = UDim2.new(1, -62, 0, 0)
+	top.right.Position = UDim2.new(1, -62 - math.floor(upgW * k), 0, 0)
 	local midX = x0 + 340 * k
-	local room = w - 62 - 470 * k - midX
+	local room = w - 62 - (470 + upgW) * k - midX
 	top.mid.Visible = room >= 290 * k
 	top.mid.Position = UDim2.fromOffset(midX + math.max(0, math.floor((room - 300 * k) / 2)), 0)
 end
@@ -16014,6 +16396,18 @@ function App.open(key)
 end
 
 App.runInits = function() runInits() end
+-- /g and /global send to every server (global chat, Kash 23:29)
+task.spawn(function()
+	local TCS = game:GetService("TextChatService")
+	local folder = TCS:WaitForChild("TextChatCommands", 30)
+	local cmd = folder and folder:WaitForChild("IC_Global", 30)
+	if not cmd then return end
+	cmd.Triggered:Connect(function(_, raw)
+		local body = tostring(raw or ""):gsub("^%s*/%a+%s*", "")
+		local res = App.req("globalChat", { text = body })
+		if not res.ok and res.msg then App.toast(res.msg, nil, "bad") end
+	end)
+end)
 local function refreshCurrent()
 	local s = App.current and App.screens[App.current]
 	if s and s.obj and s.obj.Refresh then
@@ -16028,9 +16422,26 @@ local function ideoTitle(st)
 	return string.upper(n)
 end
 local lastFlag
+-- the top bar UPGRADES button: shown from the Country unlock level, gold with a red badge while points are free
+local upgShownFree
+local function drawUpgradesButton(st)
+	local need = NAV_UNLOCK.country or 4
+	local show = st.onboarded == true and (st.lv or 1) >= need
+	if top.upg.Visible ~= show then
+		top.upg.Visible = show
+		layoutTop()
+	end
+	local free = tonumber(st.skillFree) or 0
+	if free == upgShownFree then return end
+	upgShownFree = free
+	top.upgBtn:Set(free > 0 and "gold" or "slate")
+	if top.upgBadge then top.upgBadge:Destroy(); top.upgBadge = nil end
+	if free > 0 then top.upgBadge = UI.badge(top.upgBtn.Inst, free > 99 and "99+" or free, UDim2.new(1, -4, 0, 4), 26) end
+end
 local function drawTop()
 	local st = App.state
 	if not st then return end
+	drawUpgradesButton(st)
 	top.name.Text = ideoTitle(st)
 	top.xp:Set(st.xp / math.max(1, st.xpReq), "LV " .. st.lv, R.Short(math.floor(st.xp)) .. " / " .. R.Short(st.xpReq) .. " XP")
 	top.cash.Text = R.Money(st.cash)
@@ -16079,7 +16490,7 @@ local function levelBanner(n)
 	if #n.laws > 0 then table.insert(bits, #n.laws .. " new law" .. (#n.laws > 1 and "s" or "")) end
 	if #n.props > 0 then table.insert(bits, "new property: " .. n.props[1]) end
 	if #n.units > 0 then table.insert(bits, "new unit: " .. n.units[1]) end
-	if n.slot then table.insert(bits, "+1 convoy slot") end
+	if n.slot then table.insert(bits, "a new convoy is for sale (WORLD)") end
 	table.insert(bits, "+" .. n.points .. " skill points")
 	App.toast("LEVEL " .. n.lv .. " · INFLUENCE REFILLED", table.concat(bits, " · "), "gold")
 	App.play("level_up")
@@ -16172,6 +16583,14 @@ Remotes.Sync.OnClientEvent:Connect(function(kind, data)
 		App.emit("tick", st)
 	elseif kind == "notes" then
 		handleNotes(data)
+	elseif kind == "gchat" then
+		pcall(function()
+			local d = data or {}
+			local TCS = game:GetService("TextChatService")
+			local ch = TCS:FindFirstChild("TextChannels") and TCS.TextChannels:FindFirstChild("RBXGeneral")
+			local function esc(x) return (tostring(x or ""):gsub("&", "&amp;"):gsub("<", "&lt;"):gsub(">", "&gt;")) end
+			if ch then ch:DisplaySystemMessage("<font color='#7fb0e6'><b>[GLOBAL] " .. esc(d.n) .. ":</b></font> " .. esc(d.t)) end
+		end)
 	elseif kind == "chat" then
 		-- purchase shout-out (Kash 2 Oct): a starred system message in chat
 		pcall(function()
@@ -16226,7 +16645,7 @@ if game:GetService("RunService"):IsStudio() then
 		end)
 	end)
 end
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX39"><Properties><string name="Name">ReplicatedFirst|IC_Loading|LocalScript</string><ProtectedString name="Source"><![CDATA[-- Loading screen (ReplicatedFirst): war-room art, the IDLE COUNTRY logo, a shimmering bar, version and disclaimer.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX40"><Properties><string name="Name">ReplicatedFirst|IC_Loading|LocalScript</string><ProtectedString name="Source"><![CDATA[-- Loading screen (ReplicatedFirst): war-room art, the IDLE COUNTRY logo, a shimmering bar, version and disclaimer.
 -- Modelled on the reference game's loading screen (Kash 1 Oct 16:45). Hides once the HUD exists and the save is in.
 local Players = game:GetService("Players")
 local ReplicatedFirst = game:GetService("ReplicatedFirst")
