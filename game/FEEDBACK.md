@@ -236,3 +236,13 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
     first (competitors + our mechanics). Key lesson from his mural board: SHOW THE MAIN MECHANIC + an EMOTION
     (examples: Hole Fishing, Defend Your Treehouse wave 1 -> 15 -> 99 progression, Lift a Cube struggling with a
     huge number, Car Duels PvP, building with a big number). Use big readable numbers and progression shots.
+- NEW (2 Oct 17:10-17:18) AD ART DIRECTION:
+  * The ChatGPT (gpt-image-1) concepts looked AI-generated (yellow LEGO-like figures). Use GOOGLE FLOW (Nano Banana Pro)
+    with REFERENCE IMAGES instead; stop using ChatGPT for this unless it clearly improves.
+  * Avatars must look like real Roblox avatars, 1:1: BACON HAIR or classic NOOBS. Leader = bacon hair (Brown Charmer
+    Hair 376548738, Blue and Black Motorcycle Shirt 144076358, Black Jeans 382537569, Golden Crown 1081300) with real
+    face decals (Joyful Smile 209995366, Check It 7074786 smug, Frightful 7699193 scared). Rendered as R6 in Studio and
+    used as Flow references (art/ads/refs). Match the art style of the competitor thumbnails (Build a Country, Steal An
+    Egg, Sell Lemons, Run a Restaurant).
+  DONE (2 Oct 17:35): 2 icons (16:9, design in centre square, + 512 crops) and 6 thumbnails with code-added numbers in
+  art/ads/final and IdleCountryArt/ads on Kash's PC. Flow project "Oct 02 - 17:20" holds every generation.
