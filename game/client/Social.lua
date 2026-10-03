@@ -245,13 +245,29 @@ S.rankings = { build = function(host, App)
 			else
 				if e.flag then UI.flag(card, e.flag, 36, { pos = UDim2.fromOffset(70, 10), z = 8 }) end
 				text(card, (e.tag and ("[" .. e.tag .. "] ") or "") .. (e.name or "?"), { font = "heavy", size = 17, pos = UDim2.fromOffset(116, 0), sz = UDim2.new(0.6, -116, 1, 0), z = 8, truncate = true })
-				text(card, obj.kind == "level" and ("Level " .. e.value) or R.Money(e.value), { font = "heavy", size = 17, color = obj.kind == "level" and C.xp or C.good, pos = UDim2.new(0.6, 0, 0, 0), sz = UDim2.new(0.4, -16, 1, 0), z = 8, align = Enum.TextXAlignment.Right })
+				-- Kash 2 Oct: anyone on the board can be spied on or attacked, whatever server they are in (or offline)
+				local canHit = e.uid and e.uid ~= game:GetService("Players").LocalPlayer.UserId
+				local right = canHit and 196 or 16
+				text(card, obj.kind == "level" and ("Level " .. e.value) or R.Money(e.value), { font = "heavy", size = 17, color = obj.kind == "level" and C.xp or C.good, pos = UDim2.new(0.6, -right + 16, 0, 0), sz = UDim2.new(0.4, -16, 1, 0), z = 8, align = Enum.TextXAlignment.Right })
+				if canHit then
+					local id, nm = "u" .. e.uid, e.name or "?"
+					UI.button(card, "slate", "SPY", function(btn)
+						local r = App.req("spy", { id = id }, btn)
+						if r.ok and r.intel then
+							local i = r.intel
+							App.toast("INTEL: " .. string.upper(nm), "LV " .. tostring(i.lv or "?") .. " · DEF " .. R.Short(i.def or 0) .. " · " .. R.Money(i.cash or 0) .. " on hand" .. ((i.shield or 0) > 0 and " · SHIELDED" or ""), "good")
+						end
+					end, { sz = UDim2.fromOffset(84, 34), pos = UDim2.new(1, -182, 0, 5), z = 9, textSize = 14, icon = "icon_satellite" })
+					UI.button(card, "red", "ATTACK", function(btn)
+						if App.raidTarget then App.raidTarget(id, nm, btn) end
+					end, { sz = UDim2.fromOffset(92, 34), pos = UDim2.new(1, -96, 0, 5), z = 9, textSize = 14, icon = "icon_attack" })
+				end
 			end
 		end
 	end
 	local tabs = UI.tabs(body, { "LEVEL", "WEALTH", "ALLIANCES" }, function(i) obj.kind = KINDS[i]; task.spawn(load) end, { w = 140, z = 7 })
 	tabs:Set(1)
-	function obj:Refresh(st) sub.Text = "Top 50 across every server · updates every few minutes" end
+	function obj:Refresh(st) sub.Text = "Top 50 across every server · SPY or ATTACK anyone here, even in other servers" end
 	function obj:Opened() task.spawn(load) end
 	return obj
 end }

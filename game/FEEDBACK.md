@@ -225,3 +225,14 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
   Rule for all future people art: no crowds, every face clearly drawn in the officer portrait style.
   DONE (2 Oct 16:15): reworked + live: enemy_guard/soldier/general, country_era1/2/5, shop_army. Still open: loading_bg cap badge (minor).
 - NEW (2 Oct 16:26): rename the CAPITOL tab/map to WORLD everywhere. DONE.
+- NEW (2 Oct 16:43) DECISIONS:
+  * Raiding: players can attack ANYONE in ANY server (or offline). The RAIDS tab list stays "people in your server"
+    (+ the 3 nations). The cross-server attack lives in RANKINGS (SPY + ATTACK on every player row). DONE: war cards
+    (published every 2 min + on leave) and a hit queue applied by the defender's server (MessagingService, else on login).
+  * Game description: APPROVED as written (the emoji list + Premium line).
+  * "Merits" is the approved name for the task currency (ex-Seals).
+  * Kash will make the game public himself later (do NOT switch the audience).
+  * NEW TASK: a game ICON + THUMBNAILS for running ADS. Generate with ChatGPT/OpenAI. Research what works in Roblox ads
+    first (competitors + our mechanics). Key lesson from his mural board: SHOW THE MAIN MECHANIC + an EMOTION
+    (examples: Hole Fishing, Defend Your Treehouse wave 1 -> 15 -> 99 progression, Lift a Cube struggling with a
+    huge number, Car Duels PvP, building with a big number). Use big readable numbers and progression shots.

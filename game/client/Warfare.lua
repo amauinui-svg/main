@@ -769,6 +769,7 @@ end
 S._raided = { init = function(App)
 	App.raidedPopup = function(n) raidedPopup(App, n) end
 	App.spiedNote = function(n) spiedNote(App, n) end
+	App.raidTarget = function(id, name, btn) return raidTarget(App, id, name, btn) end -- RANKINGS attacks anyone (Kash 2 Oct)
 	-- Revenge Strike results arrive later as a "raidResult" note (ClientMain emits it)
 	App.on("raidResult", function(res) showRaidResult(App, res, { revenge = true, name = type(res) == "table" and res.target or nil }) end)
 end }

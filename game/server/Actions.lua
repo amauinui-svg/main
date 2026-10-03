@@ -176,7 +176,7 @@ function act.disband(plr, p, a)
 	return ok()
 end
 
----------------------------------------------------------------- raids (Raids.lua): players in your server + 3 AI nations
+---------------------------------------------------------------- raids (Raids.lua): list = your server + 3 AI nations; RANKINGS can hit anyone (Kash 2 Oct)
 function act.raid(plr, p, a)
 	return RA.Attack(plr, p, a.id, false)
 end
@@ -548,7 +548,7 @@ function act.revengeStrike(plr, p, a)
 		local uid = tonumber(tostring(r.id):match("^u(%d+)$"))
 		q = uid and game:GetService("Players"):GetPlayerByUserId(uid)
 	end
-	if not ai and not q then return no(r.name .. " has left this server") end
+	if not ai and not q and not RA.RemoteOk(r.id) then return no(r.name .. " can't be found right now") end
 	return MK.PromptProduct(plr, "RevengeStrike", r.id)
 end
 function act.moveCapital(plr, p, a)

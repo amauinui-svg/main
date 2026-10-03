@@ -1,9 +1,14 @@
--- Raids (Kash 1 Oct 2026). You can only attack people in YOUR server, plus 3 AI nations that every server has.
--- The list cannot be refreshed. Winner takes 10% of the defender's cash on hand (the bank is safe), capped at about an
+-- Raids (Kash 1 Oct 2026). The RAIDS list shows people in YOUR server, plus 3 AI nations that every server has.
+-- Kash 2 Oct: anyone in ANY server (or offline) can be attacked from RANKINGS. Those fights use the target's war card
+-- (published every 2 min and on leave); the loss is queued in a DataStore and applied by whichever server holds them
+-- (instantly over MessagingService, else on their next login). The list cannot be refreshed. Winner takes 10% of the defender's cash on hand (the bank is safe), capped at about an
 -- hour of the defender's own law income. The same target can be raided again after 1 minute.
 -- Soldiers die on both sides by how lopsided the fight was (cheapest first). AI nations raid real players too, and
 -- every raid notice offers REVENGE. No "bank your cash" hint: players discover the bank on their own.
 local Players = game:GetService("Players")
+local MessagingService = game:GetService("MessagingService")
+local RunService = game:GetService("RunService")
+local Store = require(script.Parent.Store)
 local RS = game:GetService("ReplicatedStorage")
 local R = require(RS.Shared.Rules)
 local M = require(RS.Shared.Military)
@@ -128,7 +133,11 @@ RA.SpyMinutes = 15
 function RA.Spy(plr, p, id)
 	local d = p.data
 	local q, ai, qplr = findTargetPublic(id)
-	if not q and not ai then return { ok = false, msg = "That nation is no longer in this server" } end
+	if not q and not ai then
+		local uid = remoteUid(id)
+		if uid and uid ~= plr.UserId then return RA._remoteSpy(plr, p, id, uid) end
+		return { ok = false, msg = "That nation is no longer in this server" }
+	end
 	if q == p then return { ok = false, msg = "You cannot spy on yourself" } end
 	if d.sup < RA.SpySupply then return { ok = false, msg = "Not enough Supply (" .. RA.SpySupply .. " needed)" } end
 	d.sup -= RA.SpySupply
@@ -231,11 +240,198 @@ end
 
 findTargetPublic = findTarget
 
+---------------------------------------------------------------- cross-server raids (Kash 2 Oct)
+local SUFFIX = (RunService:IsStudio() and workspace:GetAttribute("IC_TestProfile")) and "_test" or ""
+local CARD_DS, HITS_DS, TOPIC = "IC_WarCard_v1" .. SUFFIX, "IC_WarHits_v1" .. SUFFIX, "IC_Hit" .. SUFFIX
+local cardCache = {} -- [uid] = { t = os.clock(), card = card }
+
+-- what other servers need to fight you: published every 2 min and when you leave
+function RA.PublishCard(plr, p)
+	if not Store.Online or not p.data.onboarded then return end
+	local d = p.data
+	local qm = PS.Mods(p)
+	local atk, def = PS.Power(p, qm)
+	local card = { n = d.name, f = d.flag, lv = d.lv, atk = atk, def = def, cash = math.floor(d.cash), sh = d.shield or 0, w = weaponOf(d),
+		u = M.UnitCount(d.units), loss = qm.losses or 0, t = now(), ht = d.hitApplied or 0 }
+	local ok = pcall(function() Store.DS(CARD_DS):SetAsync(tostring(plr.UserId), card) end)
+	if ok then cardCache[plr.UserId] = { t = os.clock(), card = card } end
+end
+local function getCard(uid)
+	local c = cardCache[uid]
+	if c and os.clock() - c.t < 20 then return c.card end
+	if not Store.Online then return nil end
+	local ok, card = Store.Get(Store.DS(CARD_DS), tostring(uid))
+	if ok and type(card) == "table" then cardCache[uid] = { t = os.clock(), card = card }; return card end
+	return nil
+end
+local function remoteUid(id)
+	local uid = type(id) == "string" and tonumber(id:match("^u(%d+)$"))
+	if not uid or Players:GetPlayerByUserId(uid) then return nil end
+	return uid
+end
+function RA.RemoteOk(id)
+	local uid = remoteUid(id)
+	return uid ~= nil and getCard(uid) ~= nil
+end
+local function ping(uid) pcall(function() MessagingService:PublishAsync(TOPIC, { u = uid }) end) end
+
+-- push an entry onto the target's queue. fn(rec) may veto by returning a message
+local function queueHit(uid, fn)
+	local veto
+	local ok = Store.Update(Store.DS(HITS_DS), tostring(uid), function(rec)
+		veto = nil
+		rec = type(rec) == "table" and rec or {}
+		rec.q = rec.q or {}; rec.recent = rec.recent or {}
+		local keep = {}
+		for _, r in ipairs(rec.recent) do if now() - r.t < 900 then table.insert(keep, r) end end
+		rec.recent = keep
+		local entry
+		entry, veto = fn(rec)
+		if veto then return nil end
+		table.insert(rec.q, entry)
+		while #rec.q > 30 do table.remove(rec.q, 1) end
+		return rec
+	end)
+	if not ok then return false, "The war office is busy. Try again in a moment" end
+	if veto then return false, veto end
+	ping(uid)
+	return true
+end
+local function cashOnHand(card, rec)
+	local taken = 0
+	for _, r in ipairs(rec and rec.recent or {}) do if r.t > (card.ht or 0) then taken += r.steal end end
+	return math.max(0, (card.cash or 0) - taken)
+end
+
+local function remoteSpy(plr, p, id, uid)
+	local d = p.data
+	local card = getCard(uid)
+	if not card then return { ok = false, msg = "No war records for that nation yet" } end
+	if d.sup < RA.SpySupply then return { ok = false, msg = "Not enough Supply (" .. RA.SpySupply .. " needed)" } end
+	if p.remoteBusy then return { ok = false, msg = "Still sending your last order" } end
+	p.remoteBusy = true
+	local avail = card.cash
+	local ok, err = queueHit(uid, function(rec)
+		avail = cashOnHand(card, rec)
+		return { k = "spied", by = d.name ~= "" and d.name or plr.Name, lv = d.lv, t = now() }
+	end)
+	p.remoteBusy = nil
+	if not ok then return { ok = false, msg = err } end
+	d.sup -= RA.SpySupply
+	p.spied = p.spied or {}
+	p.spied[id] = now()
+	return { ok = true, intel = { cash = math.floor(avail), atk = card.atk, def = card.def, lv = card.lv, units = card.u, shield = math.max(0, (card.sh or 0) - now()), remote = true } }
+end
+
+local function remoteAttack(plr, p, id, uid, guaranteed)
+	local d = p.data
+	local card = getCard(uid)
+	if not card or not card.def then return { ok = false, msg = "No war records for that nation yet" } end
+	local t = now()
+	if (card.sh or 0) > t then return { ok = false, msg = "They are under a raid shield" } end
+	p.raidCd = p.raidCd or {}
+	if not guaranteed and (p.raidCd[id] or 0) + RC.Cooldown > t then return { ok = false, msg = "You just attacked them. Try again in " .. ((p.raidCd[id] or 0) + RC.Cooldown - t) .. "s" } end
+	if not guaranteed and d.sup < RC.Supply then return { ok = false, msg = "Not enough Supply (" .. RC.Supply .. " needed)" } end
+	if p.remoteBusy then return { ok = false, msg = "Still sending your last order" } end
+	local mods = PS.Mods(p)
+	local atk = PS.Power(p, mods)
+	local def = card.def
+	local chance = M.WinChance(atk, def)
+	local win = guaranteed or math.random() < chance
+	local m = margin(atk, def)
+	if guaranteed and m == "close" then m = "clear" end
+	local L = RC.Losses[m]
+	local myLoss, theirLoss = win and L[1] or L[2], win and L[2] or L[1]
+	local steal = 0
+	p.remoteBusy = true
+	local ok, err = queueHit(uid, function(rec)
+		steal = 0
+		if win then
+			if (rec.last or 0) + RC.Cooldown > t then return nil, "They were just raided. Try again in " .. ((rec.last or 0) + RC.Cooldown - t) .. "s" end
+			local onHand = cashOnHand(card, rec)
+			steal = math.floor(math.min(onHand * RC.StealPct * (1 + (mods.loot or 0)), stealCap(card.lv or 1)))
+			steal = math.max(0, math.min(steal, onHand))
+			rec.last = t
+			table.insert(rec.recent, { t = t, steal = steal })
+		end
+		return { k = "raided", by = d.name, byId = "u" .. plr.UserId, win = win, steal = steal, loss = theirLoss, t = t }
+	end)
+	p.remoteBusy = nil
+	if not ok then return { ok = false, msg = err } end
+	if not PS.Profiles[plr] then return { ok = false, msg = "Left" } end
+	if not guaranteed then
+		p.raidCd[id] = t
+		d.sup = math.max(0, d.sup - RC.Supply)
+		PS.TaskProgress(p, "supply", RC.Supply)
+	end
+	local myDead, myN = kill(d.units, myLoss, mods.losses)
+	local theirN = math.floor((card.u or 0) * theirLoss * (1 - math.clamp(card.loss or 0, 0, 0.6)) + 0.5)
+	d.stats.battles += 1
+	local res = { ok = true, win = win, chance = chance, margin = m, lost = myDead, lostN = myN, killed = theirN, target = card.n, remote = true }
+	res.fight = RA.Fight(atk, def, win)
+	res.fight.a = { name = d.name, lv = d.lv, userId = plr.UserId, pow = atk, weapon = weaponOf(d), flag = d.flag }
+	res.fight.d = { name = card.n, lv = card.lv, userId = uid, pow = def, weapon = card.w or { icon = "gear_fists", name = "Fists", rarity = "common" }, flag = card.f }
+	if win then
+		local got = PS.Earn(p, steal, "raid")
+		local xp = math.max(1, math.floor(R.MinuteXp(d.lv) * 0.6 + 0.5))
+		PS.AddXp(p, xp)
+		d.stats.wins += 1; d.stats.stolen += got
+		PS.TaskProgress(p, "raids", 1)
+		res.cash = got; res.xp = xp
+		if d.revenge and d.revenge.id == id then d.revenge = nil end
+	end
+	p.dirty = true
+	return res
+end
+RA._remoteSpy = remoteSpy
+
+-- the defender's side: take everything queued against you and apply it (cash is clamped to what you have now)
+function RA.ApplyHits(plr, p)
+	if not Store.Online or not p or p.applying or p.loading or p.leaving or not p.data.onboarded then return end
+	p.applying = true
+	local got
+	Store.Update(Store.DS(HITS_DS), tostring(plr.UserId), function(rec)
+		got = nil
+		if type(rec) ~= "table" or not rec.q or #rec.q == 0 then return nil end
+		got = rec.q
+		rec.q = {}
+		return rec
+	end)
+	p.applying = nil
+	if not got or PS.Profiles[plr] ~= p then return end
+	local d = p.data
+	local raids = { n = 0, cash = 0, lost = 0, win = false }
+	for _, e in ipairs(got) do
+		if e.k == "spied" then
+			PS.Note(p, { kind = "spied", by = e.by, lv = e.lv })
+		elseif e.k == "raided" then
+			local steal = math.floor(math.min(e.steal or 0, math.max(0, d.cash)))
+			d.cash -= steal
+			d.stats.lost += steal
+			if e.win then d.stats.raided += 1 end
+			local _, n = kill(d.units, tonumber(e.loss) or 0, PS.Mods(p).losses)
+			d.revenge = { id = e.byId, name = e.by, t = e.t }
+			raids.n += 1; raids.cash += steal; raids.lost += n; raids.win = raids.win or e.win
+			raids.by, raids.byId = e.by, e.byId
+		end
+		d.hitApplied = math.max(d.hitApplied or 0, e.t or 0)
+	end
+	if raids.n > 0 then
+		PS.Note(p, { kind = "raided", by = raids.by, byId = raids.byId, win = raids.win, cash = raids.cash, lost = raids.lost })
+		if raids.n > 1 then PS.Note(p, { kind = "toast", text = "You were raided " .. raids.n .. " times. The last attacker was " .. tostring(raids.by) .. ".", tone = "bad" }) end
+	end
+	p.dirty = true
+end
+
 -- attacker p raids target id. guaranteed = Revenge Strike product
 function RA.Attack(plr, p, id, guaranteed)
 	local d = p.data
 	local q, ai, qplr = findTarget(id)
-	if not q and not ai then return { ok = false, msg = "That nation is no longer in this server" } end
+	if not q and not ai then
+		local uid = remoteUid(id)
+		if uid and uid ~= plr.UserId then return remoteAttack(plr, p, id, uid, guaranteed) end
+		return { ok = false, msg = "That nation is no longer in this server" }
+	end
 	if q == p then return { ok = false, msg = "You cannot raid yourself" } end
 	local t = now()
 	if (lastHit[id] or 0) + RC.Cooldown > t then return { ok = false, msg = "They were just raided. Try again in " .. ((lastHit[id] or 0) + RC.Cooldown - t) .. "s" } end
@@ -343,6 +539,29 @@ end
 
 function RA.Start()
 	RA.MakeAI()
+	if Store.Online then
+		task.spawn(function()
+			pcall(function()
+				MessagingService:SubscribeAsync(TOPIC, function(msg)
+					local uid = type(msg.Data) == "table" and tonumber(msg.Data.u)
+					local plr = uid and Players:GetPlayerByUserId(uid)
+					if plr and PS.Profiles[plr] then RA.ApplyHits(plr, PS.Profiles[plr]) end
+				end)
+			end)
+		end)
+		-- fallback poll + war cards
+		task.spawn(function()
+			local k = 0
+			while true do
+				task.wait(30)
+				k += 1
+				for plr, p in pairs(PS.Profiles) do
+					if k % 3 == 0 then task.spawn(RA.ApplyHits, plr, p) end
+					if k % 4 == 0 then task.spawn(RA.PublishCard, plr, p) end
+				end
+			end
+		end)
+	end
 	task.spawn(function()
 		local nextRaid = os.clock() + math.random(RC.AIRaidEvery[1], RC.AIRaidEvery[2])
 		while true do

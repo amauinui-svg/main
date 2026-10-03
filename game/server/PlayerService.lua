@@ -579,6 +579,7 @@ function PS.Load(plr)
 	PS.CatchUp(p)
 	p.loading = nil
 	PS.Sync(plr)
+	if PS.Raids then task.spawn(PS.Raids.ApplyHits, plr, p); task.spawn(PS.Raids.PublishCard, plr, p) end -- raids from other servers while away
 	if not canSave then PS.Note(p, { kind = "toast", text = "Your save could not be loaded. Progress this session will NOT be saved. Rejoin to retry.", tone = "bad" }) end
 	return p
 end
@@ -679,7 +680,10 @@ function PS.Start()
 	for _, plr in ipairs(Players:GetPlayers()) do task.spawn(PS.Load, plr) end
 	Players.PlayerRemoving:Connect(function(plr)
 		local p = PS.Profiles[plr]
-		if p then p.leaving = true; PS.Save(plr, true) end
+		if p then
+			if PS.Raids and p.data.onboarded then task.spawn(PS.Raids.PublishCard, plr, p) end -- fresh war card for while they're offline
+			p.leaving = true; PS.Save(plr, true)
+		end
 		PS.Profiles[plr] = nil
 	end)
 	game:BindToClose(function()
