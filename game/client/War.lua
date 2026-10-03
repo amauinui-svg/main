@@ -27,7 +27,7 @@ S.military = { build = function(host, App)
 		UI.clear(list)
 		local count = M.UnitCount(st.units)
 		local cap = M.UnitCap(st.lv)
-		sub.Text = "Attack <font color='#e2695f'><b>" .. R.Short(st.atk) .. "</b></font> · Defense <font color='#7fb0e6'><b>" .. R.Short(st.def) .. "</b></font> · Army <b>" .. count .. "/" .. cap .. "</b> (+1 room per level)"
+		sub.Text = "Attack <font color='#e2695f'><b>" .. R.Short(st.atk) .. "</b></font> · Defense <font color='#7fb0e6'><b>" .. R.Short(st.def) .. "</b></font> · Army <b>" .. count .. "/" .. cap .. "</b>"
 		local shown = {}
 		local pe = R.PlayerEra(st)
 		local function isLocked(u) return u.lvl > st.lv or u.era > pe end
@@ -60,7 +60,7 @@ S.military = { build = function(host, App)
 			text(card, u.name .. (owned > 0 and ("  <font color='#9a9fa6'>x" .. owned .. "</font>") or ""), { font = "heavy", size = 18, rich = true, pos = UDim2.fromOffset(58, 8), sz = UDim2.new(0.38, -58, 0, 24), z = 8, truncate = true })
 			text(card, D.Eras[u.era].name .. (locked and (u.lvl > st.lv and (" · unlocks at level " .. u.lvl) or " · advance era in Laws") or ""), { size = 13, color = C.muted, pos = UDim2.fromOffset(58, 36), sz = UDim2.new(0.38, -58, 0, 18), z = 8 })
 			text(card, "<font color='#e2695f'>ATK " .. R.Short(u.atk) .. "</font>   <font color='#7fb0e6'>DEF " .. R.Short(u.def) .. "</font>", { font = "heavy", size = 16, rich = true, pos = UDim2.new(0.38, 0, 0, 10), sz = UDim2.new(0.22, 0, 0, 22), z = 8 })
-			text(card, "Each costs 6% more than the last", { size = 12, color = C.muted, pos = UDim2.new(0.38, 0, 0, 36), sz = UDim2.new(0.22, 0, 0, 18), z = 8, truncate = true })
+			text(card, "Grows your army", { size = 12, color = C.muted, pos = UDim2.new(0.38, 0, 0, 36), sz = UDim2.new(0.22, 0, 0, 18), z = 8, truncate = true })
 			if locked then
 				UI.button(card, "locked", u.lvl > st.lv and ("LEVEL " .. u.lvl) or "ERA LOCKED", nil, { pos = UDim2.new(1, -170, 0, 14), sz = UDim2.fromOffset(160, 42), z = 9 })
 			else
@@ -90,7 +90,7 @@ S.battle = { build = function(host, App)
 	local list = UI.list(body, { pos = UDim2.fromOffset(0, 52), sz = UDim2.new(1, 0, 1, -52), gap = 8, z = 6 })
 	local obj = {}
 	local refresh = UI.button(body, "slate", "NEW RIVALS", function(btn) App.req("rivals", { refresh = true }, btn) end, { sz = UDim2.fromOffset(170, 40), z = 7, icon = "icon_flag", textSize = 15 })
-	UI.text(body, "Each attack costs " .. M.BattleSupply .. " Supply. Win to take their treasury and XP. Losing only costs the Supply.", { size = 14, color = C.muted, pos = UDim2.fromOffset(184, 0), sz = UDim2.new(1, -184, 0, 40), z = 7, wrap = true })
+	UI.text(body, "Each attack costs " .. M.BattleSupply .. " Supply. Win to take their treasury and XP!", { size = 14, color = C.muted, pos = UDim2.fromOffset(184, 0), sz = UDim2.new(1, -184, 0, 40), z = 7, wrap = true })
 	function obj:Opened() if not App.state.rivals or App.now() - App.state.rivals.t > 600 then App.req("rivals", {}) end end
 	function obj:Refresh(st)
 		UI.clear(list)
@@ -112,7 +112,7 @@ S.battle = { build = function(host, App)
 					local res = App.req("battle", { i = i }, btn)
 					if res.ok then
 						if res.win then App.toast("VICTORY OVER " .. string.upper(rv.name), "+" .. R.Money(res.cash) .. " · +" .. res.xp .. " XP", "good")
-						else App.toast("DEFEAT", "Their defense held (" .. math.floor(res.chance * 100 + 0.5) .. "% chance). Build your army in Military.", "bad") end
+						else App.toast("DEFEAT", "Their defense held. Build your army in Military.", "bad") end
 					end
 				end, { pos = UDim2.new(1, -170, 0, 16), sz = UDim2.fromOffset(160, 44), z = 9, icon = "icon_attack" })
 			end
@@ -153,8 +153,8 @@ S.bosses = { build = function(host, App)
 		local max = M.BossHp(boss.era)
 		hp:Set(boss.hp / max, R.Short(boss.hp) .. " / " .. R.Short(max) .. " HP", "")
 		local per = M.BossDamage(st.atk)
-		info.Text = string.format("Each hit deals about <b>%s</b> (3x your attack %s). Reward: <font color='#f0c75a'><b>%d gold</b></font>, <font color='#8fd07a'><b>%s</b></font> and XP. A new boss arrives an hour after each kill.",
-			R.Short(per), R.Short(st.atk), M.BossGold[boss.era], R.Money(R.MinuteValue(st.lv) * 20))
+		info.Text = string.format("Each hit deals about <b>%s</b>. Reward: <font color='#f0c75a'><b>%d gold</b></font>, <font color='#8fd07a'><b>%s</b></font> and XP.",
+			R.Short(per), M.BossGold[boss.era], R.Money(R.MinuteValue(st.lv) * 20))
 		sub.Text = "Supply <font color='#6fb3c8'><b>" .. st.sup .. "/" .. st.supMax .. "</b></font> · Bosses defeated <b>" .. st.stats.bosses .. "</b>"
 		UI.clear(list)
 		for e, Bx in ipairs(M.Bosses) do

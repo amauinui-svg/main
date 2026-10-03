@@ -59,7 +59,7 @@ T.WeeklyChest = { seals = 12, limitedCrates = 1, gearMinRarity = 3 } -- all 5 we
 T.Shop = {
 	{ key = "influence", name = "Influence Refill", desc = "Fill your Influence to max.", cost = 3, refill = "inf", icon = "icon_influence" },
 	{ key = "supply", name = "Supply Refill", desc = "Fill your Supply to max.", cost = 3, refill = "sup", icon = "icon_supply" },
-	{ key = "basic", name = "Supply Crate", desc = "A crate of gear, sometimes an officer.", cost = 6, basicCrates = 1, icon = "crate_basic" },
+	{ key = "basic", name = "Supply Crate", desc = "A crate of gear and officers.", cost = 6, basicCrates = 1, icon = "crate_basic" },
 	{ key = "shield", name = "Raid Shield (1h)", desc = "Nobody can raid you for an hour.", cost = 10, shieldHours = 1, icon = "icon_defense" },
 	{ key = "limited", name = "Founder's Crate", desc = "The premium crate: great gear and officers.", cost = 30, limitedCrates = 1, icon = "crate_limited" },
 }

@@ -314,11 +314,11 @@ M._settings = { init = function(App)
 	local function hoverCard(card, stroke, img)
 		local scale = img and mk("UIScale", {}, img)
 		card.MouseEnter:Connect(function()
-			if stroke then tween(stroke, 0.15, { Thickness = 3, Transparency = 0 }) end
+			if stroke then tween(stroke, 0.15, { Transparency = 0 }) end
 			if scale then tween(scale, 0.2, { Scale = 1.07 }, Enum.EasingStyle.Back) end
 		end)
 		card.MouseLeave:Connect(function()
-			if stroke then tween(stroke, 0.15, { Thickness = 1.5, Transparency = 0.35 }) end
+			if stroke then tween(stroke, 0.15, { Transparency = 0.35 }) end
 			if scale then tween(scale, 0.2, { Scale = 1 }) end
 		end)
 	end
@@ -392,7 +392,7 @@ M._settings = { init = function(App)
 			card.MouseLeave:Connect(function() tween(glow, 0.15, { BackgroundTransparency = 1 }) end)
 		end
 		local foot = mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 30), ZIndex = 73, LayoutOrder = 100 }, list)
-		text(foot, "Settings are saved to your country and follow you to every server.", { size = 13, color = C.dim, sz = UDim2.fromScale(1, 1), z = 74, align = Enum.TextXAlignment.Center })
+		text(foot, "Your settings are saved to your country.", { size = 13, color = C.dim, sz = UDim2.fromScale(1, 1), z = 74, align = Enum.TextXAlignment.Center })
 	end
 
 	-- GAME GUIDE
@@ -415,52 +415,52 @@ M._settings = { init = function(App)
 		return {
 			{ title = "YOUR COUNTRY", img = "country_era3", crop = true, color = "e2cfa3", lines = {
 				"Pass " .. kw("LAWS", M2) .. " with " .. kw("Influence", "e0a650") .. " to earn " .. kw("cash", G) .. " and " .. kw("XP", "b19cff") .. ".",
-				"Each level unlocks at most " .. kw("one new law", M2) .. ". New " .. kw("eras", B) .. " change how your country looks.",
-				"Level-ups give " .. kw("skill points", "b19cff") .. " for permanent stat upgrades.",
+				"Level up to unlock " .. kw("new laws", M2) .. ". New " .. kw("eras", B) .. " change how your country looks.",
+				"Level-ups give " .. kw("skill points", "b19cff") .. " for permanent upgrades.",
 			} },
 			{ title = "PROPERTIES", img = "prop_e3_t2", color = G, lines = {
 				"Build on your " .. kw("lots", G) .. " for steady " .. kw("cash per hour", G) .. ".",
-				"They keep earning while you are " .. kw("offline", B) .. " (up to 12 hours).",
-				"Better buildings unlock as you level up. Buy more lots to build more.",
+				"They keep earning even while you are " .. kw("offline", B) .. "!",
+				"Level up for better buildings. Buy more lots to build more.",
 			} },
 			{ title = "OFFICERS & GEAR", img = "gear_saber", color = P, lines = {
 				"Hire in 3 tiers: " .. table.concat(hireText, " · ") .. ". Better tiers, rarer officers.",
-				(#rarities > 0 and (#rarities .. " rarities: " .. table.concat(rarities, ", ")) or "8 rarities from Common to Forbidden") .. ". Rarer = more and bigger traits.",
+				(#rarities > 0 and (#rarities .. " rarities: " .. table.concat(rarities, ", ")) or "8 rarities from Common to Forbidden") .. ". Rarer officers have bigger traits.",
 				"Officers " .. kw("never die", G) .. " in battle. Equip " .. kw("weapons", Rd) .. " and " .. kw("armor", B) .. " on them and on " .. kw("YOU", M2) .. ".",
-				"Every officer is unique. Every new slot costs more than the last.",
+				"Every officer is unique. Collect the best!",
 			} },
 			{ title = "CRATES", img = "crate_limited", color = O2, lines = {
-				kw("Supply Crate", B) .. ": bought with cash (about " .. basic.lawMinutes .. " min of law income).",
-				kw("Founder's Crate", O2) .. ": " .. kw(limited.gold .. " gold", M2) .. " or Robux. Same crate, so everyone chases the same items.",
-				"Mostly " .. kw("cool gear", P) .. ", sometimes an " .. kw("officer", T) .. ". The limited crate rotates.",
+				kw("Supply Crate", B) .. ": buy it with cash.",
+				kw("Founder's Crate", O2) .. ": " .. kw(limited.gold .. " gold", M2) .. " or Robux, packed with the best loot.",
+				"Win " .. kw("cool gear", P) .. " and rare " .. kw("officers", T) .. ".",
 			} },
 			{ title = "ORDERS & MERITS", img = "icon_seal", color = M2, lines = {
 				kw("Daily orders", G) .. " (easy, medium, hard) pay " .. kw("Merits", M2) .. " and cash. Finish all for a bonus.",
-				kw("Weekly challenges", P) .. " reset Monday. Clear all 5 for a chest with Rare+ gear.",
-				"One " .. kw("free replace", B) .. " per day for an order you do not like.",
+				kw("Weekly challenges", P) .. ": clear all 5 for a chest of Rare+ gear.",
+				"Don't like an order? " .. kw("Replace it free", B) .. " once a day.",
 				"Spend Merits in the " .. kw("Merits Shop", M2) .. ": refills, shields, crates.",
 			} },
 			{ title = "CONVOYS", img = "convoy_ship", color = B, lines = {
-				"Send goods between world capitals. Pay is " .. kw("locked", M2) .. " when you send.",
-				"Distance alone does not pay: trade between " .. kw("different regions", B) .. " (Europe to Asia) pays most.",
-				"City " .. kw("wants change", O2) .. " as players deliver, so watch for new demand.",
-				"Alliances that hold a city " .. kw("tax", Rd) .. " the trade passing through it.",
+				"Send goods between world capitals for " .. kw("big pay", M2) .. ".",
+				"Trade between " .. kw("different regions", B) .. " (Europe to Asia) pays the most.",
+				"Watch for cities with " .. kw("new demand", O2) .. ".",
+				"Hold a city with your alliance to " .. kw("tax", Rd) .. " its trade.",
 			} },
 			{ title = "RAIDS", img = "enemy_soldier", color = Rd, lines = {
 				"Raid players in your server and " .. kw(raid.AICount .. " AI nations", Rd) .. " that raid back.",
-				"Win to take " .. kw(math.floor(raid.StealPct * 100 + 0.5) .. "% of their cash on hand", G) .. ", capped at about " .. kw(math.floor(raid.CapLawMinutes / 60 + 0.5) .. "h of their law income", M2) .. ".",
-				kw("Banked cash is safe", B) .. ". Soldiers die on both sides; officers never do.",
+				"Win to take " .. kw(math.floor(raid.StealPct * 100 + 0.5) .. "% of their cash on hand", G) .. ".",
+				kw("Banked cash is safe", B) .. ". Officers never fall in battle.",
 				"Raided? Hit " .. kw("REVENGE", Rd) .. " to strike back in one tap.",
 			} },
 			{ title = "THE BANK", img = "icon_bank", icon = true, color = G, lines = {
 				"Deposits cost a " .. kw(math.floor(bank.DepositFee * 100 + 0.5) .. "% fee", Rd) .. ". Withdrawals are " .. kw("free", G) .. ".",
-				"Earn " .. kw((bank.InterestPerHour * 100) .. "% interest per hour", G) .. " (" .. kw("half rate offline", B) .. ", up to 12 h).",
+				"Earn " .. kw((bank.InterestPerHour * 100) .. "% interest every hour", G) .. ".",
 				"Banked cash " .. kw("cannot be stolen", B) .. " in raids. Withdraw before you buy.",
 			} },
 			{ title = "LAW MASTERY", img = "medal_gold", color = M2, lines = {
-				"Every pass of a law counts toward its medals.",
-				kw("Bronze", "cd7f32") .. " " .. at[1] .. " passes: +" .. pct[2] .. "% cash and XP.  " .. kw("Silver", "c0c6cc") .. " " .. at[2] .. ": +" .. pct[3] .. "% and 5% less Influence.",
-				kw("Gold", M2) .. " " .. at[3] .. " passes: +" .. pct[4] .. "% and " .. kw("+1 skill point", "b19cff") .. ". A reason to master every law.",
+				"Pass the same law again and again to earn medals.",
+				kw("Bronze", "cd7f32") .. ", " .. kw("Silver", "c0c6cc") .. " and " .. kw("Gold", M2) .. " medals boost that law's cash and XP.",
+				"Gold also gives " .. kw("+1 skill point", "b19cff") .. ". Master every law!",
 			} },
 		}
 	end
@@ -468,7 +468,7 @@ M._settings = { init = function(App)
 	pages[2] = function(page, mw)
 		local list = UI.list(page, { gap = 10, z = 73 })
 		local intro = mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 30), ZIndex = 73, LayoutOrder = 0 }, list)
-		text(intro, "HOW " .. kw("IDLE COUNTRY", "e2cfa3") .. " WORKS: the 10 systems that grow your nation", { font = "heavy", size = 15, color = C.muted, rich = true, sz = UDim2.fromScale(1, 1), z = 74, pos = UDim2.fromOffset(4, 0) })
+		text(intro, "HOW TO PLAY " .. kw("IDLE COUNTRY", "e2cfa3"), { font = "heavy", size = 15, color = C.muted, rich = true, sz = UDim2.fromScale(1, 1), z = 74, pos = UDim2.fromOffset(4, 0) })
 		local cardW = mw - 28 - 14
 		local imgW = cardW < 640 and 150 or 200
 		local imgH = math.floor(imgW * 0.66)
@@ -481,7 +481,7 @@ M._settings = { init = function(App)
 			for k, line in ipairs(g.lines) do hs[k] = textH("•  " .. line, 15, textW - 4); total += hs[k] + 4 end
 			local h = math.max(imgH + 28, 16 + titleH + 6 + total + 12)
 			local card = UI.card(list, { button = true, sz = UDim2.new(1, 0, 0, h), z = 73, order = i })
-			local stroke = mk("UIStroke", { Color = acc, Thickness = 1.5, Transparency = 0.35, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, card)
+			local _, stroke = UI.outline(card, acc, 2, { alpha = 0.35 })
 			local tint = mk("Frame", { BackgroundColor3 = acc, BackgroundTransparency = 0.88, BorderSizePixel = 0, Position = UDim2.fromOffset(4, 4), Size = UDim2.new(1, -8, 1, -8), ZIndex = 73 }, card)
 			mk("UICorner", { CornerRadius = UDim.new(0, 6) }, tint)
 			mk("UIGradient", { Transparency = NumberSequence.new(0, 0.85) }, tint)
@@ -536,7 +536,6 @@ M._settings = { init = function(App)
 			local latest = i == 1
 			local acc = latest and C.gold or C.blue
 			local card = UI.card(list, { hot = latest, sz = UDim2.new(1, 0, 0, h), z = 73, order = i })
-			mk("Frame", { BackgroundColor3 = acc, BorderSizePixel = 0, Position = UDim2.fromOffset(6, 10), Size = UDim2.new(0, 4, 1, -20), ZIndex = 74 }, card)
 			local top = mk("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(22, 14), Size = UDim2.new(1, -40, 0, 32), ZIndex = 74 }, card)
 			mk("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder, VerticalAlignment = Enum.VerticalAlignment.Center }, top)
 			local badge = chip(top, string.upper(e.version or "?"), acc, C.black, { h = 30, size = 16, z = 75, order = 1 })
@@ -607,7 +606,7 @@ M._settings = { init = function(App)
 			UI.clear(modalHost)
 			modalHost.Visible = true
 			local panel = UI.img(modalHost, "panel", { name = "GroupPopup", sz = UDim2.fromOffset(440, 330), pos = UDim2.fromScale(0.5, 0.5), anchor = Vector2.new(0.5, 0.5), z = 71 })
-			mk("UIStroke", { Color = C.gold, Thickness = 2, Transparency = 0.3 }, panel)
+			UI.outline(panel, C.gold, 2, { alpha = 0.3 })
 			-- emblem with the classic rotating gold beams behind it (Kash 18:41: no pulsing circle)
 			if calm() then
 				UI.img(panel, "glow_soft", { slice = false, z = 72, sz = UDim2.fromOffset(150, 150), pos = UDim2.new(0.5, 0, 0, 72), anchor = Vector2.new(0.5, 0.5), color = C.gold, alpha = 0.4 })

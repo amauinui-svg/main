@@ -106,7 +106,7 @@ local function countTo(label, value, fmt)
 end
 -- outline that lights up on hover
 local function hoverStroke(UI, gui, color)
-	local st = UI.mk("UIStroke", { Color = color or UI.C.manila, Thickness = 2, Transparency = 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, gui)
+	local _, st = UI.outline(gui, color or UI.C.manila, 2, { alpha = 1 })
 	gui.MouseEnter:Connect(function() tween(st, 0.15, { Transparency = 0.15 }) end)
 	gui.MouseLeave:Connect(function() tween(st, 0.2, { Transparency = 1 }) end)
 	return st
@@ -219,7 +219,7 @@ local function buildLoginCards(App, parent, st, onClaimed)
 		end
 		dayL.ZIndex = z
 		if r.big and not claimed then
-			UI.mk("UIStroke", { Color = C.gold, Thickness = 2, Transparency = 0.25 }, card)
+			UI.outline(card, C.gold, 2, { alpha = 0.25 })
 		end
 		local _ = cell
 	end
@@ -252,7 +252,7 @@ local function showLogin(App)
 	local _ = x
 	local login = st.login or { idx = 1 }
 	local idx = math.clamp(login.idx or 1, 1, #TK.Login)
-	UI.text(body, "Come back every day for a reward. Day " .. idx .. " of 7 is next. Missed a day? Your sheet pauses, it never resets.",
+	UI.text(body, "Come back every day for a reward.",
 		{ size = 15, color = C.muted, sz = UDim2.new(1, -40, 0, 22), z = 73, truncate = true })
 	local row = UI.mk("Frame", { Name = "Days", BackgroundTransparency = 1, Position = UDim2.fromOffset(0, 34), Size = UDim2.new(1, 0, 0, cardH), ZIndex = 72 }, body)
 	UI.mk("UIGridLayout", { CellSize = UDim2.new(1 / 7, -7, 1, 0), CellPadding = UDim2.fromOffset(8, 0), SortOrder = Enum.SortOrder.LayoutOrder }, row)
@@ -378,10 +378,11 @@ local function showFlagEditor(App)
 	-- a pickable cell with a selection ring and an optional lock badge
 	local function pickCell(parent, ord, selected, locked, onPick)
 		local b = UI.img(parent, "inset", { button = true, name = "Pick", order = ord, z = 74 })
-		local ring = UI.mk("UIStroke", { Color = selected and C.gold or C.rule, Thickness = selected and 3 or 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, b)
+		-- selection ring on the plate's own border: gold when picked, manila while hovered, hidden otherwise
+		local _, ring = UI.outline(b, selected and C.gold or C.manila, selected and 3 or 2, { alpha = selected and 0 or 1 })
 		local s = UI.mk("UIScale", {}, b)
-		b.MouseEnter:Connect(function() tween(s, 0.12, { Scale = 1.06 }, Enum.EasingStyle.Back); if not selected then tween(ring, 0.12, { Color = C.manila }) end end)
-		b.MouseLeave:Connect(function() tween(s, 0.15, { Scale = 1 }); if not selected then tween(ring, 0.15, { Color = C.rule }) end end)
+		b.MouseEnter:Connect(function() tween(s, 0.12, { Scale = 1.06 }, Enum.EasingStyle.Back); if not selected then tween(ring, 0.12, { Transparency = 0 }) end end)
+		b.MouseLeave:Connect(function() tween(s, 0.15, { Scale = 1 }); if not selected then tween(ring, 0.15, { Transparency = 1 }) end end)
 		b.Activated:Connect(onPick)
 		if locked then
 			local lb = UI.img(b, "circle", { sz = UDim2.fromOffset(18, 18), pos = UDim2.new(1, -2, 0, 2), anchor = Vector2.new(1, 0), color = C.black, z = 78, slice = false })
@@ -469,7 +470,7 @@ local function showFlagEditor(App)
 		end)
 		UI.button(row, "slate", "CLEAR", function() f.img = nil; box.Text = ""; drawPreview() end, { pos = UDim2.new(1, -6, 0.5, 0), anchor = Vector2.new(1, 0.5), sz = UDim2.fromOffset(80, 34), z = 75, textSize = 13 })
 		order += 1
-		text(list, "Covers the whole flag. Roblox moderates every uploaded image.", { size = 12, color = C.dim, sz = UDim2.new(1, 0, 0, 16), z = 73, order = order })
+		text(list, "Your image covers the whole flag.", { size = 12, color = C.dim, sz = UDim2.new(1, 0, 0, 16), z = 73, order = order })
 
 		drawPreview()
 	end
@@ -503,7 +504,7 @@ local function buildUpgrades(App, parent, opts)
 	local freeN = text(freeCard, "0", { font = "display", size = 36, color = C.gold, pos = UDim2.fromOffset(14, 0), sz = UDim2.fromOffset(80, 58), z = z + 1, align = Enum.TextXAlignment.Center, scaled = true })
 	text(freeCard, "SKILL POINTS FREE", { font = "heavy", size = 17, color = C.gold, pos = UDim2.fromOffset(100, 8), sz = UDim2.new(1, -110, 0, 22), z = z + 1, truncate = true })
 	local freeSub = text(freeCard, "", { size = 13, color = C.muted, pos = UDim2.fromOffset(100, 30), sz = UDim2.new(1, -110, 0, 18), z = z + 1, truncate = true })
-	local freeStroke = UI.mk("UIStroke", { Color = C.gold, Thickness = 2, Transparency = 1 }, freeCard)
+	local _, freeStroke = UI.outline(freeCard, C.gold, 2, { alpha = 1 })
 	task.spawn(function()
 		while freeCard.Parent do
 			if (App.state and App.state.skillFree or 0) > 0 then
@@ -554,7 +555,7 @@ local function buildUpgrades(App, parent, opts)
 	function obj:Refresh(st)
 		if not st then return end
 		countTo(freeN, st.skillFree or 0, function(v) return tostring(math.floor(v + 0.5)) end)
-		freeSub.Text = "+3 every level · +1 per Gold law (" .. (st.goldLaws or 0) .. " so far)"
+		freeSub.Text = "Level up and master laws to earn more"
 		drawUpgrades(st)
 	end
 	return obj
@@ -583,7 +584,7 @@ local function showUpgrades(App)
 		tw.Completed:Connect(function() if panel.Parent then host.Visible = false; UI.clear(host) end end)
 	end
 	UI.button(panel, "slate", "", function() close() end, { pos = UDim2.new(1, -14, 0, 12), anchor = Vector2.new(1, 0), sz = UDim2.fromOffset(38, 36), z = 75, icon = "icon_x", iconSize = 18 })
-	infoButton(UI, App, panel, UDim2.new(1, -84, 0, 30), "SKILL POINTS", "You get +3 skill points every level and +1 for every law you take to Gold mastery. Spend them here on permanent upgrades.", 75)
+	infoButton(UI, App, panel, UDim2.new(1, -84, 0, 30), "SKILL POINTS", "Earn skill points by leveling up and mastering laws. Spend them here on permanent upgrades!", 75)
 	local obj = buildUpgrades(App, body, { z = 73, scroll = true })
 	obj:Refresh(st)
 	upgradesPopup = { panel = panel, obj = obj }
@@ -646,7 +647,7 @@ S.country = { build = function(host, App)
 	local loginHead = UI.mk("Frame", { Name = "LoginHead", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 34), ZIndex = 7, LayoutOrder = 2 }, list)
 	text(loginHead, "DAILY LOGIN", { font = "display", size = 26, color = C.gold, sz = UDim2.new(0, 220, 1, 0), z = 8 })
 	infoButton(UI, App, loginHead, UDim2.new(0, 200, 0.5, 0), "DAILY LOGIN SHEET",
-		"Claim one reward each day you play. Missed a day? The sheet PAUSES: you keep your place. Day 7 is the big one: 30 gold + a Founder's Crate.", 9)
+		"Come back every day for a reward. Day 7 is the big one: 30 gold + a Founder's Crate!", 9)
 	local loginRight = text(loginHead, "", { font = "heavy", size = 18, color = C.ink, align = Enum.TextXAlignment.Right, sz = UDim2.new(1, -240, 1, 0), pos = UDim2.fromOffset(240, 0), z = 8, rich = true })
 	local loginRowH = contentW < 760 and 150 or 168
 	local loginRow = UI.mk("Frame", { Name = "LoginRow", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, loginRowH), ZIndex = 7, LayoutOrder = 3 }, list)
@@ -660,7 +661,7 @@ S.country = { build = function(host, App)
 	local statsP, statsB = UI.panel(two, "YOUR STATS", { plain = true, sz = UDim2.new(0.5, -6, 1, 0), z = 7, titleSize = 24 })
 	local upP, upB = UI.panel(two, "YOUR UPGRADES", { plain = true, sz = UDim2.new(0.5, -6, 1, 0), pos = UDim2.new(0.5, 6, 0, 0), z = 7, titleSize = 24 })
 	local _ = statsP
-	infoButton(UI, App, upP, UDim2.new(1, -34, 0, 28), "SKILL POINTS", "You get +3 skill points every level and +1 for every law you take to Gold mastery. Spend them here on permanent upgrades.", 10)
+	infoButton(UI, App, upP, UDim2.new(1, -34, 0, 28), "SKILL POINTS", "Earn skill points by leveling up and mastering laws. Spend them here on permanent upgrades!", 10)
 
 	-- stats: identity header
 	local idRow = UI.mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 44), ZIndex = 9 }, statsB)
@@ -678,7 +679,7 @@ S.country = { build = function(host, App)
 		local st = App.state
 		local prod = Config.Products and Config.Products.ChangeGovernment
 		local free = (st.govCredit or 0) > 0
-		text(b, free and "You have a free change. Pick your new government." or ("Each change costs R$ " .. (prod and prod.robux or 99) .. ". Your current government is lit."), { size = 15, color = C.muted, sz = UDim2.new(1, 0, 0, 22), z = 87 })
+		text(b, free and "You have a free change. Pick your new government." or ("Each change costs R$ " .. (prod and prod.robux or 99) .. "."), { size = 15, color = C.muted, sz = UDim2.new(1, 0, 0, 22), z = 87 })
 		local grid = UI.mk("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(0, 30), Size = UDim2.new(1, 0, 1, -30), ZIndex = 87 }, b)
 		UI.mk("UIGridLayout", { CellSize = UDim2.new(1 / 3, -8, 0, 170), CellPadding = UDim2.fromOffset(12, 12), SortOrder = Enum.SortOrder.LayoutOrder }, grid)
 		local icons = { republic = "icon_landmark", monarchy = "icon_crown", federation = "icon_globe", junta = "icon_military", theocracy = "icon_sparkles", technocracy = "icon_rocket" }

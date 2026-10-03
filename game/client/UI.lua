@@ -172,6 +172,29 @@ function UI.card(parent, p)
 	return UI.img(parent, p.hot and "card_hot" or "card", { name = p.name or "Card", pos = p.pos, sz = p.sz, z = p.z or 6, order = p.order, anchor = p.anchor, button = p.button })
 end
 
+-- outline(plate, color, thickness, p) -> frame, stroke: a highlight outline that sits exactly on a kit plate's own
+-- border. Every plate has a 2 px dark border with ~3 px rounded corners on screen, so the stroke is drawn on an inner
+-- frame inset by its thickness (its outer edge lands on the plate edge) with a corner radius that gives the same ~3 px
+-- outer radius. Use this for every highlight on a plate (never a raw UIStroke / UICorner on the plate itself).
+-- p.alpha = stroke transparency (default 0), p.enabled = false starts it hidden, p.z = ZIndex, p.name.
+-- Not for plates whose children are laid out by a UIListLayout / UIGridLayout (chips, auto-sized tags).
+function UI.outline(plate, color, t, p)
+	p = p or {}
+	t = t or 2
+	-- a UIPadding on the plate would shift the frame: compensate so it still covers the plate exactly
+	local pad = plate:FindFirstChildOfClass("UIPadding")
+	local pl, pr, pt, pb = UDim.new(), UDim.new(), UDim.new(), UDim.new()
+	if pad then pl, pr, pt, pb = pad.PaddingLeft, pad.PaddingRight, pad.PaddingTop, pad.PaddingBottom end
+	local f = mk("Frame", { Name = p.name or "Outline", BackgroundTransparency = 1, BorderSizePixel = 0, Active = false, Selectable = false,
+		Position = UDim2.new(-pl.Scale, t - pl.Offset, -pt.Scale, t - pt.Offset),
+		Size = UDim2.new(1 + pl.Scale + pr.Scale, -2 * t + pl.Offset + pr.Offset, 1 + pt.Scale + pb.Scale, -2 * t + pt.Offset + pb.Offset),
+		ZIndex = p.z or (plate.ZIndex + 8) }, plate)
+	mk("UICorner", { CornerRadius = UDim.new(0, math.max(0, 3 - t)) }, f)
+	local st = mk("UIStroke", { Name = "Stroke", Color = color or UI.C.manila, Thickness = t, Transparency = p.alpha or 0,
+		ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Enabled = p.enabled ~= false }, f)
+	return f, st
+end
+
 -- chip(parent, text, p) -> chipImage, label. p.w = fixed width (content centred) instead of sizing to the text;
 -- p.button = true makes it an ImageButton (use UI.chipBtn for a clickable chip with press / hover feedback)
 function UI.chip(parent, s, p)

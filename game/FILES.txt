@@ -34,6 +34,7 @@ client/Contracts.lua|ReplicatedStorage.Client|Contracts|ModuleScript
 client/Settings.lua|ReplicatedStorage.Client|Settings|ModuleScript
 client/Shop.lua|ReplicatedStorage.Client|Shop|ModuleScript
 client/GearShop.lua|ReplicatedStorage.Client|GearShop|ModuleScript
+client/Afk.lua|ReplicatedStorage.Client|Afk|ModuleScript
 client/Tester.lua|ReplicatedStorage.Client|Tester|ModuleScript
 client/Tutorial.lua|ReplicatedStorage.Client|Tutorial|ModuleScript
 client/ClientMain.client.lua|StarterPlayer.StarterPlayerScripts|ClientMain|LocalScript

@@ -30,7 +30,7 @@ R.Skills = {
 	{ key = "sup", name = "MAX SUPPLY", icon = "icon_supply", per = 1, unit = "", desc = "+1 max Supply per upgrade", cost = function(n) return 2 end },
 	{ key = "atk", name = "ATTACK", icon = "icon_attack", per = 4, unit = "", desc = "+4 attack per upgrade", cost = function(n) return 1 end },
 	{ key = "def", name = "DEFENSE", icon = "icon_defense", per = 4, unit = "", desc = "+4 defense per upgrade", cost = function(n) return 1 end },
-	{ key = "lot", name = "BUILDING LOTS", icon = "icon_properties", per = 1, unit = "", desc = "+1 lot (cost doubles each time)", cost = function(n) return 2 ^ (n + 1) end },
+	{ key = "lot", name = "BUILDING LOTS", icon = "icon_properties", per = 1, unit = "", desc = "+1 building lot", cost = function(n) return 2 ^ (n + 1) end },
 }
 R.SkillByKey = {}
 for _, s in ipairs(R.Skills) do R.SkillByKey[s.key] = s end
@@ -67,7 +67,8 @@ end
 ---------------------------------------------------------------- XP curve (26 Sep 2026)
 -- A level costs a multiple of what one FULL Influence bar earns at that level with the best law you have,
 -- so the refill on level-up can never chain into the next level by itself.
-R.XpFirst, R.XpBase, R.XpStep, R.XpCap = 0.75, 1.3, 0.2, 5
+-- 3 Oct (Kash: progress too fast, levels should be a lot harder): about twice the XP per level
+R.XpFirst, R.XpBase, R.XpStep, R.XpCap = 1.0, 2.5, 0.4, 10
 local bestXp, bestCash = {}, {}
 function R.BestXpPerInfluence(lv)
 	if bestXp[lv] then return bestXp[lv] end

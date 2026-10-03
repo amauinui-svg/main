@@ -32,6 +32,12 @@ AD.Init(PS, WS, RA)
 PS.Admin = AD
 PS.AN = AN
 BG.Start(PS, WS)
+task.spawn(function()
+	while true do
+		task.wait(60)
+		for plr, p in pairs(PS.Profiles) do if p.afkSince and plr.Parent then pcall(A.AfkTick, plr, p) end end
+	end
+end)
 CH.Start()
 PS.Chat = CH
 A.Init(PS, MK, RA, AD)
@@ -57,6 +63,8 @@ Request.OnServerInvoke = function(plr, action, args)
 	while p.busy and waited < 8 do waited += task.wait() end
 	if p.busy then return { ok = false, msg = "Busy, try again" } end
 	if PS.Profiles[plr] ~= p or p.leaving then return { ok = false, msg = "Left" } end -- audit M3
+	-- any real action ends AFK (the chamber only sends sync/afk while it is up)
+	if action ~= "afk" and action ~= "sync" and p.afkSince then p.afkSince = nil end
 	p.busy = true
 	local snap = AN.Before(p)
 	local okCall, res = pcall(fn, plr, p, args)

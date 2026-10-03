@@ -240,7 +240,8 @@ local function fighterCard(App, parent, f, side, cx, top, maxHp, range, z)
 	f = f or {}
 	local o = { side = side, f = f, maxHp = math.max(1, maxHp or 1), range = range or { 0, 0 } }
 	local card = UI.card(parent, { name = side == "a" and "Attacker" or "Defender", anchor = Vector2.new(0.5, 0), pos = UDim2.fromOffset(cx, top), sz = UDim2.fromOffset(CARD_W, CARD_H), z = z })
-	o.stroke = mk("UIStroke", { Color = C.rule, Thickness = 1.5, Transparency = 0.2 }, card)
+	-- result highlight on the card's own border (hidden until the fight ends)
+	o.outline, o.stroke = UI.outline(card, C.rule, 2, { alpha = 1 })
 	o.card, o.home = card, card.Position
 
 	-- portrait (avatar headshot for players, the big flag for AI nations) with the weapon beside it, facing the enemy
@@ -359,7 +360,7 @@ local function playFight(App, res, opts)
 	-- the panel is built at DESIGN size and scaled to fit (phones), popping in from the centre
 	local fitS = math.min(1, (App.W() - 24) / DESIGN_W, (App.H() - 24) / DESIGN_H)
 	local panel = UI.img(stage, "panel_plain", { name = "FightPanel", sz = UDim2.fromOffset(DESIGN_W, DESIGN_H), pos = UDim2.fromScale(0.5, 0.5), anchor = Vector2.new(0.5, 0.5), z = 72 })
-	mk("UIStroke", { Color = C.gold, Thickness = 2, Transparency = 0.15 }, panel)
+	UI.outline(panel, C.gold, 2, { alpha = 0.15 })
 	local pscale = mk("UIScale", { Scale = fitS * 0.6 }, panel)
 	tw(pscale, 0.34, { Scale = fitS }, Enum.EasingStyle.Back)
 
@@ -524,8 +525,8 @@ local function playFight(App, res, opts)
 		hint.Visible = false
 		local win = res.win
 		local winner, loser = win and A or D, win and D or A
-		winner.stroke.Color, winner.stroke.Thickness, winner.stroke.Transparency = C.gold, 2.5, 0
-		loser.stroke.Color = C.bad
+		winner.stroke.Color, winner.stroke.Transparency = C.gold, 0
+		loser.stroke.Color, loser.stroke.Transparency = C.bad, 0.2
 		if loser.img then tw(loser.img, 0.5, { ImageColor3 = Color3.fromRGB(90, 90, 96) }) end
 		tw(loser.weapon, 0.5, { ImageTransparency = 0.5 })
 		sfx(App, win and "victory" or "defeat")
@@ -597,7 +598,7 @@ local function resultPopup(App, res, targetName)
 	local _, bd = popup(App, "RAID REPORT", 460, 420)
 	local win = res.win
 	local band = UI.card(bd, { name = "Banner", hot = win, sz = UDim2.new(1, -40, 0, 74), z = 74 })
-	mk("UIStroke", { Color = win and C.good or C.bad, Thickness = 2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, band)
+	UI.outline(band, win and C.good or C.bad, 2)
 	local big = text(band, win and "VICTORY" or "DEFEAT", { font = "display", size = 38, color = win and C.gold or C.bad, align = Enum.TextXAlignment.Center, pos = UDim2.fromOffset(0, 4), sz = UDim2.new(1, 0, 0, 42), z = 75, stroke = 1.5 })
 	FX.centre(big)
 	local bs = mk("UIScale", { Scale = 1.6 }, big)
@@ -677,8 +678,7 @@ local function raidedPopup(App, n)
 	-- the layout positions the cell (no input); the card inside slides in from the right
 	local cell = mk("Frame", { Name = "Raided", BackgroundTransparency = 1, Active = false, Size = UDim2.fromOffset(340, 96), ZIndex = 82, LayoutOrder = math.floor(os.clock() * 10) }, host)
 	local card = UI.img(cell, "panel_plain", { name = "Card", sz = UDim2.fromScale(1, 1), pos = UDim2.fromOffset(360, 0), z = 83 })
-	mk("UIStroke", { Color = accent, Thickness = 1.5, Transparency = 0.25 }, card)
-	mk("Frame", { Name = "Accent", Size = UDim2.new(0, 5, 1, -12), Position = UDim2.fromOffset(6, 6), BackgroundColor3 = accent, BorderSizePixel = 0, ZIndex = 84 }, card)
+	UI.outline(card, accent, 2, { alpha = 0.25 })
 	local em = mk("Frame", { BackgroundColor3 = Color3.fromHex("10141a"), BorderSizePixel = 0, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 18, 0, 30), Size = UDim2.fromOffset(38, 38), ZIndex = 84 }, card)
 	mk("UICorner", { CornerRadius = UDim.new(1, 0) }, em)
 	mk("UIStroke", { Color = accent, Thickness = 2 }, em)
@@ -740,8 +740,7 @@ local function spiedNote(App, n)
 	-- the layout positions the cell; the card inside is centre-anchored so it pops from its middle
 	local cell = mk("TextButton", { Name = "Spied", Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.fromOffset(330, 70), ZIndex = 82, LayoutOrder = math.floor(os.clock() * 10) }, spiedHost)
 	local card = UI.img(cell, "panel_plain", { name = "Card", sz = UDim2.fromScale(1, 1), pos = UDim2.fromScale(0.5, 0.5), anchor = Vector2.new(0.5, 0.5), z = 83 })
-	mk("UIStroke", { Color = C.blue, Thickness = 1.5, Transparency = 0.3 }, card)
-	mk("Frame", { Size = UDim2.new(0, 5, 1, -12), Position = UDim2.fromOffset(6, 6), BackgroundColor3 = C.blue, BorderSizePixel = 0, ZIndex = 84 }, card)
+	UI.outline(card, C.blue, 2, { alpha = 0.3 })
 	UI.icon(card, "icon_satellite", 30, C.blue, UDim2.new(0, 22, 0.5, 0), { z = 84, anchor = Vector2.new(0, 0.5) })
 	text(card, string.upper(tostring(n.by or "Someone")) .. " SPIED ON YOU", { font = "display", size = 17, color = C.blue, pos = UDim2.fromOffset(62, 8), sz = UDim2.new(1, -72, 0, 24), z = 84, truncate = true })
 	text(card, "LV " .. tostring(n.lv or "?") .. " · they can see your cash and army. Bank your cash!", { size = 13, color = C.ink, pos = UDim2.fromOffset(62, 34), sz = UDim2.new(1, -72, 0, 28), z = 84, wrap = true })
@@ -789,10 +788,10 @@ S.battle = { build = function(host, App)
 	mk("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Right, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }, chips)
 
 	infoButton(App, body, "HOW RAIDS WORK",
-		"You can raid the other nations in <b>this server</b> plus <b>3 rival nations</b> from around the world. The list is fixed: it cannot be refreshed.\n\n" ..
-		"Their defense and cash are <b>hidden</b>. <font color='#7fb0e6'><b>SPY</b></font> (" .. SPY_SUPPLY .. " Supply) to see them for 15 minutes. They are told you spied.\n\n" ..
-		"Win and you take <font color='#8fd07a'><b>10% of their cash on hand</b></font>, up to about 1 hour of their law income. Banked cash is safe.\n\n" ..
-		"The same nation can be raided again after <b>1 minute</b>. <font color='#e2695f'><b>Soldiers die on both sides</b></font>, cheapest first.",
+		"Raid the nations in <b>this server</b> plus <b>3 rival nations</b> from around the world.\n\n" ..
+		"<font color='#7fb0e6'><b>SPY</b></font> (" .. SPY_SUPPLY .. " Supply) to see their defense and cash.\n\n" ..
+		"Win to steal <font color='#8fd07a'><b>10% of their cash on hand</b></font>. Bank your own cash to keep it safe!\n\n" ..
+		"<font color='#e2695f'><b>Soldiers fall on both sides</b></font>, so keep your army strong.",
 		UDim2.fromOffset(0, 5), 8)
 	text(body, "Raid nations in your server and 3 rival nations. SPY first to see their defense and cash. Win to steal 10% of their cash on hand.",
 		{ size = 14, color = C.muted, wrap = true, pos = UDim2.fromOffset(34, 0), sz = UDim2.new(1, -34, 0, 36), z = 7, valign = Enum.TextYAlignment.Center })
@@ -810,7 +809,7 @@ S.battle = { build = function(host, App)
 		list.Size = UDim2.new(1, 0, 1, show and -120 or -44)
 		if not show then return end
 		local card = UI.card(revengeHost, { sz = UDim2.fromScale(1, 1), z = 7, hot = true })
-		mk("UIStroke", { Color = C.bad, Thickness = 2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, card)
+		UI.outline(card, C.bad, 2)
 		UI.icon(card, "icon_flame", 30, C.bad, UDim2.new(0, 14, 0.5, 0), { z = 8, anchor = Vector2.new(0, 0.5) })
 		text(card, "REVENGE", { font = "display", size = 20, color = C.bad, pos = UDim2.fromOffset(54, 6), sz = UDim2.new(1, -440, 0, 24), z = 8 })
 		text(card, "<b>" .. esc(rv.name) .. "</b> raided you " .. ago(App, rv.t) .. ". Hit back!", { size = 15, rich = true, pos = UDim2.fromOffset(54, 34), sz = UDim2.new(1, -440, 0, 22), z = 8, truncate = true })

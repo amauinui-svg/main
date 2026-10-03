@@ -251,26 +251,38 @@ S.laws = { build = function(host, App)
 	end
 
 	function obj:Refresh(st)
+		-- Kash 3 Oct: every era tab is shown; eras you don't have yet only show a lock and the level they open at
 		local cur = R.PlayerEra(st)
-		local maxTab = math.min(#D.Eras, cur + 1)
 		local giftOn = giftBtn.Inst.Visible
-		if not tabs or obj.maxTab ~= maxTab or obj.tabsGift ~= giftOn then
+		if not tabs or obj.curEra ~= cur or obj.tabsGift ~= giftOn then
 			if tabs then tabs.Inst:Destroy() end
 			local labels = {}
-			for e = 1, maxTab do table.insert(labels, string.upper(D.Eras[e].name)) end
-			obj.maxTab = maxTab
+			for e = 1, #D.Eras do table.insert(labels, e <= cur and string.upper(D.Eras[e].name) or ("LV " .. D.Eras[e].start)) end
+			obj.curEra = cur
 			obj.tabsGift = giftOn
-			-- era tabs shrink to share the row with the FREE GIFT button instead of running under it
 			local avail = App.W() - (App.NAVW or 176) - 48 - (giftOn and 184 or 0)
-			local tabW = math.clamp(math.floor(avail / maxTab) - 6, 72, 132)
-			tabs = UI.tabs(body, labels, function(i) obj.era = i; build(App.state) end, { w = tabW, sz = UDim2.new(1, giftOn and -184 or 0, 0, 34), textSize = 13, z = 7 })
-			obj.era = obj.era or cur
+			local tabW = math.clamp(math.floor(avail / #D.Eras) - 6, 64, 132)
+			tabs = UI.tabs(body, labels, function(i)
+				if i > cur + 1 then
+					App.toast("Unlocks at level " .. D.Eras[i].start, nil, "info")
+					tabs:Set(obj.era)
+					return
+				end
+				obj.era = i; build(App.state)
+			end, { w = tabW, sz = UDim2.new(1, giftOn and -184 or 0, 0, 34), textSize = 13, z = 7 })
+			for e = cur + 1, #D.Eras do
+				local b = tabs.buttons[e]
+				if b then
+					UI.icon(b.Inst, "icon_lock", 14, C.muted, UDim2.new(0, 10, 0.5, 0), { z = b.Inst.ZIndex + 2, anchor = Vector2.new(0, 0.5) })
+					b.Label.Position = UDim2.fromOffset(18, 0); b.Label.Size = UDim2.new(1, -22, 1, 0)
+				end
+			end
+			obj.era = math.min(obj.era or cur, cur + 1)
 			tabs:Set(obj.era)
 			build(st)
 		end
 		for _, card in pairs(obj.cards) do updateCard(card, st) end
-		local inf = st.inf .. "/" .. st.infMax
-		sub.Text = "Influence <font color='#e0a650'><b>" .. inf .. "</b></font> · 25/50/100 passes = Bronze/Silver/Gold mastery · Gold gives +1 skill point"
+		sub.Text = "Influence <font color='#e0a650'><b>" .. st.inf .. "/" .. st.infMax .. "</b></font>"
 	end
 	function obj:Opened()
 		local cur = R.PlayerEra(App.state)
@@ -434,7 +446,7 @@ S.properties = { build = function(host, App)
 		text(b1, "INCOME", { font = "bold", size = 13, color = C.muted, pos = UDim2.fromOffset(16, 8), sz = UDim2.new(1, -20, 0, 16), z = 8 })
 		text(b1, R.Money(st.incHr) .. "/hr", { font = "display", size = 28, color = C.good, pos = UDim2.fromOffset(16, 26), sz = UDim2.new(1, -20, 0, 32), z = 8 })
 		local bonus = math.floor(((st.mods and st.mods.props or 1) - 1) * 100 + 0.5)
-		plate(b1, (bonus > 0 and ("+" .. bonus .. "% bonus · ") or "") .. "50% while offline", UDim2.new(1, -12, 0, 10), Vector2.new(1, 0), 9, C.muted)
+		plate(b1, (bonus > 0 and ("+" .. bonus .. "% bonus · ") or "") .. "earns while offline", UDim2.new(1, -12, 0, 10), Vector2.new(1, 0), 9, C.muted)
 		local b2 = UI.card(head, { sz = UDim2.new(0.5, -5, 1, 0), pos = UDim2.new(0.5, 5, 0, 0), z = 7 })
 		text(b2, "LOTS", { font = "bold", size = 13, color = C.muted, pos = UDim2.fromOffset(16, 8), sz = UDim2.new(1, -20, 0, 16), z = 8 })
 		text(b2, used .. " / " .. st.lotsMax, { font = "display", size = 28, pos = UDim2.fromOffset(16, 26), sz = UDim2.new(0.5, 0, 0, 32), z = 8 })
@@ -725,7 +737,7 @@ S.skills = { build = function(host, App)
 	end
 	function obj:Refresh(st)
 		UI.clear(list)
-		sub.Text = "<font color='#f0c75a'><b>" .. st.skillFree .. " POINTS FREE</b></font> · +3 every level · +1 for every law at Gold mastery (" .. st.goldLaws .. " so far)"
+		sub.Text = "<font color='#f0c75a'><b>" .. st.skillFree .. " POINTS FREE</b></font> · level up and master laws to earn more"
 		for k, s in ipairs(R.Skills) do
 			local n = st.sk[s.key] or 0
 			local cost = s.cost(n)
@@ -763,7 +775,7 @@ S.bank = { build = function(host, App)
 		UI.icon(vault, "icon_bank", 30, C.gold, UDim2.fromOffset(16, 14), { z = 7 })
 		text(vault, "THE VAULT", { font = "display", size = 22, pos = UDim2.fromOffset(56, 14), sz = UDim2.new(1, -110, 0, 30), z = 7 })
 		UI.infoBtn(vault, UDim2.new(1, -40, 0, 14), function()
-			App.confirm("HOW THE BANK WORKS", "• Banked cash <b>can't be stolen</b> in raids.\n• Depositing costs a <b>" .. math.floor(Config.Bank.DepositFee * 100) .. "% fee</b>. Withdrawing is free.\n• It earns <b>" .. (Config.Bank.InterestPerHour * 100) .. "% interest per hour</b> (half while you're offline), with no cap.\n• You can't buy things straight from the bank: withdraw first.", "GOT IT", "manila", function() end)
+			App.confirm("HOW THE BANK WORKS", "• Banked cash <b>can't be stolen</b> in raids.\n• Depositing costs a <b>" .. math.floor(Config.Bank.DepositFee * 100) .. "% fee</b>. Withdrawing is free.\n• It earns <b>" .. (Config.Bank.InterestPerHour * 100) .. "% interest every hour</b>.\n• Withdraw your cash before you buy things.", "GOT IT", "manila", function() end)
 		end, { z = 8, size = 28 })
 		balance = text(vault, R.Money(st.bank or 0), { font = "display", size = 38, color = C.gold, pos = UDim2.fromOffset(16, 52), sz = UDim2.new(1, -32, 0, 44), z = 7 })
 		rateL = text(vault, "", { size = 15, color = C.muted, rich = true, pos = UDim2.fromOffset(16, 98), sz = UDim2.new(1, -32, 0, 20), z = 7 })
@@ -796,7 +808,7 @@ S.bank = { build = function(host, App)
 		balance.Text = R.Money(b)
 		local rate = st.bankRate or Config.Bank.InterestPerHour
 		local base = st.bankCap and math.min(b, st.bankCap) or b -- display = payout (interest on the capped balance)
-		rateL.Text = "<font color='#8fd07a'><b>+" .. R.Money(base * rate) .. "/hr</b></font> interest (" .. (math.floor(rate * 1000 + 0.5) / 10) .. "%/h" .. ((st.bankCap and b > st.bankCap) and (" on the first " .. R.Money(st.bankCap)) or "") .. ") · safe from raids"
+		rateL.Text = "<font color='#8fd07a'><b>+" .. R.Money(base * rate) .. "/hr</b></font> interest (" .. (math.floor(rate * 1000 + 0.5) / 10) .. "%/h) · safe from raids"
 	end
 	function obj:Refresh(st)
 		buildVault(st); tickVault(st)
@@ -806,7 +818,7 @@ S.bank = { build = function(host, App)
 		text(left, "STATE LOAN", { font = "display", size = 20, pos = UDim2.fromOffset(52, 12), sz = UDim2.new(1, -70, 0, 26), z = 7 })
 		if st.loan then
 			local total = math.floor(st.loan.amt * 1.1)
-			text(left, "You owe <b>" .. R.Money(st.loan.owed) .. "</b>. 20% of what you earn repays it.", { size = 15, rich = true, wrap = true, pos = UDim2.fromOffset(16, 44), sz = UDim2.new(1, -32, 0, 40), z = 7, valign = Enum.TextYAlignment.Top })
+			text(left, "You owe <b>" .. R.Money(st.loan.owed) .. "</b>. It pays itself back as you earn.", { size = 15, rich = true, wrap = true, pos = UDim2.fromOffset(16, 44), sz = UDim2.new(1, -32, 0, 40), z = 7, valign = Enum.TextYAlignment.Top })
 			local bar = UI.bar(left, C.good, { pos = UDim2.fromOffset(16, 88), sz = UDim2.new(1, -32, 0, 22), z = 7 })
 			bar:Set(1 - st.loan.owed / math.max(1, total), "REPAID " .. math.floor((1 - st.loan.owed / math.max(1, total)) * 100) .. "%", "")
 			UI.button(left, st.cash > 0 and "manila" or "locked", "REPAY " .. R.Money(math.min(st.cash, st.loan.owed)), function(btn) App.req("loanRepay", {}, btn) end, { pos = UDim2.new(0, 16, 1, -54), sz = UDim2.new(1, -32, 0, 40), z = 8 })
@@ -872,7 +884,7 @@ S.tasks = { build = function(host, App)
 		UI.icon(card, "icon_gift", 30, C.gold, UDim2.fromOffset(16, 20), { z = 8 })
 		text(card, "ALL THREE DONE: +5 GOLD", { font = "display", size = 20, color = C.gold, pos = UDim2.fromOffset(62, 0), sz = UDim2.new(1, -260, 1, 0), z = 8 })
 		UI.button(card, t.bonus and "locked" or (all and "gold" or "slate"), t.bonus and "CLAIMED" or "CLAIM", function(btn) App.req("taskBonus", {}, btn) end, { pos = UDim2.new(1, -186, 0, 13), sz = UDim2.fromOffset(170, 44), z = 9 })
-		obj.subBase = "New orders every day at 00:00 UTC"
+		obj.subBase = "New orders every day"
 	end
 	function obj:Tick()
 		local now = App.now()

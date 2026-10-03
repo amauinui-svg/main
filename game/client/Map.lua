@@ -454,10 +454,6 @@ function Map.build(host, App)
 		local secs = T.TripSeconds(c.at, b, R.PlayerEra(st), st.gp and st.gp.FastConvoys)
 		local card = UI.card(plist, { sz = UDim2.new(1, 0, 0, 96), z = 27, order = order, hot = L.hot or L.ev ~= nil })
 		UI.icon(card, L.icon, 26, (L.hot or L.ev) and C.gold or C.manila, UDim2.fromOffset(10, 10), { z = 28 })
-		if L.ev then
-			-- event loads get a gold edge so they stand out in the list
-			mk("Frame", { Name = "EventEdge", BorderSizePixel = 0, BackgroundColor3 = C.gold, Position = UDim2.fromOffset(3, 8), Size = UDim2.new(0, 4, 1, -16), ZIndex = 28 }, card)
-		end
 		text(card, L.name, { font = "heavy", size = 17, pos = UDim2.fromOffset(44, 6), sz = UDim2.new(1, -150, 0, 20), z = 28, truncate = true })
 		local tags = {}
 		if L.demand then table.insert(tags, "<font color='#8fd07a'>WANTED +30%</font>") end
@@ -647,7 +643,7 @@ function Map.build(host, App)
 			UI.button(war, protected and "locked" or "red", "x5", function(btn) local r = App.req("siege", { city = b, n = 5 }, btn); if r.ok then App.float(btn.Inst, "-" .. R.Short(r.dmg), C.bad) end end, { sz = UDim2.new(0.25, -4, 1, 0), pos = UDim2.new(0.5, 4, 0, 0), z = 29, textSize = 14 })
 			UI.button(war, protected and "locked" or "red", "MAX", function(btn) local r = App.req("siege", { city = b, n = 50 }, btn); if r.ok then App.float(btn.Inst, "-" .. R.Short(r.dmg), C.bad) end end, { sz = UDim2.new(0.25, -4, 1, 0), pos = UDim2.new(0.75, 4, 0, 0), z = 29, textSize = 14 })
 			local note = row(34, nx())
-			text(note, "1 Supply per hit. When the garrison hits 0 the alliance that did the most damage in the last 30 min takes the city.", { size = 12, color = C.muted, sz = UDim2.fromScale(1, 1), z = 28, wrap = true })
+			text(note, "1 Supply per hit. Break the garrison to capture the city!", { size = 12, color = C.muted, sz = UDim2.fromScale(1, 1), z = 28, wrap = true })
 		end
 
 		if b ~= st.home then
@@ -764,7 +760,7 @@ function Map.build(host, App)
 			obj.focus(act.city)
 		else
 			local nx = Events.Next(now)
-			App.toast("NEXT WORLD EVENT IN " .. R.Clock(nx.starts - now), "For 15 minutes the first convoy you send to the event city pays big.", "info")
+			App.toast("NEXT WORLD EVENT IN " .. R.Clock(nx.starts - now), "Send a convoy to the event city for big pay!", "info")
 		end
 	end)
 	App.on("tick", function() updateEvent() end)

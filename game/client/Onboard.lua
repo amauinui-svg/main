@@ -104,7 +104,7 @@ function O.show(App)
 		for ei, e in ipairs(emblems) do
 			local b = UI.img(em, "inset", { button = true, name = "Emblem", order = ei, sz = UDim2.fromOffset(34, 34), z = 64 })
 			if not e then text(b, "NONE", { font = "heavy", size = 10, color = C.muted, align = Enum.TextXAlignment.Center, sz = UDim2.fromScale(1, 1), z = 65 }) end
-			if (form.flag.e or false) == e then UI.mk("UIStroke", { Color = C.manila, Thickness = 2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, b) end
+			if (form.flag.e or false) == e then UI.outline(b, C.manila, 2) end
 			if e then UI.icon(b, e, 22, C.ink, UDim2.fromScale(0.5, 0.5), { z = 65, anchor = Vector2.new(0.5, 0.5) }) end
 			local locked = e and not owned
 			if locked then lockMark(b, 66) end
@@ -146,7 +146,7 @@ function O.show(App)
 	end
 	steps[4] = function()
 		text(area, "Pick your home capital", { font = "display", size = 24, pos = UDim2.fromOffset(4, 10), sz = UDim2.new(1, 0, 0, 30), z = 63 })
-		text(area, "Your first convoy starts here and every new convoy is built here. You can trade with every city either way.", { size = 15, color = C.muted, wrap = true, pos = UDim2.fromOffset(4, 42), sz = UDim2.new(1, 0, 0, 40), z = 63 })
+		text(area, "Your convoys start here. You can trade with every city!", { size = 15, color = C.muted, wrap = true, pos = UDim2.fromOffset(4, 42), sz = UDim2.new(1, 0, 0, 40), z = 63 })
 		local list = UI.list(area, { pos = UDim2.fromOffset(0, 86), sz = UDim2.new(1, 0, 1, -86), gap = 8, z = 63 })
 		local popular = (App.world and App.world.popular) or Config.PopularCapitals
 		local function cityCard(parent, i, order, hot)

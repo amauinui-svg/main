@@ -26,6 +26,9 @@ local GROUPS = {
 		{ "REMOVE SHIELD", "/shield 0" }, { "LOGIN REWARD", "/login" }, { "NEW ORDERS", "/tasks" }, { "OPEN WORLD EVENT", "/event", "gold" },
 		{ "NORMAL EVENTS", "/noevent" },
 	} },
+	{ "SOUNDS", {
+		{ "SOUND BOARD", "#sounds", "blue" }, { "AFK CHAMBER", "#afk", "blue" },
+	} },
 	{ "SHOP AND ALLIANCE", {
 		{ "STARTER PACK AGAIN", "/starter" }, { "BUNDLE AGAIN", "/bundle" }, { "PASSES OFF", "/passes off" }, { "PASSES ON", "/passes on" },
 		{ "+500 ALLIANCE XP", "/allyxp 500" }, { "+$1M TREASURY", "/allytreasury 1m" }, { "SAVE NOW", "/save" }, { "HELP", "/help" },
@@ -77,7 +80,9 @@ S._tester = { init = function(App)
 			mk("UIGridLayout", { CellSize = UDim2.new(0.25, -5, 0, 34), CellPadding = UDim2.fromOffset(5, 5), SortOrder = Enum.SortOrder.LayoutOrder }, grid)
 			for i, b in ipairs(g[2]) do
 				UI.button(grid, b[3] or "slate", b[1], function()
-					if b[2] == "/reset" then
+					if b[2] == "#sounds" then if App.soundBoard then App.soundBoard() end
+					elseif b[2] == "#afk" then open = false; if panel then panel.Visible = false end; if App.openAfk then App.openAfk() end
+					elseif b[2] == "/reset" then
 						App.confirm("RESET PROGRESS?", "This wipes your save and starts you again as a brand new player. Purchases you own stay.", "RESET", "red", function() run("/reset") end)
 					else run(b[2]) end
 				end, { z = 93, order = i, textSize = 12 })
@@ -106,6 +111,40 @@ S._tester = { init = function(App)
 		if open and box then task.defer(function() box:CaptureFocus() end) end
 	end
 	App.toggleTester = toggle
+
+	-- SOUND BOARD (Kash 23:48: preview sounds before they go in). Current sounds by key, plus candidates to pick from.
+	local CANDIDATES = {
+		{ "DEFEAT (raid lost)", { { "A", 125909120236588, "Mounting Consequences sting (in use)" }, { "B", 116298781032555, "Sad trombone" }, { "C", 1837950656, "Brute Force sting" }, { "D", 97861773515321, "Lose arcade" }, { "E", 115055593775910, "Old defeat sound" } } },
+		{ "MYTHIC / SECRET / FORBIDDEN REVEAL", { { "A", 9047100306, "Hustler sting (mythic)" }, { "B", 9047103106, "All It Takes sting (secret)" }, { "C", 1836860398, "Winning Spirit (forbidden)" }, { "D", 73774648241042, "Rating excellent" }, { "E", 135385970610304, "Twinkle" }, { "F", 134527763388412, "Current legendary" } } },
+	}
+	local board
+	function App.soundBoard()
+		if board then board:Destroy(); board = nil; return end
+		local p, body = UI.panel(App.sg or App.root, "SOUND BOARD", { sz = UDim2.fromOffset(640, 560), pos = UDim2.fromScale(0.5, 0.5), anchor = Vector2.new(0.5, 0.5), z = 95, name = "SoundBoard" })
+		board = p
+		UI.button(p, "slate", "X", function() p:Destroy(); board = nil end, { pos = UDim2.new(1, -54, 0, 10), sz = UDim2.fromOffset(40, 36), z = 99, textSize = 16 })
+		local list = UI.list(body, { z = 96, gap = 6 })
+		local order = 0
+		local function head(t) order += 1; text(list, t, { font = "heavy", size = 15, color = C.manila, sz = UDim2.new(1, 0, 0, 22), z = 97, order = order }) end
+		head("CANDIDATES: tell Claude the letter you like")
+		for _, g in ipairs(CANDIDATES) do
+			order += 1
+			text(list, g[1], { font = "bold", size = 14, color = C.muted, sz = UDim2.new(1, 0, 0, 18), z = 97, order = order })
+			for _, c in ipairs(g[2]) do
+				order += 1
+				local row = mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, -8, 0, 34), ZIndex = 97, LayoutOrder = order }, list)
+				UI.button(row, "green", "PLAY " .. c[1], function() App.sfxPreview(c[2]) end, { sz = UDim2.fromOffset(110, 32), z = 98, textSize = 13 })
+				text(row, c[3], { size = 14, pos = UDim2.fromOffset(122, 0), sz = UDim2.new(1, -122, 1, 0), z = 98, truncate = true })
+			end
+		end
+		head("EVERY SOUND IN THE GAME")
+		for _, k in ipairs(App.sfxKeys and App.sfxKeys() or {}) do
+			order += 1
+			local row = mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, -8, 0, 34), ZIndex = 97, LayoutOrder = order }, list)
+			UI.button(row, "slate", "PLAY", function() App.sfx(k) end, { sz = UDim2.fromOffset(90, 32), z = 98, textSize = 13 })
+			text(row, k, { size = 14, pos = UDim2.fromOffset(102, 0), sz = UDim2.new(1, -102, 1, 0), z = 98 })
+		end
+	end
 
 	local function ensureButton()
 		if btn or not (App.state and App.state.admin) then return end

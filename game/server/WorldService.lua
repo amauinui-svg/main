@@ -37,8 +37,8 @@ for i, c in ipairs(World.Cities) do
 	table.insert(WS.Countries[c.country], i)
 end
 WS.Upgrades = {
-	{ key = "stipend", name = "STATE STIPEND", icon = "icon_coins", max = 10, desc = "Every member is paid an hourly wage (more for active members)" },
-	{ key = "trade", name = "TRADE NETWORK", icon = "icon_globe", max = 5, desc = "+3% convoy pay per level for all members" },
+	{ key = "stipend", name = "STATE STIPEND", icon = "icon_coins", max = 10, desc = "Every member earns an hourly wage" },
+	{ key = "trade", name = "TRADE NETWORK", icon = "icon_globe", max = 5, desc = "+3% convoy pay for every member" },
 	{ key = "war", name = "WAR COLLEGE", icon = "icon_attack", max = 5, desc = "+5% siege damage per level" },
 	{ key = "fort", name = "FORTIFICATIONS", icon = "icon_castle", max = 5, desc = "+10% garrison per level on captured cities" },
 }
@@ -354,7 +354,7 @@ WS.QuestPool = {
 	{ key = "raid", name = "Win raids", per = 12 },
 	{ key = "hit", name = "Land siege hits", per = 25 },
 	{ key = "boss", name = "Defeat bosses", per = 2 },
-	{ key = "donate", name = "Donate (minutes of law income)", per = 40 },
+	{ key = "donate", name = "Donate to the treasury", per = 40 },
 }
 WS.QuestXp = 600
 WS.MaxLevel = 30

@@ -255,17 +255,17 @@ local function dropColumns(kind, st)
 			table.insert(cols, { name = e.label, sub = pct(e.pct) .. " of drops", vals = vals, extra = extra, color = troops and C.gold or nil })
 		end
 		local pv = (st and st.pity and st.pity[kind]) or 0
-		table.insert(notes, "<font color='#e9b949'><b>PITY " .. pv .. " / " .. (O.Pity[kind] or 50) .. ":</b></font> the crate that fills the meter is guaranteed <b>Legendary or better</b>.")
+		table.insert(notes, "<font color='#e9b949'><b>PITY " .. pv .. " / " .. (O.Pity[kind] or 50) .. ":</b></font> fill the meter for a guaranteed <b>Legendary or better</b>.")
 		if kind == "limited" then
-			table.insert(notes, "<b>Elite troops</b> are your era's elite unit (pack size by rarity) and <font color='#f0c75a'><b>never die in raids</b></font>.")
-			table.insert(notes, "A <b>10-pack</b> guarantees Epic or better: if nothing Epic+ dropped, the last crate is upgraded to Epic.")
+			table.insert(notes, "<b>Elite troops</b> are your era's strongest unit and <font color='#f0c75a'><b>never die in raids</b></font>.")
+			table.insert(notes, "A <b>10-pack</b> always includes Epic or better.")
 		else
 			if st and freeSlots(st) == 0 then
-				table.insert(notes, "<font color='#e2695f'><b>Every slot is full right now: this crate gives gear only.</b></font>")
+				table.insert(notes, "<font color='#e2695f'><b>Your officer slots are full: this crate gives gear.</b></font>")
 			end
 		end
 	end
-	table.insert(notes, luck and "<font color='#f0c75a'><b>2x CRATE LUCK ACTIVE:</b></font> Legendary and up doubled (included above)."
+	table.insert(notes, luck and "<font color='#f0c75a'><b>2x CRATE LUCK ACTIVE:</b></font> Legendary and up doubled!"
 		or "The <b>2x Crate Luck</b> pass doubles Legendary and up.")
 	return cols, notes, luck
 end
@@ -429,7 +429,7 @@ local function openPicker(App, holderId, holderName, slot)
 	for i, g in ipairs(items) do
 		local rc = rcol(g.rarity)
 		local row = UI.card(lst, { sz = UDim2.new(1, 0, 0, 66), z = 75, order = i, hot = g.id == cur })
-		stroke(row, rc, g.id == cur and 2 or 1, g.id == cur and 0 or 0.4)
+		if g.id == cur then UI.outline(row, rc, 2) end
 		local well = mk("Frame", { BackgroundColor3 = DARK, BorderSizePixel = 0, Position = UDim2.fromOffset(8, 7), Size = UDim2.fromOffset(52, 52), ZIndex = 76 }, row)
 		corner(well, 6)
 		gearImage(well, g, UDim2.fromScale(0.9, 0.9), UDim2.fromScale(0.5, 0.5), 77, Vector2.new(0.5, 0.5))
@@ -461,7 +461,7 @@ local function resultCard(parent, r, w, h, z)
 	local item = r.item or {}
 	local rc = rcol(item.rarity)
 	local card = UI.card(parent, { name = "Result", sz = UDim2.fromScale(1, 1), z = z })
-	stroke(card, rc, 3)
+	UI.outline(card, rc, 3)
 	local band = mk("Frame", { BackgroundColor3 = rc, BackgroundTransparency = 0.5, BorderSizePixel = 0, Position = UDim2.fromOffset(4, 4), Size = UDim2.new(1, -8, 0.55, -4), ZIndex = z }, card)
 	corner(band, 8)
 	mk("UIGradient", { Rotation = 90, Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.1), NumberSequenceKeypoint.new(1, 1) }) }, band)
@@ -607,7 +607,7 @@ local function reveal(App, result, opts)
 				Size = UDim2.fromOffset(cw, ch), ZIndex = 77 }, grid)
 			local i = ridx(r.item and r.item.rarity)
 			local rc = rcol(r.item and r.item.rarity)
-			if App.sfx then App.sfx(i >= 5 and "reveal_legendary" or i >= 4 and "reveal_epic" or i >= 3 and "reveal_rare" or "reveal_common") end
+			if App.sfx then App.sfx(i >= 8 and "reveal_forbidden" or i >= 7 and "reveal_secret" or i >= 6 and "reveal_mythic" or i >= 5 and "reveal_legendary" or i >= 4 and "reveal_epic" or i >= 3 and "reveal_rare" or "reveal_common") end
 			if i >= 3 then
 				local a = aura(slot, rc, math.floor(math.max(cw, ch) * (1.15 + 0.1 * i)), UDim2.fromScale(0.5, 0.5), 77, math.min(1, 0.25 + 0.1 * i))
 				local as = mk("UIScale", { Scale = 0 }, a)
@@ -682,12 +682,11 @@ S.officers = { build = function(host, App)
 
 	-- header: [title or sub tabs] [i] [subtitle ......] [UNEQUIP ALL] [AUTO EQUIP BEST]
 	local hx = host:GetAttribute("TabsRight") or 158
-	infoBtn(App, panel, "OFFICERS", "Officers give your country % boosts. Every officer sits in a <b>slot</b>: you can only hire when a slot is open. "
-		.. "<font color='#ff9a2e'><b>LIMITED</b></font> officers (Mega VIP, Limited Bundle) get their own extra slot.\n\n"
-		.. "Every hire is unique: a rarity plus random traits. Weapons add attack, armor adds defense, on you and on each officer.",
+	infoBtn(App, panel, "OFFICERS", "Officers boost your whole country. Hire one into every open <b>slot</b>.\n\n"
+		.. "Every officer is unique, with their own rarity and traits. Give them weapons and armor to make them even stronger!",
 		UDim2.fromOffset(hx, 15), 8)
 	local subX = hx + 32
-	local subL = text(panel, "Hire officers with cash. Each one rolls a rarity and traits; their gear adds attack and defense.", { size = 13, color = C.muted, wrap = true, scaled = true,
+	local subL = text(panel, "Hire officers to boost your nation. Gear them up for more attack and defense!", { size = 13, color = C.muted, wrap = true, scaled = true,
 		pos = UDim2.fromOffset(subX, 8), sz = UDim2.new(1, -subX - 376, 0, 38), z = 7 })
 	-- too narrow (phones): the "i" popup already explains it, so hide the line instead of squashing it
 	local function fitSub() subL.Visible = subL.AbsoluteSize.X >= panel.AbsoluteSize.X * 0.2 end
@@ -789,7 +788,7 @@ S.officers = { build = function(host, App)
 		local box = UI.img(card, "inset", { button = true, name = slot, pos = UDim2.new(x, 0, 0, 8), sz = UDim2.new(0.19, -8, 1, -16), z = 8 })
 		if g then
 			local rc = rcol(g.rarity)
-			stroke(box, rc, 2)
+			UI.outline(box, rc, 2)
 			local well = mk("Frame", { BackgroundColor3 = DARK, BorderSizePixel = 0, Position = UDim2.new(0, 6, 0.5, 0), AnchorPoint = Vector2.new(0, 0.5), Size = UDim2.fromOffset(54, 54), ZIndex = 9 }, box)
 			corner(well, 5)
 			if ridx(g.rarity) >= 4 then glow(well, rc, 1.1, 9, 0.8) end
@@ -798,7 +797,6 @@ S.officers = { build = function(host, App)
 			text(box, rar(g.rarity).name .. " " .. string.upper(slot), { font = "bold", size = 11, color = rc, pos = UDim2.fromOffset(66, 28), sz = UDim2.new(1, -70, 0, 14), z = 9, truncate = true })
 			text(box, gearStat(g), { font = "bold", size = 12, color = C.good, pos = UDim2.fromOffset(66, 44), sz = UDim2.new(1, -70, 0, 16), z = 9, truncate = true })
 		else
-			stroke(box, C.rule, 1)
 			text(box, (slot == "weapon" and "Weapon" or "Armor") .. ": Empty", { font = "bold", size = 16, color = C.muted, pos = UDim2.fromOffset(12, -8), sz = UDim2.new(1, -20, 1, 0), z = 9, truncate = true })
 			text(box, "Tap to equip", { size = 12, color = C.dim, pos = UDim2.new(0, 12, 0.5, 6), sz = UDim2.new(1, -20, 0, 16), z = 9 })
 		end
@@ -818,7 +816,7 @@ S.officers = { build = function(host, App)
 
 	local function playerRow(st, order)
 		local card = UI.card(list, { sz = UDim2.new(1, 0, 0, 92), z = 7, order = order, hot = true })
-		stroke(card, C.gold, 2)
+		UI.outline(card, C.gold, 2)
 		playerPortrait(card, 76, UDim2.fromOffset(36, 8), 8)
 		text(card, "YOU", { font = "display", size = 22, color = C.gold, pos = UDim2.fromOffset(120, 8), sz = UDim2.new(0.3, -124, 0, 26), z = 8 })
 		text(card, "HEAD OF STATE", { font = "heavy", size = 13, color = C.manila, pos = UDim2.fromOffset(120, 36), sz = UDim2.new(0.3, -124, 0, 16), z = 8, truncate = true })
@@ -843,7 +841,7 @@ S.officers = { build = function(host, App)
 		local card = UI.card(list, { sz = UDim2.new(1, 0, 0, 92), z = 7, order = order, hot = limited })
 		if limited then
 			-- the special orange LIMITED frame: thick border, warm wash from the left, a LIMITED band under the portrait
-			stroke(card, LIMITED, 3)
+			UI.outline(card, LIMITED, 3)
 			local wash = mk("Frame", { Name = "LimitedWash", BackgroundColor3 = LIMITED, BackgroundTransparency = 0.55, BorderSizePixel = 0, Position = UDim2.fromOffset(3, 3),
 				Size = UDim2.new(0.45, 0, 1, -6), ZIndex = 7 }, card)
 			corner(wash, 8)
@@ -879,9 +877,8 @@ S.officers = { build = function(host, App)
 
 	local function hireRow(st, order, free)
 		local card = UI.card(list, { sz = UDim2.new(1, 0, 0, 100), z = 7, order = order })
-		stroke(card, free > 0 and C.rule or C.bad, 1, free > 0 and 0 or 0.4)
 		text(card, free > 0 and (free > 1 and (free .. " EMPTY SLOTS") or "EMPTY SLOT") or "NO FREE SLOT", { font = "display", size = 21, color = free > 0 and C.manila or C.bad, pos = UDim2.fromOffset(16, 8), sz = UDim2.new(0.42, -16, 0, 26), z = 8 })
-		text(card, free > 0 and "A random recruit joins your cabinet. Pricier hires roll rarer officers."
+		text(card, free > 0 and "A new officer joins your cabinet. Pricier hires find rarer officers."
 			or "Every slot is full. <b>Unlock a slot below</b> or fire an officer to hire again.",
 			{ size = 13, color = C.muted, pos = UDim2.fromOffset(16, 34), sz = UDim2.new(0.42, -16, 0, 30), z = 8, wrap = true, rich = true })
 		ratesBtn(App, card, "hire", { pos = UDim2.new(0, 16, 1, -34), sz = UDim2.fromOffset(150, 28) })
@@ -900,14 +897,13 @@ S.officers = { build = function(host, App)
 
 	local function lockedRow(st, order)
 		local card = UI.card(list, { sz = UDim2.new(1, 0, 0, 78), z = 7, order = order })
-		stroke(card, C.rule, 1)
 		local cost = st.nextSlotCost
 		local pass = Config.Passes and Config.Passes.BonusOfficer
 		local showPass = pass and not (st.gp and st.gp.BonusOfficer)
 		local rightW = (cost and 264 or 0) + (showPass and 196 or 0)
 		UI.icon(card, "icon_lock", 26, C.dim, UDim2.new(0, 16, 0.5, 0), { z = 8, anchor = Vector2.new(0, 0.5) })
 		text(card, cost and "LOCKED SLOT" or "ALL SLOTS UNLOCKED", { font = "display", size = 21, color = C.muted, pos = UDim2.fromOffset(54, 10), sz = UDim2.new(1, -64 - rightW, 0, 26), z = 8, truncate = true })
-		text(card, cost and "Buy this slot to hire another officer. Each slot costs more than the last." or "You own every officer slot you can buy.",
+		text(card, cost and "Buy this slot to hire another officer." or "You own every officer slot you can buy.",
 			{ size = 13, color = C.muted, pos = UDim2.fromOffset(54, 38), sz = UDim2.new(1, -64 - rightW, 0, 32), z = 8, wrap = true })
 		if cost then
 			local b = UI.button(card, "gold", "UNLOCK SLOT  " .. R.Money(cost), function(btn)
@@ -932,14 +928,14 @@ S.officers = { build = function(host, App)
 		if #ltd == 0 then return end
 		local hdr = mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 34), ZIndex = 7, LayoutOrder = order }, list)
 		text(hdr, "LIMITED SLOTS", { font = "display", size = 22, color = LIMITED, pos = UDim2.fromOffset(4, 4), sz = UDim2.fromOffset(190, 28), z = 8 })
-		infoBtn(App, hdr, "LIMITED SLOTS", "Limited officers from <b>Mega VIP</b> and the <b>Limited Bundle</b> sit in their own exclusive slots. "
-			.. "They never take a normal slot, always give their bonuses and can't be fired.", UDim2.fromOffset(200, 8), 8)
+		infoBtn(App, hdr, "LIMITED SLOTS", "Limited officers from <b>Mega VIP</b> and the <b>Limited Bundle</b> get their own bonus slot. "
+			.. "Their boosts are always on!", UDim2.fromOffset(200, 8), 8)
 		for k, o in ipairs(ltd) do officerRow(st, o, nil, order + k) end
 	end
 	-- no limited officer yet: a slim pointer to where they come from
 	local function limitedTeaser(order)
 		local card = UI.card(list, { sz = UDim2.new(1, 0, 0, 60), z = 7, order = order })
-		stroke(card, LIMITED, 1, 0.5)
+		UI.outline(card, LIMITED, 1, { alpha = 0.5 })
 		UI.icon(card, "icon_sparkles", 22, LIMITED, UDim2.new(0, 16, 0.5, 0), { z = 8, anchor = Vector2.new(0, 0.5) })
 		text(card, "<font color='#ff9a2e'><b>LIMITED SLOT</b></font>  Mega VIP and the Limited Bundle add an exclusive officer in their own extra slot.",
 			{ size = 14, color = C.muted, rich = true, wrap = true, pos = UDim2.fromOffset(50, 0), sz = UDim2.new(1, -200, 1, 0), z = 8 })
@@ -1021,7 +1017,7 @@ S.inventory = { build = function(host, App)
 	local obj = { tab = 1, rar = nil, sig = nil }
 	local sub = text(panel, "", { font = "bold", size = 14, color = C.muted, pos = UDim2.fromOffset(250, 16), sz = UDim2.new(1, -300, 0, 22), z = 7, align = Enum.TextXAlignment.Right, rich = true, truncate = true })
 	infoBtn(App, panel, "INVENTORY", "Everything you own. <b>Weapons</b> add attack and <b>armor</b> adds defense when worn by you or one of your officers. "
-		.. "Legendary and better gear rolls a bonus perk.\n\nOpen <b>crates</b> here. Tap a card for details, equip or discard.", UDim2.new(1, -36, 0, 18), 8)
+		.. "Legendary and better gear comes with a bonus perk.\n\nOpen <b>crates</b> here. Tap a card for details, equip or discard.", UDim2.new(1, -36, 0, 18), 8)
 
 	local FILTERS = { "ALL", "WEAPONS", "ARMOR", "OFFICERS", "CRATES" }
 	local tabs = UI.tabs(body, FILTERS, function(i) obj.tab = i; obj.sig = nil; obj:Refresh(App.state) end, { w = 106, textSize = 14, z = 7 })
@@ -1059,11 +1055,11 @@ S.inventory = { build = function(host, App)
 	-- ELITE TROOPS strip (Founder's Crate / Starter Pack): one chip per era you own elite troops of
 	local STRIP_H = 44
 	local strip = UI.img(body, "inset", { name = "EliteStrip", pos = UDim2.fromOffset(0, 44), sz = UDim2.new(1, -12, 0, STRIP_H - 6), z = 7, visible = false })
-	stroke(strip, C.gold, 1.5, 0.3)
+	UI.outline(strip, C.gold, 1.5, { alpha = 0.3 })
 	UI.icon(strip, "icon_crown", 18, C.gold, UDim2.new(0, 10, 0.5, 0), { z = 8, anchor = Vector2.new(0, 0.5) })
 	text(strip, "ELITE TROOPS", { font = "heavy", size = 14, color = C.gold, pos = UDim2.fromOffset(34, 0), sz = UDim2.new(0, 104, 1, 0), z = 8 })
-	infoBtn(App, strip, "ELITE TROOPS", "Elite troops come from the <b>Founder's Crate</b> and the <b>Starter Pack</b>. Each era has one elite unit, much stronger than its regular troops.\n\n"
-		.. "<font color='#f0c75a'><b>Elite troops never die in raids</b></font> and do not use army capacity. They always add their ATK and DEF to your power.", UDim2.new(0, 138, 0.5, -11), 9)
+	infoBtn(App, strip, "ELITE TROOPS", "Find Elite troops in the <b>Founder's Crate</b> and the <b>Starter Pack</b>. They are much stronger than regular troops.\n\n"
+		.. "<font color='#f0c75a'><b>Elite troops never die in raids</b></font> and don't take up army space.", UDim2.new(0, 138, 0.5, -11), 9)
 	local chips = UI.list(strip, { horizontal = true, pos = UDim2.fromOffset(166, 4), sz = UDim2.new(1, -172, 1, -4), gap = 8, z = 8 })
 	chips.ScrollBarThickness = 3
 	local function eliteOf(st)
@@ -1184,7 +1180,7 @@ S.inventory = { build = function(host, App)
 	---------------------------------------------- cards
 	local function card(order, rc, tag)
 		local c = UI.img(grid, "card", { button = true, z = 7, order = order })
-		stroke(c, rc, 2)
+		UI.outline(c, rc, 2)
 		hoverScale(c, 0.05)
 		text(c, tag, { font = "heavy", size = 11, color = C.muted, pos = UDim2.fromOffset(10, 6), sz = UDim2.new(1, -20, 0, 14), z = 9 })
 		local well = mk("Frame", { BackgroundColor3 = DARK, BorderSizePixel = 0, Position = UDim2.fromOffset(8, 22), Size = UDim2.new(1, -16, 0, 98), ZIndex = 8, ClipsDescendants = true }, c)
@@ -1290,8 +1286,8 @@ S.inventory = { build = function(host, App)
 		end
 		rarityBar(c, isBasic and "SUPPLY" or "LIMITED", rc)
 		c.Activated:Connect(function()
-			local body2 = isBasic and ("Gear and officers. Bought with cash: about " .. Config.Crates.Basic.lawMinutes .. " minutes of law income at your level.")
-				or "Gear or <b>ELITE TROOPS</b>. Elite troops never die in raids. A 10-pack guarantees Epic or better. Buy with gold or Robux. Limited time!"
+			local body2 = isBasic and ("Gear and officers. Buy it with cash!")
+				or "Gear or <b>ELITE TROOPS</b> that never die in raids. 10-packs always include Epic or better. Limited time!"
 			local _, bd, close = popup(App, def.name, 460, 250)
 			text(bd, body2, { size = 16, wrap = true, rich = true, sz = UDim2.new(1, 0, 1, -54), valign = Enum.TextYAlignment.Top, z = 74 })
 			UI.button(bd, "slate", "CLOSE", close, { sz = UDim2.fromOffset(150, 42), pos = UDim2.new(0, 0, 1, -4), anchor = Vector2.new(0, 1), z = 74 })

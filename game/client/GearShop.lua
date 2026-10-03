@@ -23,7 +23,7 @@ S.gearshop = { build = function(host, App)
 	local panel, body = UI.panel(host, "GEAR SHOP", { sz = UDim2.new(1, -20, 1, -20), pos = UDim2.fromOffset(10, 10), z = 5, titleSize = 26 })
 	local _ = panel
 	local timer = text(body, "", { font = "heavy", size = 16, color = C.gold, rich = true, pos = UDim2.fromOffset(0, 2), sz = UDim2.new(1, 0, 0, 22), z = 7, align = Enum.TextXAlignment.Right })
-	text(body, "New gear every 5 minutes. One of each item per restock. Rarer gear unlocks as you level up.", { size = 15, color = C.muted, pos = UDim2.fromOffset(0, 2), sz = UDim2.new(1, -260, 0, 22), z = 7, truncate = true })
+	text(body, "Fresh gear every 5 minutes. Level up for rarer gear!", { size = 15, color = C.muted, pos = UDim2.fromOffset(0, 2), sz = UDim2.new(1, -260, 0, 22), z = 7, truncate = true })
 	local list = UI.list(body, { pos = UDim2.fromOffset(0, 34), sz = UDim2.new(1, 0, 1, -34), gap = 8, z = 6 })
 
 	local function stat(g)
@@ -70,7 +70,7 @@ S.gearshop = { build = function(host, App)
 			for k, e in ipairs(byR[r] or {}) do
 				local g = e.gear
 				local card = UI.card(row, { z = 8, order = k })
-				mk("UIStroke", { Color = col, Thickness = 2, Transparency = locked and 0.6 or 0, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, card)
+				UI.outline(card, col, 2, { alpha = locked and 0.6 or 0 })
 				local well = mk("Frame", { BackgroundColor3 = C.black, BackgroundTransparency = 0.2, BorderSizePixel = 0, Position = UDim2.fromOffset(10, 10), Size = UDim2.fromOffset(84, 84), ZIndex = 9 }, card)
 				mk("UICorner", { CornerRadius = UDim.new(0, 8) }, well)
 				local glow = mk("UIGradient", { Color = ColorSequence.new(col:Lerp(C.black, 0.55), C.black), Rotation = 90 }, well)

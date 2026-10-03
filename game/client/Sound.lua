@@ -48,6 +48,10 @@ local SFX = {
 	reveal_rare      = { id = rid(4612374495), volume = 0.5, gap = 0.1, alt = rid(4612374393) },
 	reveal_epic      = { id = rid(1841209502), volume = 0.55, gap = 0.3, duck = true, alt = rid(1846631123) },
 	reveal_legendary = { id = rid(134527763388412), volume = 0.65, gap = 0.5, duck = true, alt = rid(9039690188) },
+	-- rarer unlocks (Kash 2 Oct 23:48): officers and items above Legendary get their own bigger stings
+	reveal_mythic    = { id = rid(9047100306), volume = 0.7, gap = 0.6, duck = true, alt = rid(1836860398) },
+	reveal_secret    = { id = rid(9047103106), volume = 0.7, gap = 0.6, duck = true, alt = rid(9047100306) },
+	reveal_forbidden = { id = rid(1836860398), volume = 0.75, gap = 0.6, duck = true, alt = rid(9047103106) },
 	-- war
 	raid_start       = { id = rid(1846284814), volume = 0.55, gap = 1, duck = true, with = "unsheath", alt = rid(1835324771) },
 	unsheath         = { id = rid(12222225), volume = 0.45, gap = 0.2 },
@@ -57,7 +61,7 @@ local SFX = {
 	crit             = { id = rid(9120730097), volume = 0.6, jitter = 0.03, gap = 0.1, alt = rid(9114559389) },
 	takedown_hit     = { id = rid(9120974378), volume = 0.35, gap = 0.6, stop = 2.5, with = "crit", alt = rid(9120975204) },
 	victory          = { id = rid(1835295052), volume = 0.6, gap = 2, duck = true, alt = rid(1835324771) },
-	defeat           = { id = rid(115055593775910), volume = 0.55, gap = 2, duck = true, alt = rid(125909120236588) },
+	defeat           = { id = rid(125909120236588), volume = 0.6, gap = 2, duck = true, alt = rid(1837950656) }, -- Kash 23:48: new defeat sound
 	boss_defeat      = { id = rid(1835324771), volume = 0.65, gap = 2, duck = true, with = "takedown_hit", alt = rid(119099828605032) },
 }
 
@@ -219,6 +223,14 @@ M._sound = { init = function(App)
 		if d.with then play(d.with, { volume = opts.volume }, false) end
 	end
 	function App.sfx(name, opts) play(name, opts, true) end
+	-- sound board (tester panel): every sound key, and raw candidate ids to audition
+	App.sfxKeys = function() local k = {}; for n in pairs(SFX) do table.insert(k, n) end; table.sort(k); return k end
+	local preview
+	function App.sfxPreview(id)
+		if preview then preview:Stop(); preview:Destroy() end
+		preview = Instance.new("Sound"); preview.SoundId = "rbxassetid://" .. tostring(id); preview.Volume = 0.7; preview.SoundGroup = gSFX; preview.Parent = root
+		preview:Play()
+	end
 	local function stopAllSfx()
 		for _, pool in pairs(pools) do for _, c in ipairs(pool) do c:Stop() end end
 		live = 0

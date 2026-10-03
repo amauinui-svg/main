@@ -74,9 +74,8 @@ function App.toast(title, body, tone)
 	local t = UI.img(toastHost, "panel_plain", { name = "Toast", sz = UDim2.fromOffset(520, body and 66 or 42), z = 80, order = toastN })
 	local entry = { card = t, until_ = os.clock() + (body and 4 or 3) }
 	liveToasts[key] = entry
-	mk("Frame", { Size = UDim2.new(0, 5, 1, -12), Position = UDim2.fromOffset(6, 6), BackgroundColor3 = color, BorderSizePixel = 0, ZIndex = 81 }, t)
-	text(t, title, { font = "display", size = 19, pos = UDim2.fromOffset(20, body and 6 or 8), sz = UDim2.new(1, -30, 0, 26), z = 81, color = color, truncate = true })
-	if body then text(t, body, { size = 15, pos = UDim2.fromOffset(20, 34), sz = UDim2.new(1, -30, 0, 24), z = 81, truncate = true, color = C.ink }) end
+	text(t, title, { font = "display", size = 19, pos = UDim2.fromOffset(16, body and 6 or 8), sz = UDim2.new(1, -32, 0, 26), z = 81, color = color, truncate = true })
+	if body then text(t, body, { size = 15, pos = UDim2.fromOffset(16, 34), sz = UDim2.new(1, -32, 0, 24), z = 81, truncate = true, color = C.ink }) end
 	task.spawn(function()
 		while os.clock() < entry.until_ do task.wait(0.2) end
 		if t.Parent then t:Destroy() end
@@ -323,7 +322,7 @@ App.content = content
 local defs = {}
 local inits = {} -- modules can return entries without a build field: { init = function(App) end }
 -- later modules override earlier ones (Warfare's raids replace War's battle, Contracts replaces Economy's tasks)
-for _, modName in ipairs({ "Sound", "Map", "Economy", "War", "Social", "Warfare", "Cabinet", "Country", "Contracts", "Settings", "Shop", "GearShop", "Tester", "Tutorial" }) do
+for _, modName in ipairs({ "Sound", "Map", "Economy", "War", "Social", "Warfare", "Cabinet", "Country", "Contracts", "Settings", "Shop", "GearShop", "Afk", "Tester", "Tutorial" }) do
 	local okReq, mod = pcall(require, ClientMods:WaitForChild(modName, 5))
 	if okReq and type(mod) == "table" then
 		for k, def in pairs(mod) do
@@ -589,6 +588,7 @@ handleNote = function(n)
 			App.emit("raidResult", n.res)
 			local r = n.res or {}
 			if r.ok and not r.fight then App.toast(r.win and "REVENGE STRIKE · VICTORY" or "REVENGE STRIKE", r.win and ("+" .. R.Money(r.cash or 0)) or nil, r.win and "gold" or "bad") end
+		elseif n.kind == "afkFind" then if App.afkFind then App.afkFind(n) end
 		elseif n.kind == "crates" then App.toast("+" .. n.n .. " FOUNDER'S CRATE" .. (n.n > 1 and "S" or ""), "Open them in your Inventory", "gold"); App.navBadge("inventory", "!")
 		elseif n.kind == "bundle" then App.toast("LIMITED BUNDLE UNLOCKED", "Empress Valeria Thorne and the Founder's Saber joined you", "gold"); App.big("bundle")
 		elseif n.kind == "toast" then App.toast(n.text, nil, n.tone)
@@ -691,6 +691,8 @@ if game:GetService("RunService"):IsStudio() then
 			elseif k == "login" and App.showLogin then App.showLogin()
 			elseif k == "settings" and App.openSettings then App.openSettings(arg ~= "" and arg or nil)
 			elseif k == "tester" and App.toggleTester then App.toggleTester()
+			elseif k == "afk" and App.openAfk then App.openAfk()
+			elseif k == "sounds" and App.soundBoard then App.soundBoard()
 			elseif k == "profile" and App.showProfile then App.showProfile(tonumber(arg) or plr.UserId)
 			elseif k == "emit" then App.emit(arg) end
 		end)

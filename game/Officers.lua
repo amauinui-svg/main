@@ -161,11 +161,11 @@ O.BasicOfficerChance = 0.08
 O.CrateInfo = {
 	limited = {
 		{ label = "Gear (weapon or armor)", pct = 75, odds = O.GearOdds.limited },
-		{ label = "Elite troops (pack size by rarity)", pct = 25, odds = O.GearOdds.limited },
+		{ label = "Elite troops", pct = 25, odds = O.GearOdds.limited },
 	},
 	basic = {
 		{ label = "Gear (weapon or armor)", pct = 92, odds = O.GearOdds.basic },
-		{ label = "Officer (only with an open slot, else gear)", pct = 8, odds = O.HireOdds.basic_officer },
+		{ label = "Officer", pct = 8, odds = O.HireOdds.basic_officer },
 	},
 }
 -- ctx = { era = your era, slotFree = true/false }

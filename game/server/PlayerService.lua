@@ -518,7 +518,7 @@ function PS.MigrateOfficers(p)
 	end
 	if n > 0 then
 		d.gold += gold
-		PS.Note(p, { kind = "toast", text = "The officer bench is gone: " .. n .. " benched officer" .. (n > 1 and "s" or "") .. " retired for " .. gold .. " gold.", tone = "gold" })
+		PS.Note(p, { kind = "toast", text = n .. " officer" .. (n > 1 and "s" or "") .. " retired with honors: +" .. gold .. " gold!", tone = "gold" })
 	end
 end
 function PS.AddGear(p, g)

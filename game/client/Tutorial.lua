@@ -120,7 +120,7 @@ S._tutorial = { init = function(App)
 
 	local function build()
 		card = UI.img(App.sg or App.root, "panel", { name = "Tutorial", sz = UDim2.fromOffset(520, 118), pos = UDim2.new(0.5, (App.NAVW or 176) / 2, 1, -18), anchor = Vector2.new(0.5, 1), z = 70 })
-		mk("UIStroke", { Color = C.gold, Thickness = 2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, card)
+		UI.outline(card, C.gold, 2)
 		UI.icon(card, "icon_sparkles", 26, C.gold, UDim2.fromOffset(16, 16), { z = 71 })
 		titleL = text(card, "", { font = "display", size = 20, color = C.manila, pos = UDim2.fromOffset(50, 12), sz = UDim2.new(1, -170, 0, 26), z = 71 })
 		stepL = text(card, "", { font = "heavy", size = 12, color = C.muted, pos = UDim2.new(1, -116, 0, 16), sz = UDim2.fromOffset(100, 18), z = 71, align = Enum.TextXAlignment.Right })

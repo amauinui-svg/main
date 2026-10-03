@@ -334,3 +334,12 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 - Bots (and players) can't raid a country until it has the RAIDS tab (level 6).
 - Tabs unlocked too late: lowered so everything is open by level 9 (Properties 2, Shop 3, Country 3, Orders 4, Military 4, Inventory 5, Bank 5, Raids 6, Bosses 7, Rankings 8, Alliance 9).
 - Off-style pills/progress bars/buttons and overlaps: whole-client pass onto the UI kit (chips, tags, bars, info buttons), composite sub tabs fixed, LIMITED plate, crate card layout, pity bars.
+
+## 2 Oct 23:43 - 3 Oct 00:11 (Kash)
+- Owned one-time passes/products in the shop get a grey kit cover: OWNED + THANK YOU FOR YOUR SUPPORT!
+- Code-drawn outlines never lined up with the art (corners): every highlight on a kit plate now uses UI.outline (matched to the plate border), many removed. No colored accent stripes on cards/toasts.
+- Defeat gets a new sound; Mythic/Secret/Forbidden reveals get their own stings. SOUND BOARD in the tester panel to preview every sound and candidate picks (tell Claude the letter).
+- Never tell players internal rules ("your sheet pauses, it never resets"). All player text rewritten short and motivating ("Come back every day for a reward.").
+- Progress too fast: levels need about twice the XP (XpFirst 1.0, XpBase 2.5, XpStep 0.4, XpCap 10).
+- Laws: every era tab is shown; eras you don't have show only a lock and the level (no name).
+- AFK CHAMBER: idle 15 min -> full-screen chamber with the world map, income, earnings while away, time away, and finds; every 60 s an 8% chance to find gear (rare+ lottery-low); RETURN goes back; prevents the 20 min idle kick.

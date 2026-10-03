@@ -1194,6 +1194,37 @@ function act.funnel(plr, p, a)
 	return ok()
 end
 
+-- AFK chamber: the client says when the player enters / leaves it. Finds roll on the server every 60 s.
+function act.afk(plr, p, a)
+	if a and a.on then
+		p.afkSince = p.afkSince or os.time()
+		p.afkFinds = p.afkFinds or {}
+		return ok({ since = p.afkSince })
+	end
+	local finds = p.afkFinds or {}
+	p.afkSince, p.afkFinds = nil, nil
+	return ok({ finds = finds })
+end
+function A.AfkTick(plr, p)
+	if not p.afkSince or os.time() - p.afkSince < 55 then return end
+	local rng = PS.Rng(p)
+	if rng:NextNumber() >= Config.Afk.Find then return end
+	if invFull(p.data, 1) then return end
+	local W = Config.Afk.Rarity
+	local tot = 0
+	for _, w in ipairs(W) do tot += w end
+	local x, r = rng:NextNumber() * tot, 1
+	for i, w in ipairs(W) do x -= w; if x <= 0 then r = i; break end end
+	local g = O.NewGear(rng, r)
+	g.id = string.format("g%x%06x", os.time(), rng:NextInteger(0, 16777215))
+	if not PS.AddGear(p, g) then return end
+	p.afkFinds = p.afkFinds or {}
+	table.insert(p.afkFinds, { name = g.name, rarity = g.rarity, icon = g.icon, t = os.time() })
+	PS.Note(p, { kind = "afkFind", gear = g })
+	if PS.AN then PS.AN.Custom(p, "AfkFind", r) end
+	PS.Sync(plr)
+end
+
 -- tutorial progress (Kash 2 Oct): step number, or -1 when skipped or finished
 function act.tutorial(plr, p, a)
 	local step = tonumber(a and a.step)
@@ -1232,7 +1263,7 @@ function act.adminList(plr, p)
 	return ok({ list = AD.List() })
 end
 
-A.NoSync = { globalChat = true, gearShop = true, funnel = true, tutorial = true, adRefill = true, allyList = true, rankings = true, profile = true, adminList = true }
+A.NoSync = { afk = true, globalChat = true, gearShop = true, funnel = true, tutorial = true, adRefill = true, allyList = true, rankings = true, profile = true, adminList = true }
 -- requests allowed before onboarding finishes
 A.PreOnboard = { buyPass = true, sync = true, onboard = true, rankings = true, admin = true, adminList = true, funnel = true }
 return A

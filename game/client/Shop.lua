@@ -145,11 +145,9 @@ local function shine(card, period, delay)
 	return clip
 end
 
--- animated gradient border (rotating colours) on a card
+-- animated gradient border (rotating colours) on a card, sitting exactly on the card plate's own border
 local function gradBorder(card, colors, th)
-	local ring = mk("Frame", { Name = "GradBorder", BackgroundTransparency = 1, Size = UDim2.new(1, -2, 1, -2), Position = UDim2.fromOffset(1, 1), ZIndex = 24 }, card)
-	corner(ring, 10)
-	local st = stroke(ring, C.white, th or 3)
+	local ring, st = UI.outline(card, C.white, th or 3, { name = "GradBorder", z = 24 })
 	local seq = {}
 	for i, c in ipairs(colors) do table.insert(seq, ColorSequenceKeypoint.new((i - 1) / (#colors - 1), c)) end
 	local g = mk("UIGradient", { Color = ColorSequence.new(seq) }, st)
@@ -186,10 +184,8 @@ local function liftCard(parent, p)
 		LayoutOrder = p.order or 0, ZIndex = 7 }, parent)
 	if p.halo then halo(cell, p.halo[1], p.halo[2], 7, p.haloPad) end
 	local card = UI.card(cell, { hot = p.hot, sz = UDim2.fromScale(1, 1), pos = UDim2.fromScale(0.5, 0.5), anchor = Vector2.new(0.5, 0.5), z = 8 })
-	local ring = mk("Frame", { Name = "HoverGlow", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 23 }, card)
-	corner(ring, 10)
 	local base = p.baseGlow or 1
-	local gs = stroke(ring, p.glow or C.manila, 2, base)
+	local _, gs = UI.outline(card, p.glow or C.manila, 2, { name = "HoverGlow", alpha = base, z = 23 })
 	local sc = mk("UIScale", {}, card)
 	card.MouseEnter:Connect(function()
 		tw(card, 0.16, { Position = UDim2.new(0.5, 0, 0.5, -4) }, Enum.EasingStyle.Back)
@@ -215,6 +211,28 @@ local function ownButton(parent, kind, label, fn, p)
 		own.Inst.Visible = owned and true or false
 		if ownedLabel then own:Set(nil, ownedLabel) end
 		if buyKind or buyLabel then b:Set(buyKind, buyLabel) end
+	end
+	return obj
+end
+
+-- OWNED cover for a one-time purchase: a grey kit plate over the whole card (same 9-slice corners and border as the
+-- card, so it lines up exactly) with OWNED and a thank you. It swallows clicks, so nothing under it can be pressed.
+-- obj:Set(owned, ownBtn) shows / hides it; ownBtn (an ownButton) is hidden entirely while covered.
+local function ownedCover(card, z)
+	z = z or 40
+	local cover = UI.img(card, "inset", { button = true, name = "OwnedCover", alpha = 0.1, z = z, visible = false })
+	cover.Selectable = false
+	text(cover, "OWNED", { name = "Owned", font = "display", size = 64, scaled = true, color = C.ink, stroke = 1.5, align = Enum.TextXAlignment.Center,
+		anchor = Vector2.new(0.5, 1), pos = UDim2.new(0.5, 0, 0.5, 8), sz = UDim2.new(1, -24, 0.34, 0), z = z + 1 })
+	text(cover, "THANK YOU FOR YOUR SUPPORT!", { name = "Thanks", font = "heavy", size = 18, scaled = true, color = C.manila, stroke = 1, align = Enum.TextXAlignment.Center,
+		anchor = Vector2.new(0.5, 0), pos = UDim2.new(0.5, 0, 0.5, 12), sz = UDim2.new(1, -24, 0, 24), z = z + 1 })
+	local obj = { Inst = cover }
+	function obj:Set(owned, ownBtn)
+		cover.Visible = owned and true or false
+		if ownBtn and owned then
+			ownBtn.buy.Inst.Visible = false
+			ownBtn.own.Inst.Visible = false
+		end
 	end
 	return obj
 end
@@ -467,11 +485,15 @@ S.shop = { build = function(host, App)
 			if st and st.starter then return end
 			buyProduct("StarterPack", btn)
 		end, { sz = UDim2.fromOffset(rightW - 14, 54), pos = UDim2.new(1, -14, 1, -14), anchor = Vector2.new(1, 1), z = 14, textSize = 22 })
+		local cover = ownedCover(card)
 		up(function(st)
-			local show = (not st.starter) and (tonumber(st.lv) or 1) <= SP.maxLevel
+			-- owners keep seeing the card under the OWNED cover; everyone else sees it only while it is on offer
+			local owned = st.starter and true or false
+			local show = (tonumber(st.lv) or 1) <= SP.maxLevel -- owners see the OWNED cover until they outgrow the offer
 			head.Visible = show
 			wrap.Visible = show
-			buy:Set(st.starter and true or false, "OWNED")
+			buy:Set(owned, "OWNED")
+			cover:Set(owned, buy)
 			local era = math.clamp(tonumber(st.era) or R.EraOf(tonumber(st.lv) or 1) or 1, 1, 8)
 			prop.Image = UI.asset("prop_e" .. era .. "_t3")
 			local unit = M.Elite[era]
@@ -482,7 +504,7 @@ S.shop = { build = function(host, App)
 	------------------------------------------------------------ 1. LIMITED hero row
 	local function hero()
 		local L = Config.Crates.Limited
-		section("limited", "LIMITED TIME", "Founder's offers leave the shop when the timer runs out", "icon_sparkles", C.gold)
+		section("limited", "LIMITED TIME", "Grab these before they're gone!", "icon_sparkles", C.gold)
 		local W = innerW()
 		local pad = 10
 		local gap = 16
@@ -522,17 +544,12 @@ S.shop = { build = function(host, App)
 			if App.state and App.state.bundle then return end
 			buyProduct("LimitedBundle", btn)
 		end, { sz = UDim2.fromOffset(math.min(230, bw - 130), 48), pos = UDim2.new(1, -16, 1, -14), anchor = Vector2.new(1, 1), z = 27, textSize = 19 })
-		-- big OWNED stamp
-		local stamp = mk("Frame", { Name = "Stamp", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.42), Size = UDim2.fromOffset(220, 64),
-			Rotation = -12, ZIndex = 28, Visible = false }, bc)
-		corner(stamp, 8)
-		stroke(stamp, C.gold, 4)
-		text(stamp, "OWNED", { font = "display", size = 44, color = C.gold, align = Enum.TextXAlignment.Center, sz = UDim2.fromScale(1, 1), z = 29, stroke = 1.5 })
+		local bcover = ownedCover(bc)
 		up(function(st)
 			local owned = st.bundle and true or false
 			local over = crateOver()
 			bbtn:Set(owned, "OWNED", over and "locked" or "green", over and "SOLD OUT" or nil)
-			stamp.Visible = owned
+			bcover:Set(owned, bbtn)
 			bart.ImageTransparency = owned and 0.3 or 0
 			onceL.Text = owned and "IN YOUR ROSTER" or "ONE PER PLAYER"
 		end)
@@ -544,8 +561,8 @@ S.shop = { build = function(host, App)
 		-------------------------------------------------- FOUNDER'S CRATE
 		local _, cc = liftCard(row, { name = "Crate", sz = UDim2.fromOffset(cw, H), pos = stack and UDim2.fromOffset(0, H + gap) or UDim2.fromOffset(bw + gap, 0), glow = LIMITED, baseGlow = 0.7 })
 		text(cc, L.name, { font = "display", size = 22, color = C.manila, pos = UDim2.fromOffset(16, 10), sz = UDim2.new(1, -60, 0, 28), z = 10, truncate = true })
-		infoBtn(App, cc, L.name, "One crate, two prices: open one now for <b>" .. L.gold .. " gold</b>, or buy Robux packs that go to your <b>Inventory</b> to open any time.\n\n"
-			.. "Gear or <b>ELITE TROOPS</b> that never die in raids. The <b>10-pack</b> guarantees at least one <b>Epic or better</b>. Tap <b>DROP RATES</b> for every % chance.",
+		infoBtn(App, cc, L.name, "Open one now for <b>" .. L.gold .. " gold</b>, or grab a Robux pack and open them any time from your <b>Inventory</b>.\n\n"
+			.. "Win gear or <b>ELITE TROOPS</b> that never die in raids. The <b>10-pack</b> always has an <b>Epic or better</b>. Tap <b>DROP RATES</b> to see the odds.",
 			UDim2.new(1, -34, 0, 14), 30)
 		local cTimer = text(cc, "", { font = "heavy", size = 13, color = LIMITED, pos = UDim2.fromOffset(16, 38), sz = UDim2.new(1, -32, 0, 18), z = 10 })
 		-- left column (DROP RATES, PITY, owned crates), the crate centred in the space to its right so they never overlap
@@ -592,7 +609,7 @@ S.shop = { build = function(host, App)
 			end, { sz = UDim2.fromOffset(pw, 44), pos = UDim2.fromOffset(x, 272), z = 12, textSize = 16 })
 			packBtns[i] = b
 			if pk.n == 10 then
-				stroke(b.Inst, C.gold, 2, 0.1)
+				UI.outline(b.Inst, C.gold, 2, { alpha = 0.1 })
 				local t = tag(cc, "BEST VALUE", C.gold, C.manilaInk, { pos = UDim2.fromOffset(x + pw / 2, 264), anchor = Vector2.new(0.5, 0.5), z = 16, h = 18, size = 11, rot = -4 })
 				local ts = mk("UIScale", {}, t)
 				tw(ts, 0.8, { Scale = 1.08 }, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
@@ -625,7 +642,7 @@ S.shop = { build = function(host, App)
 	------------------------------------------------------------ 2. SUPPLY CRATE (free path)
 	local function supply()
 		local B = Config.Crates.Basic
-		section("supply", "SUPPLY CRATE", "Free to play: bought with cash. Price = " .. B.lawMinutes .. " min of law income at your level", "icon_package", C.manila)
+		section("supply", "SUPPLY CRATE", "Gear and officers, bought with cash", "icon_package", C.manila)
 		local W = innerW()
 		local wrap = mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 132), LayoutOrder = nextOrder(), ZIndex = 7 }, list)
 		mk("UIPadding", { PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 8), PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8) }, wrap)
@@ -661,7 +678,7 @@ S.shop = { build = function(host, App)
 
 	------------------------------------------------------------ 3. VIP
 	local function vip()
-		section("vip", "VIP", "Forever perks and a chat tag everyone sees · Mega VIP replaces VIP (they do not stack)", "icon_crown", VIPGOLD)
+		section("vip", "VIP", "Forever perks and a chat tag everyone sees", "icon_crown", VIPGOLD)
 		local H = 236
 		local g, cw = grid(330, H, 18, 2, 12)
 		local function vipCard(key, order, color, perks, premium, slides)
@@ -687,11 +704,11 @@ S.shop = { build = function(host, App)
 				shine(card, 2.8, 1.2)
 				ribbon(card, "BEST", PINK, C.white)
 			end
-			return btn, img
+			return btn, img, ownedCover(card)
 		end
 		local V, MV = Config.VIP.VIP, Config.VIP.MegaVIP
 		local function pctOf(x) return math.floor(x * 100 + 0.5) end
-		local vb, vimg = vipCard("VIP", 1, VIPGOLD, {
+		local vb, vimg, vcover = vipCard("VIP", 1, VIPGOLD, {
 			"+" .. pctOf(V.cash) .. "% cash from everything",
 			"+" .. pctOf(V.regen) .. "% faster Influence regen",
 			"<font color='#f0c75a'>[VIP]</font> chat tag",
@@ -702,7 +719,7 @@ S.shop = { build = function(host, App)
 			{ icon = "icon_crown", tile = VIPGOLD, label = "[VIP] CHAT TAG" },
 		})
 		local vipOfficer = O.VIPOfficer()
-		local mb, mimg = vipCard("MegaVIP", 2, PINK, {
+		local mb, mimg, mcover = vipCard("MegaVIP", 2, PINK, {
 			"+" .. pctOf(MV.cash) .. "% cash from everything",
 			"+" .. pctOf(MV.regen) .. "% faster Influence regen",
 			"LIMITED officer <b><font color='#ff9a2e'>" .. vipOfficer.name .. "</font></b>",
@@ -720,6 +737,8 @@ S.shop = { build = function(host, App)
 			if gp.MegaVIP and not gp.VIP then vb:Set(true, "MEGA VIP ACTIVE") else vb:Set(gp.VIP and true or false, "OWNED") end
 			vimg:Dim((gp.VIP or gp.MegaVIP) and true or false)
 			mimg:Dim(gp.MegaVIP and true or false)
+			vcover:Set(gp.VIP and true or false, vb)
+			mcover:Set(gp.MegaVIP and true or false, mb)
 		end)
 	end
 
@@ -748,10 +767,12 @@ S.shop = { build = function(host, App)
 				k += 1
 				local t = tallCard(g, { order = k, art = PASS_ART[key] or "icon_sparkles", slides = MULTI[key], name = string.upper(pass.name), desc = pass.desc, glow = C.manila })
 				local btn = ownButton(t.card, "green", "R$ " .. pass.price, function(b) buyPass(key, b) end, { sz = t.btnSz, pos = t.btnPos, anchor = Vector2.new(0.5, 1), z = 12, textSize = 17 })
+				local cover = ownedCover(t.card)
 				up(function(st)
-					local owned = st.gp and st.gp[key]
-					btn:Set(owned and true or false)
+					local owned = (st.gp and st.gp[key]) and true or false
+					btn:Set(owned)
 					markOwned(t, owned)
+					cover:Set(owned, btn)
 				end)
 			end
 		end
@@ -881,7 +902,7 @@ S.shop = { build = function(host, App)
 				{ size = 13, color = C.dim, sz = UDim2.fromScale(1, 1), z = 8, wrap = true })
 		end
 		local foot = mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 30), ZIndex = 7, LayoutOrder = nextOrder() }, list)
-		text(foot, "Robux purchases are granted after Roblox confirms them. Crates bought with Robux wait in your Inventory.", { size = 12, color = C.dim, sz = UDim2.fromScale(1, 1), z = 8, wrap = true })
+		text(foot, "Crates bought with Robux wait in your Inventory.", { size = 12, color = C.dim, sz = UDim2.fromScale(1, 1), z = 8, wrap = true })
 	end
 
 	local function setSub(st)

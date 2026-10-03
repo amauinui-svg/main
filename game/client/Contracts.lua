@@ -76,12 +76,12 @@ end
 local WEEKLY_COLOR = Color3.fromHex("a77bff")
 -- short subtitles under each order, by task key
 local SUB = {
-	laws = "Pass laws on the Laws tab.", trips = "Convoys that arrive at a city.", raids = "Win raids against other players.",
+	laws = "Pass laws on the Laws tab.", trips = "Deliver convoys to any city.", raids = "Win raids against other players.",
 	build = "Build on your lots in Properties.", hits = "Siege a city or hit the boss.", units = "Recruit soldiers in Military.",
 	boss = "Bring the era boss down.", deposit = "Put any amount in the bank.", donate = "Give cash to your alliance treasury.",
-	hire = "Hire from the Officers tab.", crate = "Open any crate.", influence = "Influence spent on laws.",
-	supply = "Supply spent on attacks.", level = "Level up your country.", earn = "Counted in minutes of law income.",
-	moves = "Different destination cities.", online = "Minutes played.", siege = "Alliance siege hits on cities.",
+	hire = "Hire from the Officers tab.", crate = "Open any crate.", influence = "Spend Influence on laws.",
+	supply = "Spend Supply on attacks.", level = "Level up your country.", earn = "Pass laws to earn cash.",
+	moves = "Send convoys to different cities.", online = "Just keep playing!", siege = "Hit cities with your alliance.",
 }
 
 local function hms(sec)
@@ -94,7 +94,7 @@ local function tween(o, t, props, style)
 	return tw
 end
 local function hoverStroke(UI, gui, color, base)
-	local st = UI.mk("UIStroke", { Color = color, Thickness = 2, Transparency = base or 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, gui)
+	local _, st = UI.outline(gui, color, 2, { alpha = base or 1 })
 	gui.MouseEnter:Connect(function() tween(st, 0.15, { Transparency = 0.1 }) end)
 	gui.MouseLeave:Connect(function() tween(st, 0.2, { Transparency = base or 1 }) end)
 	return st
@@ -169,7 +169,7 @@ S.tasks = { build = function(host, App)
 
 	local function rowFrame(order, gold)
 		local card = UI.card(list, { sz = UDim2.new(1, 0, 0, 76), z = 7, order = order, hot = gold })
-		if gold then UI.mk("UIStroke", { Color = C.gold, Thickness = 2, Transparency = 0.15 }, card)
+		if gold then UI.outline(card, C.gold, 2, { alpha = 0.15 })
 		else hoverStroke(UI, card, C.manila) end
 		return card
 	end
@@ -306,7 +306,7 @@ S.tasks = { build = function(host, App)
 		obj.timers = {}
 		local seals = st.seals or 0
 		local head = UI.mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 30), ZIndex = 7, LayoutOrder = 0 }, list)
-		text(head, "Merits come only from orders. They cannot be traded or bought.", { size = 15, color = C.muted, sz = UDim2.new(1, -180, 1, 0), z = 8, truncate = true })
+		text(head, "Finish orders to earn Merits.", { size = 15, color = C.muted, sz = UDim2.new(1, -180, 1, 0), z = 8, truncate = true })
 		local contentW = App.W() - App.NAVW - 20 - 28
 		local cols = contentW >= 980 and 4 or 3
 		local grid = UI.mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, ZIndex = 7, LayoutOrder = 1 }, list)
@@ -317,7 +317,7 @@ S.tasks = { build = function(host, App)
 			local cell = UI.mk("Frame", { Name = "Cell", BackgroundTransparency = 1, LayoutOrder = k, ZIndex = 7 }, grid)
 			local isCrate = it.icon == "crate_basic" or it.icon == "crate_limited"
 			local card = UI.card(cell, { sz = UDim2.fromScale(1, 1), z = 8, hot = it.key == "limited" })
-			local stroke = UI.mk("UIStroke", { Color = it.key == "limited" and C.gold or C.manila, Thickness = 2, Transparency = it.key == "limited" and 0.3 or 1 }, card)
+			local _, stroke = UI.outline(card, it.key == "limited" and C.gold or C.manila, 2, { alpha = it.key == "limited" and 0.3 or 1 })
 			cell.MouseEnter:Connect(function()
 				tween(card, 0.15, { Position = UDim2.fromOffset(0, -5) }, Enum.EasingStyle.Back)
 				tween(stroke, 0.15, { Transparency = 0.05 })

@@ -11,7 +11,7 @@ local Config = require(Shared.Config)
 local S = {}
 local AC = Config.Alliance
 local UPGRADES = {
-	{ key = "stipend", name = "STATE STIPEND", icon = "icon_coins", max = 10, desc = function(l) return "Every member is paid an hourly wage (level " .. l .. ", more for active members)" end },
+	{ key = "stipend", name = "STATE STIPEND", icon = "icon_coins", max = 10, desc = function(l) return "Every member earns an hourly wage (level " .. l .. ")" end },
 	{ key = "trade", name = "TRADE NETWORK", icon = "icon_globe", max = 5, desc = function(l) return "+" .. (3 * l) .. "% convoy pay for every member" end },
 	{ key = "war", name = "WAR COLLEGE", icon = "icon_attack", max = 5, desc = function(l) return "+" .. (5 * l) .. "% siege damage" end },
 	{ key = "fort", name = "FORTIFICATIONS", icon = "icon_castle", max = 5, desc = function(l) return "+" .. (10 * l) .. "% garrison on cities you capture" end },
@@ -22,7 +22,7 @@ local PERK_SIZE = { 3, 5, 8, 12 }
 local PERK_NAMES = { law = "law cash", props = "property income", convoy = "convoy pay", regen = "Influence regen", attack = "attack", defense = "defense" }
 -- alliance quests: what each kind is called and drawn with
 local QUEST_ICON = { law = "icon_laws", convoy = "icon_container", raid = "icon_attack", hit = "icon_crosshair", boss = "icon_bosses", donate = "icon_coins" }
-local XP_LABELS = { { "law", "Law" }, { "convoy", "Convoy" }, { "raid", "Raid win" }, { "hit", "Siege hit" }, { "boss", "Boss" }, { "donate", "Donation (per minute of law cash)" } }
+local XP_LABELS = { { "law", "Law" }, { "convoy", "Convoy" }, { "raid", "Raid win" }, { "hit", "Siege hit" }, { "boss", "Boss" }, { "donate", "Donation" } }
 -- what a finished quest pays each member who helped (act.allyClaim)
 local QUEST_GOLD, QUEST_SEALS = 15, 3
 
@@ -198,7 +198,7 @@ local function showProfile(App, uid)
 			text(cell, A.desc, { size = 12, color = earned and C.muted or C.dim, pos = UDim2.fromOffset(58, 26), sz = UDim2.new(1, -64, 0, 30), z = 75, wrap = true, valign = Enum.TextYAlignment.Top })
 			text(cell, "Title: " .. A.title, { font = "bold", size = 12, color = earned and C.manila or C.dim, pos = UDim2.fromOffset(58, 60), sz = UDim2.new(1, -64, 0, 18), z = 75, truncate = true })
 			if pickable then
-				local stroke = UI.mk("UIStroke", { Color = C.gold, Thickness = 2, Enabled = false, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, cell)
+				local _, stroke = UI.outline(cell, C.gold, 2, { enabled = false })
 				local shown = text(cell, "SHOWN", { font = "heavy", size = 11, color = C.gold, pos = UDim2.new(1, -60, 0, 4), sz = UDim2.fromOffset(52, 14), z = 77, align = Enum.TextXAlignment.Right, visible = false })
 				strokes[A.key] = { stroke = stroke, shown = shown }
 				hover(UI, cell)
@@ -243,7 +243,7 @@ S.alliance = { build = function(host, App)
 	App.showProfile = App.showProfile or function(uid) showProfile(App, uid) end
 
 	local function noAlliance(st)
-		sub.Text = "Alliances fight over the 41 capitals, tax trade through them, and pay their members"
+		sub.Text = "Team up, capture capitals and get rich together"
 		local left = UI.list(area, { sz = UDim2.new(0.6, -8, 1, 0), gap = 6, z = 7 })
 		local right = UI.card(area, { sz = UDim2.new(0.4, -8, 1, 0), pos = UDim2.new(0.6, 8, 0, 0), z = 7 })
 		local hdr = UI.mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 26), ZIndex = 7, LayoutOrder = 0 }, left)
@@ -285,7 +285,7 @@ S.alliance = { build = function(host, App)
 			-- colour swatch on an inset plate, with a manila ring on the picked one
 			local cell = UI.img(sw, "inset", { button = true, name = "Swatch", order = k, z = 9 })
 			UI.mk("Frame", { BackgroundColor3 = Color3.fromHex(col), BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(1, -8, 1, -8), ZIndex = 10 }, cell)
-			local ring = UI.mk("UIStroke", { Color = C.manila, Thickness = 2, Enabled = false, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, cell)
+			local _, ring = UI.outline(cell, C.manila, 2, { enabled = false })
 			local s = cell
 			swatches[col] = { ring = ring }
 			s.Activated:Connect(function() obj.form.color = col; mark() end)
@@ -437,7 +437,7 @@ S.alliance = { build = function(host, App)
 			local lc = UI.card(list, { sz = UDim2.new(1, 0, 0, 60), z = 8, order = 201 })
 			UI.icon(lc, "icon_sparkles", 28, C.xp, UDim2.fromOffset(16, 16), { z = 9 })
 			text(lc, "ALLIANCE LEVEL " .. (info.level or 1), { font = "display", size = 19, pos = UDim2.fromOffset(60, 6), sz = UDim2.new(1, -76, 0, 24), z = 9 })
-			text(lc, "+" .. pct(info.bonus) .. "% law cash, property income and convoy pay for every member (+1% a level, up to +10%)", { size = 13, color = C.muted, pos = UDim2.fromOffset(60, 32), sz = UDim2.new(1, -76, 0, 18), z = 9, truncate = true })
+			text(lc, "+" .. pct(info.bonus) .. "% law cash, property income and convoy pay for every member", { size = 13, color = C.muted, pos = UDim2.fromOffset(60, 32), sz = UDim2.new(1, -76, 0, 18), z = 9, truncate = true })
 		end
 		do
 			local byType = {}
@@ -457,7 +457,7 @@ S.alliance = { build = function(host, App)
 			local cc = UI.card(list, { sz = UDim2.new(1, 0, 0, 60), z = 8, order = 202 })
 			UI.icon(cc, "icon_flag", 28, C.manila, UDim2.fromOffset(16, 16), { z = 9 })
 			text(cc, "CITY PERKS", { font = "display", size = 19, pos = UDim2.fromOffset(60, 6), sz = UDim2.new(1, -76, 0, 24), z = 9 })
-			text(cc, #parts > 0 and table.concat(parts, " · ") or "None yet. Each city you hold gives a perk; the best 2 of each kind count.", { size = 13, color = C.muted, pos = UDim2.fromOffset(60, 32), sz = UDim2.new(1, -76, 0, 18), z = 9, truncate = true })
+			text(cc, #parts > 0 and table.concat(parts, " · ") or "None yet. Hold cities to earn perks.", { size = 13, color = C.muted, pos = UDim2.fromOffset(60, 32), sz = UDim2.new(1, -76, 0, 18), z = 9, truncate = true })
 		end
 		for k, u in ipairs(UPGRADES) do
 			local lvl = a.up and a.up[u.key] or 0
@@ -494,7 +494,7 @@ S.alliance = { build = function(host, App)
 		section(list, "MANAGE", 400)
 		local manage = UI.mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 48), ZIndex = 8, LayoutOrder = 401 }, list)
 		UI.button(manage, "red", "LEAVE ALLIANCE", function(btn)
-			App.confirm("LEAVE " .. a.name .. "?", "You will lose the alliance perks and stipend." .. (myRole == "leader" and " Leadership passes to your longest-serving officer." or ""), "LEAVE", "red", function()
+			App.confirm("LEAVE " .. a.name .. "?", "You will lose the alliance perks and stipend." .. (myRole == "leader" and " An officer will take over as leader." or ""), "LEAVE", "red", function()
 				App.req("allyLeave", {}, btn); obj.list = nil
 			end)
 		end, { sz = UDim2.fromOffset(200, 42), z = 9 })
@@ -512,7 +512,7 @@ S.alliance = { build = function(host, App)
 		UI.icon(top, "icon_flag", 30, Color3.fromHex(a.color or "546e7a"), UDim2.fromOffset(16, 20), { z = 9 })
 		text(top, "CITIES HELD", { font = "heavy", size = 13, color = C.muted, pos = UDim2.fromOffset(60, 10), sz = UDim2.fromOffset(160, 16), z = 9 })
 		text(top, #held .. " / " .. AC.MaxCities, { font = "display", size = 28, color = C.manila, pos = UDim2.fromOffset(60, 26), sz = UDim2.fromOffset(160, 34), z = 9 })
-		text(top, "Every convoy other players deliver into your cities pays its city tax into the treasury."
+		text(top, "Your cities earn tax from every convoy that arrives."
 			.. (#countries > 0 and (" Full control: " .. table.concat(countries, ", ") .. " (+10% cash).") or ""), { size = 13, color = C.muted, pos = UDim2.fromOffset(230, 0), sz = UDim2.new(1, -246, 1, 0), z = 9, wrap = true })
 		if #held == 0 then
 			local e = UI.card(list, { sz = UDim2.new(1, 0, 0, 96), z = 8, order = 2 })
@@ -553,7 +553,7 @@ S.alliance = { build = function(host, App)
 		end
 		if type(qs) ~= "table" or #qs == 0 or stale then
 			local e = UI.card(list, { sz = UDim2.new(1, 0, 0, 60), z = 8, order = 2 })
-			text(e, "This week's quests are being drawn up. They appear as soon as any member plays.", { size = 15, color = C.muted, pos = UDim2.fromOffset(16, 0), sz = UDim2.new(1, -32, 1, 0), z = 9, wrap = true })
+			text(e, "New quests are on the way!", { size = 15, color = C.muted, pos = UDim2.fromOffset(16, 0), sz = UDim2.new(1, -32, 1, 0), z = 9, wrap = true })
 		else
 			for k, q in ipairs(qs) do
 				local mineN = (q.by and q.by[me]) or 0

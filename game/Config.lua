@@ -10,7 +10,7 @@ C.Passes = {
 	AutoDispatch = { id = 2005970704, name = "Auto Dispatch", desc = "Convoys pick the best load and keep trading while you are offline.", price = 399 },
 	ExtraConvoys = { id = 2006912670, name = "+2 Convoy Slots", desc = "Run two more convoys at once.", price = 199 },
 	ExtraLots = { id = 2006660680, name = "+3 Building Lots", desc = "Three more lots for properties.", price = 149 },
-	BonusOfficer = { id = 2005112703, name = "Bonus Officer Slot", desc = "One extra officer slot on top of the ones you buy.", price = 299 },
+	BonusOfficer = { id = 2005112703, name = "Bonus Officer Slot", desc = "One extra officer slot, forever.", price = 299 },
 	VIP = { id = 2006120681, name = "VIP", desc = "+10% cash from everything, +10% faster Influence regen and the VIP chat tag.", price = 499 },
 	MegaVIP = { id = 2006588683, name = "Mega VIP", desc = "+25% cash, +25% faster Influence regen, a unique LIMITED officer and the MEGA VIP chat tag.", price = 899 },
 	CustomFlag = { id = 2005754689, name = "Custom Flag", desc = "Design your own flag: extra layouts, emblems and colours, or use your own image.", price = 99 },
@@ -49,6 +49,14 @@ C.GearShop = {
 	PerRarity = 3,
 	Levels = { 1, 10, 25, 50, 80, 110, 140, 170 },        -- common .. forbidden
 	Minutes = { 4, 10, 25, 60, 150, 360, 900, 2400 },    -- price in minutes of law income
+}
+
+-- AFK CHAMBER (Kash 3 Oct): idle 15 min -> full-screen chamber. Every 60 s a small chance to find gear.
+-- Odds per minute: Find = chance anything is found; Rarity = weights for common .. forbidden (lottery-low above rare).
+C.Afk = {
+	IdleSeconds = 900,
+	Find = 0.08,
+	Rarity = { 75, 20, 4.9, 0.09, 0.009, 0.0009, 0.00009, 0.000009 },
 }
 
 C.Products = {
