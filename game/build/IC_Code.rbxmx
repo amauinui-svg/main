@@ -3561,6 +3561,11 @@ function RA.Targets(p)
 		table.insert(list, { id = a.id, name = a.name, flag = a.flag, lv = a.lv, def = def, cash = math.floor(a.cash), ai = true,
 			cooldown = math.max(0, (lastHit[a.id] or 0) + RC.Cooldown - t), shield = 0 })
 	end
+	-- the button also shows YOUR own cooldown on that target (Kash 2 Oct: some raided targets showed no timer)
+	local mine = p.raidCd or {}
+	for _, e in ipairs(list) do
+		e.cooldown = math.max(e.cooldown or 0, (mine[e.id] or 0) + RC.Cooldown - t)
+	end
 	-- hide what you have not spied on (fresh intel lasts RA.SpyMinutes)
 	for _, e in ipairs(list) do
 		local seen = p.spied and p.spied[e.id]
@@ -8622,7 +8627,7 @@ local function playFight(App, res, opts)
 		else
 			rewardPill(UI, r1, "icon_defense", C.muted, "Their defense held", 1, 81)
 		end
-		rewardPill(UI, r2, "icon_military", C.bad, R.Commas(res.lostN or 0) .. " soldiers lost", 1, 81)
+		rewardPill(UI, r2, "icon_military", C.bad, R.Commas(res.lostN or 0) .. ((res.lostN == 1) and " soldier lost" or " soldiers lost"), 1, 81)
 		rewardPill(UI, r2, "icon_crosshair", C.gold, R.Commas(res.killed or 0) .. " enemy killed", 2, 81)
 		for _, r in ipairs({ r1, r2 }) do
 			r.Position += UDim2.fromOffset(0, 12)
@@ -8755,7 +8760,7 @@ local function raidedPopup(App, n)
 		else
 			rewardPill(UI, rows, "icon_cash", C.good, "Cash safe", 1, 74)
 		end
-		rewardPill(UI, rows, "icon_military", (n.lost or 0) > 0 and C.bad or C.muted, R.Commas(n.lost or 0) .. " soldiers lost", 2, 74)
+		rewardPill(UI, rows, "icon_military", (n.lost or 0) > 0 and C.bad or C.muted, R.Commas(n.lost or 0) .. ((n.lost == 1) and " soldier lost" or " soldiers lost"), 2, 74)
 		text(panel, n.win and "Hit back: ATTACK them now, or use a guaranteed REVENGE STRIKE." or "Their raid failed. Teach them a lesson?",
 			{ size = 15, color = C.muted, wrap = true, align = Enum.TextXAlignment.Center, pos = UDim2.fromOffset(24, 198), sz = UDim2.new(1, -48, 0, 40), z = 73 })
 		local bar = mk("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -20), Size = UDim2.new(1, -40, 0, 50), ZIndex = 74 }, panel)
@@ -13669,9 +13674,9 @@ local function handleNotes(notes)
 			if App.spiedNote then pcall(App.spiedNote, n) else App.toast(string.upper(n.by or "SOMEONE") .. " SPIED ON YOU", nil, "bad") end
 		elseif n.kind == "raided" then
 			if n.win then
-				App.toast(string.upper(n.by) .. " RAIDED YOU", "Stole " .. R.Money(n.cash) .. (n.lost and n.lost > 0 and (" · " .. n.lost .. " soldiers lost") or "") .. " · open RAIDS for REVENGE", "bad")
+				App.toast(string.upper(n.by) .. " RAIDED YOU", "Stole " .. R.Money(n.cash) .. (n.lost and n.lost > 0 and (" · " .. n.lost .. (n.lost == 1 and " soldier lost" or " soldiers lost")) or "") .. " · open RAIDS for REVENGE", "bad")
 			else
-				App.toast("YOU HELD OFF " .. string.upper(n.by), "Their raid failed" .. (n.lost and n.lost > 0 and (" · " .. n.lost .. " soldiers lost") or "") .. " · open RAIDS to hit back", "good")
+				App.toast("YOU HELD OFF " .. string.upper(n.by), "Their raid failed" .. (n.lost and n.lost > 0 and (" · " .. n.lost .. (n.lost == 1 and " soldier lost" or " soldiers lost")) or "") .. " · open RAIDS to hit back", "good")
 			end
 			App.navBadge("battle", "!")
 		elseif n.kind == "raidResult" then

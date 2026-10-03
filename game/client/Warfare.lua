@@ -575,7 +575,7 @@ local function playFight(App, res, opts)
 		else
 			rewardPill(UI, r1, "icon_defense", C.muted, "Their defense held", 1, 81)
 		end
-		rewardPill(UI, r2, "icon_military", C.bad, R.Commas(res.lostN or 0) .. " soldiers lost", 1, 81)
+		rewardPill(UI, r2, "icon_military", C.bad, R.Commas(res.lostN or 0) .. ((res.lostN == 1) and " soldier lost" or " soldiers lost"), 1, 81)
 		rewardPill(UI, r2, "icon_crosshair", C.gold, R.Commas(res.killed or 0) .. " enemy killed", 2, 81)
 		for _, r in ipairs({ r1, r2 }) do
 			r.Position += UDim2.fromOffset(0, 12)
@@ -708,7 +708,7 @@ local function raidedPopup(App, n)
 		else
 			rewardPill(UI, rows, "icon_cash", C.good, "Cash safe", 1, 74)
 		end
-		rewardPill(UI, rows, "icon_military", (n.lost or 0) > 0 and C.bad or C.muted, R.Commas(n.lost or 0) .. " soldiers lost", 2, 74)
+		rewardPill(UI, rows, "icon_military", (n.lost or 0) > 0 and C.bad or C.muted, R.Commas(n.lost or 0) .. ((n.lost == 1) and " soldier lost" or " soldiers lost"), 2, 74)
 		text(panel, n.win and "Hit back: ATTACK them now, or use a guaranteed REVENGE STRIKE." or "Their raid failed. Teach them a lesson?",
 			{ size = 15, color = C.muted, wrap = true, align = Enum.TextXAlignment.Center, pos = UDim2.fromOffset(24, 198), sz = UDim2.new(1, -48, 0, 40), z = 73 })
 		local bar = mk("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -20), Size = UDim2.new(1, -40, 0, 50), ZIndex = 74 }, panel)

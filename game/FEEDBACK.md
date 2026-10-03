@@ -246,3 +246,31 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
     Egg, Sell Lemons, Run a Restaurant).
   DONE (2 Oct 17:35): 2 icons (16:9, design in centre square, + 512 crops) and 6 thumbnails with code-added numbers in
   art/ads/final and IdleCountryArt/ads on Kash's PC. Flow project "Oct 02 - 17:20" holds every generation.
+- NEW (2 Oct 21:15) FEEDBACK (with screenshots):
+  * RAIDED popup ("YOU HELD OFF X" / "X RAIDED YOU") is too big: make it a SMALL notice that does not take over the
+    screen, players will be attacked often. (Kash: note for a future change.) Also "1 soldiers lost" grammar.
+  * Every RNG box (Founder's Crate, Supply Crate, hires, any crate/box opening) must show its DROPS and their % RATES
+    in its info popup.
+  * NO officer BENCH. Officers can only be obtained when there is an OPEN SLOT (block hires/crate officer drops when
+    full). LIMITED gamepass officers (VIP/Mega VIP/bundle) get their OWN EXCLUSIVE slot (extra, not using normal slots).
+  * FOUNDER'S CRATE must never give officers; it can give SPECIAL TROOPS instead (plus gear).
+  * STARTER PACK for new players: a decent property + decent troops.
+  * BUG: the red RAID button shows a cooldown for some targets but not others even after Kash raided them (the
+    per-attacker cooldown is not shown on the button; only the target's "just raided" cooldown is).
+  * Passes with several unlocks (MEGA VIP etc.): the card image should ROTATE between images of each thing unlocked;
+    the aura/rays must sit BEHIND the image.
+  * Generated thumbnails need MORE DETAIL in the background.
+  * Does NOT like the Takedown concept or its tickets: remove Takedown + tickets (and the ticket items in the Merits shop).
+  * Disable SHIFT LOCK.
+  * ALLIANCE tab needs more: a tab showing the cities the alliance holds; OVERVIEW shows members, contribution and
+    perks; alliances have LEVELS and earn rewards for completing levels; add a WAR tab marked COMING SOON.
+  * Asked: what other concepts would make the game really cool? (answered in chat)
+- NEW (2 Oct 21:16) Kash LOVES the Idle Mafia style ad thumbnails (BUILD YOUR NATION, title card): keep making those.
+  The full title is "IDLE COUNTRY GAME" (not "IDLE COUNTRY") everywhere (titles, title cards, logo).
+- NEW (2 Oct 21:24):
+  * ERAS: players advance to the next era by PAYING MONEY (not just reaching a level). The price should be about what
+    reaching that era's level costs (roughly equivalent).
+  * FOUNDER'S CRATE price -> 49 Robux each (update the packs to match, charm pricing, bulk cheaper per unit).
+  * PLAYER PROFILES like the competitor's (screenshot shown earlier): another way for players to feel progress.
+  * ALLIANCES need more progression feel: alliance tasks/quests (clan quests), levels, rewards.
+  * Asked: what can players DO while waiting for property income and Influence to refill? (answered in chat)

@@ -452,9 +452,9 @@ local function handleNotes(notes)
 			if App.spiedNote then pcall(App.spiedNote, n) else App.toast(string.upper(n.by or "SOMEONE") .. " SPIED ON YOU", nil, "bad") end
 		elseif n.kind == "raided" then
 			if n.win then
-				App.toast(string.upper(n.by) .. " RAIDED YOU", "Stole " .. R.Money(n.cash) .. (n.lost and n.lost > 0 and (" · " .. n.lost .. " soldiers lost") or "") .. " · open RAIDS for REVENGE", "bad")
+				App.toast(string.upper(n.by) .. " RAIDED YOU", "Stole " .. R.Money(n.cash) .. (n.lost and n.lost > 0 and (" · " .. n.lost .. (n.lost == 1 and " soldier lost" or " soldiers lost")) or "") .. " · open RAIDS for REVENGE", "bad")
 			else
-				App.toast("YOU HELD OFF " .. string.upper(n.by), "Their raid failed" .. (n.lost and n.lost > 0 and (" · " .. n.lost .. " soldiers lost") or "") .. " · open RAIDS to hit back", "good")
+				App.toast("YOU HELD OFF " .. string.upper(n.by), "Their raid failed" .. (n.lost and n.lost > 0 and (" · " .. n.lost .. (n.lost == 1 and " soldier lost" or " soldiers lost")) or "") .. " · open RAIDS to hit back", "good")
 			end
 			App.navBadge("battle", "!")
 		elseif n.kind == "raidResult" then

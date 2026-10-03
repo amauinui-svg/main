@@ -182,6 +182,11 @@ function RA.Targets(p)
 		table.insert(list, { id = a.id, name = a.name, flag = a.flag, lv = a.lv, def = def, cash = math.floor(a.cash), ai = true,
 			cooldown = math.max(0, (lastHit[a.id] or 0) + RC.Cooldown - t), shield = 0 })
 	end
+	-- the button also shows YOUR own cooldown on that target (Kash 2 Oct: some raided targets showed no timer)
+	local mine = p.raidCd or {}
+	for _, e in ipairs(list) do
+		e.cooldown = math.max(e.cooldown or 0, (mine[e.id] or 0) + RC.Cooldown - t)
+	end
 	-- hide what you have not spied on (fresh intel lasts RA.SpyMinutes)
 	for _, e in ipairs(list) do
 		local seen = p.spied and p.spied[e.id]
