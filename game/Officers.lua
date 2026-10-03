@@ -36,7 +36,7 @@ O.Traits = {
 }
 O.TraitByKey = {}
 for _, t in ipairs(O.Traits) do O.TraitByKey[t.key] = t end
-O.Caps = { losses = 60, regen = 100 } -- totals never go above these
+O.Caps = { losses = 60, regen = 100, interest = 100 } -- totals never go above these
 
 local FIRST = { "Ada", "Marek", "Ines", "Tobias", "Yara", "Kenji", "Amara", "Viktor", "Lucia", "Omar", "Freya", "Dmitri", "Noor",
 	"Hugo", "Sana", "Elias", "Mira", "Rafael", "Ilse", "Kwame", "Anya", "Teodor", "Leila", "Bastian", "Zofia", "Idris", "Clara",
@@ -152,20 +152,37 @@ function O.BundleGear()
 		name = "Founder's Saber", power = 30, perk = { k = "loot", v = 15 }, limited = true }
 end
 
----------------------------------------------------------------- crates
--- Founder's Crate: mostly gear, sometimes an officer. Basic Supply Crate: mostly common gear.
-function O.OpenCrate(rng, kind, luck, forceEpic)
+---------------------------------------------------------------- crates (Kash 2 Oct)
+-- Founder's Crate: gear or ELITE TROOPS, never officers. Supply Crate: mostly gear, sometimes an officer, but only when
+-- you have an open officer slot (no bench). Every box shows these exact numbers in its info popup.
+O.EliteChance = 0.25
+O.EliteSize = { 2, 3, 4, 6, 9, 13, 18, 25 } -- elite troops per pack by rolled rarity (common .. forbidden)
+O.BasicOfficerChance = 0.08
+O.CrateInfo = {
+	limited = {
+		{ label = "Gear (weapon or armor)", pct = 75, odds = O.GearOdds.limited },
+		{ label = "Elite troops (pack size by rarity)", pct = 25, odds = O.GearOdds.limited },
+	},
+	basic = {
+		{ label = "Gear (weapon or armor)", pct = 92, odds = O.GearOdds.basic },
+		{ label = "Officer (only with an open slot, else gear)", pct = 8, odds = O.HireOdds.basic_officer },
+	},
+}
+-- ctx = { era = your era, slotFree = true/false }
+function O.OpenCrate(rng, kind, luck, forceEpic, ctx)
+	ctx = ctx or {}
 	if kind == "limited" then
-		if rng:NextNumber() < 0.25 then
-			local r = O.Roll(rng, O.HireOdds.crate_officer, luck)
+		if rng:NextNumber() < O.EliteChance then
+			local r = O.Roll(rng, O.GearOdds.limited, luck)
 			if forceEpic then r = math.max(r, 4) end
-			return { type = "officer", item = O.NewOfficer(rng, r) }
+			local rar = O.Rarities[r]
+			return { type = "troops", item = { era = math.clamp(ctx.era or 1, 1, 8), n = O.EliteSize[r], rarity = rar.key } }
 		end
 		local r = O.Roll(rng, O.GearOdds.limited, luck)
 		if forceEpic then r = math.max(r, 4) end
 		return { type = "gear", item = O.NewGear(rng, r) }
 	end
-	if rng:NextNumber() < 0.08 then
+	if ctx.slotFree and rng:NextNumber() < O.BasicOfficerChance then
 		return { type = "officer", item = O.NewOfficer(rng, O.Roll(rng, O.HireOdds.basic_officer, luck)) }
 	end
 	return { type = "gear", item = O.NewGear(rng, O.Roll(rng, O.GearOdds.basic, luck)) }
@@ -184,15 +201,23 @@ function O.Bonuses(cab, inv, maxSlots)
 			local g = holder and holder[slot] and inv.gear[holder[slot]]
 			if g then
 				if g.kind == "weapon" then b.gearAtk += g.power else b.gearDef += g.power end
-				if g.perk then b[g.perk.k] += g.perk.v end
+				if g.perk and b[g.perk.k] then b[g.perk.k] += g.perk.v end -- unknown keys ignored (audit L10)
 			end
 		end
 	end
 	wear(cab.player)
+	-- limited officers sit in their own exclusive slots and always count (Kash 2 Oct)
+	for _, oid in ipairs(cab.ltd or {}) do
+		local o = inv.officers[oid]
+		if o then
+			for _, t in ipairs(o.traits or {}) do if b[t.k] then b[t.k] += t.v end end
+			wear(o)
+		end
+	end
 	for si, oid in ipairs(cab.slots or {}) do
 		local o = oid and (not maxSlots or si <= maxSlots) and inv.officers[oid]
 		if o then
-			for _, t in ipairs(o.traits) do b[t.k] += t.v end
+			for _, t in ipairs(o.traits or {}) do if b[t.k] then b[t.k] += t.v end end
 			wear(o)
 		end
 	end

@@ -57,8 +57,6 @@ T.WeeklyChest = { seals = 12, limitedCrates = 1, gearMinRarity = 3 } -- all 5 we
 
 -- Seals shop. Seals are not tradable and never bought with Robux.
 T.Shop = {
-	{ key = "ticket1", name = "Takedown Ticket", desc = "One extra Takedown attack.", cost = 2, tickets = 1, icon = "icon_ticket" },
-	{ key = "ticket5", name = "5 Takedown Tickets", desc = "Five extra Takedown attacks.", cost = 8, tickets = 5, icon = "icon_ticket" },
 	{ key = "influence", name = "Influence Refill", desc = "Fill your Influence to max.", cost = 3, refill = "inf", icon = "icon_influence" },
 	{ key = "supply", name = "Supply Refill", desc = "Fill your Supply to max.", cost = 3, refill = "sup", icon = "icon_supply" },
 	{ key = "basic", name = "Supply Crate", desc = "A crate of gear, sometimes an officer.", cost = 6, basicCrates = 1, icon = "crate_basic" },

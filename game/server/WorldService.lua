@@ -75,6 +75,9 @@ function WS.Perks(aid)
 	end
 	local a = WS.Alliances[aid]
 	if a and a.up then out.convoy += 0.03 * (a.up.trade or 0) end
+	local lb = WS.LevelBonus(a and a.level)
+	out.law += lb; out.props += lb; out.convoy += lb
+	out.levelBonus = lb
 	return out
 end
 
@@ -116,6 +119,7 @@ local function restoreCities()
 	end
 end
 local function backupCities()
+	if not Store.MemOnline then return end -- a server cut off from the shared map must never overwrite its backup (audit M9)
 	local snap = {}
 	for i, c in pairs(WS.Cities) do if c.owner then snap[tostring(i)] = c end end
 	Store.Update(Store.DS(WORLD_DS), "cities", function() return snap end)
@@ -123,7 +127,7 @@ end
 
 ---------------------------------------------------------------- alliances
 local function summary(a)
-	return { name = a.name, tag = a.tag, color = a.color, members = a.count or 0, level = a.level or 1, open = a.open ~= false, leader = a.leaderName,
+	return { name = a.name, tag = a.tag, color = a.color, members = a.count or 0, level = a.level or 1, cap = WS.MemberCap(a), open = a.open ~= false, leader = a.leaderName,
 		fee = a.joinFee or 0, dues = a.dues and a.dues.pct or 0, style = a.dues and a.dues.style or "flat" }
 end
 -- returns record, readOk (readOk=false means the DataStore could not be reached: do not act on a missing record)
@@ -151,13 +155,19 @@ local function writeIndex(id, s)
 		return old
 	end)
 end
-local function publish(kind, id)
-	if Store.Online then pcall(function() MessagingService:PublishAsync("IC_World" .. SUFFIX, { k = kind, id = id }) end) end
+local function publish(kind, id, rev)
+	if Store.Online then
+		local ok, err = pcall(function() MessagingService:PublishAsync("IC_World" .. SUFFIX, { k = kind, id = id, r = rev }) end)
+		if not ok then warn("[Idle Country] world publish failed: " .. tostring(err)) end
+	end
 	WS.Changed:Fire(kind, id)
 end
+-- set by GameServer: does anyone in THIS server belong to alliance id? (audit M5: other servers skip the read)
+WS.Interest = function(id) return false end
 
--- mutate an alliance record atomically. fn(a) returns (a, result) or (nil, errorMessage)
-function WS.MutateAlliance(id, fn)
+-- mutate an alliance record atomically. fn(a) returns (a, result) or (nil, errorMessage).
+-- quiet = true: no cross-server message (treasury/progress flushes; other servers pick it up on the periodic refresh)
+function WS.MutateAlliance(id, fn, quiet)
 	local result, err
 	local ok, a = Store.Update(Store.DS(ALLY_DS), "a_" .. id, function(old)
 		old = old or (not Store.Online and WS.Alliances[id]) or nil
@@ -195,7 +205,7 @@ function WS.MutateAlliance(id, fn)
 			-- skip the shared index write when nothing in the summary changed (review #5)
 			if not old or HttpService:JSONEncode(old) ~= HttpService:JSONEncode(s) then writeIndex(id, s) end
 		end
-		publish("a", id)
+		if not quiet or a.disbanded then publish("a", id, a.rev) else WS.Changed:Fire("a", id) end
 	end
 	return a, result
 end
@@ -220,8 +230,12 @@ function WS.CreateAlliance(plr, name, tag, color, who)
 	if not fname or fname ~= name or not ftag or ftag ~= tag then return nil, "That name is not allowed" end
 	for _, s in pairs(WS.Index) do
 		if s.name and s.name:lower() == name:lower() then return nil, "That name is taken" end
+		if s.tag and s.tag == tag then return nil, "That tag is taken" end
 	end
 	local id = HttpService:GenerateGUID(false):sub(1, 8)
+	-- names and tags are reserved in their own keys so two servers cannot found the same one (audit L3)
+	local okN, why = WS.ReserveName(name, tag, id)
+	if not okN then return nil, why end
 	local a = {
 		id = id, name = name, tag = tag, color = color, created = now(), open = true,
 		leader = plr.UserId, leaderName = who or plr.Name,
@@ -230,12 +244,41 @@ function WS.CreateAlliance(plr, name, tag, color, who)
 	}
 	table.insert(a.log, { t = now(), m = (who or plr.Name) .. " founded the alliance" })
 	local ok = Store.Update(Store.DS(ALLY_DS), "a_" .. id, function() return a end)
-	if not ok then return nil, "Could not save the alliance. Try again." end
+	if not ok then WS.ReleaseName(a); return nil, "Could not save the alliance. Try again." end
 	WS.Alliances[id] = a
 	WS.Index[id] = summary(a)
 	writeIndex(id, WS.Index[id])
 	publish("a", id)
 	return a
+end
+
+local function reserveKey(k, id)
+	local taken
+	local ok = Store.Update(Store.DS(ALLY_DS), k, function(old)
+		taken = nil
+		if old and old ~= id then
+			-- a reservation by an alliance that no longer exists is free again
+			if WS.Index[old] then taken = true; return nil end
+		end
+		return id
+	end)
+	return ok and not taken
+end
+function WS.ReserveName(name, tag, id)
+	if not Store.Online then return true end
+	if not reserveKey("nm_" .. name:lower(), id) then return false, "That name is taken" end
+	if not reserveKey("tg_" .. tag, id) then
+		Store.Update(Store.DS(ALLY_DS), "nm_" .. name:lower(), function(old) if old == id then return "" end; return nil end)
+		return false, "That tag is taken"
+	end
+	return true
+end
+function WS.ReleaseName(a)
+	if not Store.Online or not a or not a.name then return end
+	task.spawn(function()
+		Store.Update(Store.DS(ALLY_DS), "nm_" .. a.name:lower(), function(old) if old == a.id then return "" end; return nil end)
+		Store.Update(Store.DS(ALLY_DS), "tg_" .. tostring(a.tag), function(old) if old == a.id then return "" end; return nil end)
+	end)
 end
 
 local function addLog(a, m)
@@ -245,18 +288,27 @@ local function addLog(a, m)
 end
 WS.AddLog = addLog
 
-function WS.Join(plr, id, who, fee, lv)
-	return WS.MutateAlliance(id, function(a)
-		if (a.joinFee or 0) > (fee or 0) then return nil, "The join fee just went up. Check it and try again." end
+-- maxFee: the most the joiner agreed to pay. Returns record, feeCharged (audit L2: charge the record's fee, never twice)
+function WS.Join(plr, id, who, maxFee, lv)
+	local charged = 0
+	local rec, err = WS.MutateAlliance(id, function(a)
+		charged = 0
+		local key = tostring(plr.UserId)
+		if a.members[key] then return a, true end -- already in (a retried write): nothing to charge again
+		local fee = a.joinFee or 0
+		if fee > (maxFee or 0) then return nil, "The join fee just went up. Check it and try again." end
 		local n = 0; for _ in pairs(a.members) do n += 1 end
 		if a.disbanded then return nil, "That alliance has disbanded" end
-		if n >= AC.MaxMembers then return nil, "That alliance is full" end
+		if n >= WS.MemberCap(a) then return nil, "That alliance is full" end
 		if a.open == false then return nil, "That alliance is invite only" end
-		a.members[tostring(plr.UserId)] = { name = who or plr.Name, role = "member", joined = now(), active = now(), lv = lv }
-		if (fee or 0) > 0 then a.treasury = (a.treasury or 0) + fee end
+		a.members[key] = { name = who or plr.Name, role = "member", joined = now(), active = now(), lv = lv, wk = 0, tot = 0 }
+		if fee > 0 then a.treasury = (a.treasury or 0) + fee end
+		charged = fee
 		addLog(a, (who or plr.Name) .. " joined")
 		return a, true
 	end)
+	if not rec then return nil, err end
+	return rec, charged
 end
 
 function WS.Leave(plr, id, who)
@@ -286,19 +338,139 @@ function WS.Leave(plr, id, who)
 end
 
 function WS.Role(a, userId) local m = a and a.members[tostring(userId)]; return m and m.role end
+function WS.IsMember(aid, userId)
+	local a = aid and WS.Alliances[aid]
+	return a ~= nil and not a.disbanded and a.members[tostring(userId)] ~= nil
+end
 
----------------------------------------------------------------- treasury (batched per server)
+---------------------------------------------------------------- alliance progression (Kash 2 Oct: levels, rewards, quests)
+-- Members earn alliance XP just by playing (laws, convoys, raids, sieges, bosses, donations). XP raises the alliance
+-- LEVEL: more member slots, a cash bonus for everyone, and a reward each member claims for every level. Each week the
+-- alliance gets 3 QUESTS sized to its member count; finishing one gives alliance XP and every member who helped a reward.
+WS.AllyXp = { law = 1, convoy = 2, raid = 3, hit = 1, boss = 6, donate = 1 } -- XP per unit
+WS.QuestPool = {
+	{ key = "law", name = "Pass laws", per = 120 },
+	{ key = "convoy", name = "Deliver convoys", per = 30 },
+	{ key = "raid", name = "Win raids", per = 12 },
+	{ key = "hit", name = "Land siege hits", per = 25 },
+	{ key = "boss", name = "Defeat bosses", per = 2 },
+	{ key = "donate", name = "Donate (minutes of law income)", per = 40 },
+}
+WS.QuestXp = 600
+WS.MaxLevel = 30
+function WS.LevelXp(level) return math.floor(400 * level ^ 1.6 + 0.5) end
+function WS.MemberCap(a) return math.min(40, AC.MaxMembers - 10 + 2 * ((a and a.level) or 1)) end -- 22 at level 1, 40 at 10
+function WS.LevelBonus(level) return math.min(0.10, 0.01 * ((level or 1) - 1)) end -- +1% cash per level after 1, max +10%
+function WS.LevelReward(level) return { gold = 5 + 3 * level, basic = (level % 5 == 0) and 1 or 0 } end
+function WS.Week(t) return math.floor(((t or now()) + 3 * 86400) / 604800) end -- weeks start Monday 00:00 UTC
+
+local function genQuests(a, week)
+	local rng = Random.new(week * 7919 + #tostring(a.id or "") * 131 + (string.byte(a.id or "a") or 1))
+	local pool = table.clone(WS.QuestPool)
+	local n = math.max(5, a.count or 1)
+	local list = {}
+	for _ = 1, 3 do
+		local q = table.remove(pool, rng:NextInteger(1, #pool))
+		table.insert(list, { key = q.key, name = q.name, goal = q.per * n, prog = 0, by = {} })
+	end
+	return list
+end
+-- make sure the record is on this week's quests (called inside a mutation)
+function WS.EnsureWeek(a)
+	local w = WS.Week()
+	if a.qweek ~= w then
+		a.qweek = w
+		a.count = 0; for _ in pairs(a.members or {}) do a.count += 1 end
+		a.quests = genQuests(a, w)
+		for _, m in pairs(a.members or {}) do m.wk = 0 end
+	end
+	a.level = a.level or 1
+	a.xp = a.xp or 0
+end
+
 local pendingTreasury = {} -- [aid] = amount
+local pendingProg = {} -- [aid] = { xp = n, mem = { [uid] = pts }, q = { [kind] = { n = n, by = { [uid] = n } } } }
 function WS.Credit(aid, amount)
 	if not aid or amount ~= amount or amount <= 0 or amount == math.huge then return end
 	pendingTreasury[aid] = (pendingTreasury[aid] or 0) + amount
 end
+function WS.AddProgress(aid, uid, kind, n)
+	n = tonumber(n) or 0
+	if not aid or n ~= n or n <= 0 or n == math.huge or not WS.AllyXp[kind] then return end
+	local pp = pendingProg[aid] or { xp = 0, mem = {}, q = {} }
+	pendingProg[aid] = pp
+	local pts = n * WS.AllyXp[kind]
+	uid = tostring(uid)
+	pp.xp += pts
+	pp.mem[uid] = (pp.mem[uid] or 0) + pts
+	local qk = pp.q[kind] or { n = 0, by = {} }
+	pp.q[kind] = qk
+	qk.n += n
+	qk.by[uid] = (qk.by[uid] or 0) + n
+end
+-- apply a progress batch to a record (inside a mutation). Returns true when something worth announcing happened.
+local function applyProg(a, pp)
+	WS.EnsureWeek(a)
+	local loud = false
+	a.xp += pp.xp
+	while a.level < WS.MaxLevel and a.xp >= WS.LevelXp(a.level) do
+		a.xp -= WS.LevelXp(a.level)
+		a.level += 1
+		addLog(a, "The alliance reached LEVEL " .. a.level .. "!")
+		loud = true
+	end
+	for uid, pts in pairs(pp.mem) do
+		local m = a.members[uid]
+		if m then m.wk = (m.wk or 0) + pts; m.tot = (m.tot or 0) + pts; m.active = now() end
+	end
+	for _, q in ipairs(a.quests or {}) do
+		local add = pp.q[q.key]
+		if add and not q.done then
+			q.prog = math.min(q.goal, q.prog + add.n)
+			for uid, n in pairs(add.by) do if a.members[uid] then q.by[uid] = (q.by[uid] or 0) + n end end
+			if q.prog >= q.goal then
+				q.done = now()
+				a.xp += WS.QuestXp
+				addLog(a, "Quest complete: " .. q.name .. "!")
+				loud = true
+				while a.level < WS.MaxLevel and a.xp >= WS.LevelXp(a.level) do
+					a.xp -= WS.LevelXp(a.level); a.level += 1
+					addLog(a, "The alliance reached LEVEL " .. a.level .. "!")
+				end
+			end
+		end
+	end
+	return loud
+end
+
 function WS.FlushTreasury()
-	local batch = pendingTreasury
-	pendingTreasury = {}
-	for aid, amt in pairs(batch) do
-		local rec, err = WS.MutateAlliance(aid, function(a) a.treasury = (a.treasury or 0) + amt; return a, true end)
-		if not rec and err ~= "Alliance not found" then pendingTreasury[aid] = (pendingTreasury[aid] or 0) + amt end
+	local batch, prog = pendingTreasury, pendingProg
+	pendingTreasury, pendingProg = {}, {}
+	local ids = {}
+	for aid in pairs(batch) do ids[aid] = true end
+	for aid in pairs(prog) do ids[aid] = true end
+	for aid in pairs(ids) do
+		local amt, pp = batch[aid] or 0, prog[aid]
+		local loud = false
+		local rec, err = WS.MutateAlliance(aid, function(a)
+			loud = false
+			a.treasury = (a.treasury or 0) + amt
+			if pp then loud = applyProg(a, pp) else WS.EnsureWeek(a) end
+			return a, true
+		end, true)
+		if not rec and err ~= "Alliance not found" then
+			if amt > 0 then pendingTreasury[aid] = (pendingTreasury[aid] or 0) + amt end
+			if pp then
+				local cur = pendingProg[aid]
+				if not cur then pendingProg[aid] = pp
+				else cur.xp += pp.xp
+					for u, v in pairs(pp.mem) do cur.mem[u] = (cur.mem[u] or 0) + v end
+					for k, q in pairs(pp.q) do local c = cur.q[k] or { n = 0, by = {} }; cur.q[k] = c; c.n += q.n; for u, v in pairs(q.by) do c.by[u] = (c.by[u] or 0) + v end end
+				end
+			end
+		elseif rec and loud then
+			publish("a", aid, rec.rev) -- level-ups and finished quests reach every server at once
+		end
 	end
 end
 
@@ -418,10 +590,10 @@ function WS.SetRent(i, aid, pct)
 	return result
 end
 -- rent rate a player pays (fraction), 0 for new players, their own alliance's cities and unowned cities
-function WS.RentFor(d)
+function WS.RentFor(d, uid)
 	local c = d.home and WS.Cities[d.home]
 	if not c or not c.owner or (c.rent or 0) <= 0 then return 0, nil end
-	if c.owner == d.alliance then return 0, nil end
+	if c.owner == d.alliance and (not uid or WS.IsMember(d.alliance, uid)) then return 0, nil end
 	if os.time() - (d.created or os.time()) < Config.Rent.GraceHours * 3600 then return 0, nil end
 	return c.rent / 100, c.owner
 end
@@ -483,10 +655,28 @@ function WS.Start()
 				local d = msg.Data
 				if type(d) ~= "table" then return end
 				if d.k == "c" and tonumber(d.id) then pcall(WS.RefreshCity, tonumber(d.id)); WS.Changed:Fire("c", d.id)
-				elseif d.k == "a" and d.id then pcall(WS.LoadAlliance, d.id); WS.Changed:Fire("a", d.id) end
+				elseif d.k == "a" and type(d.id) == "string" then
+					-- only read alliances someone here belongs to, and only when the message is newer (audit M5)
+					local cur = WS.Alliances[d.id]
+					if (cur or WS.Interest(d.id)) and not (cur and d.r and (cur.rev or 0) >= d.r) then pcall(WS.LoadAlliance, d.id) end
+					WS.Changed:Fire("a", d.id)
+				end
 			end)
 		end)
 	end
+	-- every 90 s re-read the alliances people in this server belong to: a dropped message never leaves a kicked
+	-- member with stipend, perks or rent exemptions for the rest of the session (audit M4)
+	task.spawn(function()
+		while true do
+			task.wait(90)
+			for id in pairs(WS.Alliances) do
+				if WS.Interest(id) then
+					local ok = pcall(WS.LoadAlliance, id)
+					if ok then WS.Changed:Fire("a", id) end
+				end
+			end
+		end
+	end)
 	task.spawn(function()
 		local t = 0
 		while true do

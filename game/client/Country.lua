@@ -658,7 +658,7 @@ S.country = { build = function(host, App)
 
 	function obj:Refresh(st)
 		if not st then return end
-		local era = R.EraOf(st.lv)
+		local era = R.PlayerEra(st)
 		local E = D.Eras[era]
 		if obj.era ~= era then
 			obj.era = era

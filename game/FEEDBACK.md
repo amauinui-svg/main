@@ -274,3 +274,13 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
   * PLAYER PROFILES like the competitor's (screenshot shown earlier): another way for players to feel progress.
   * ALLIANCES need more progression feel: alliance tasks/quests (clan quests), levels, rewards.
   * Asked: what can players DO while waiting for property income and Influence to refill? (answered in chat)
+- NEW (2 Oct 21:39) DECISIONS on new concepts:
+  * GOVERNMENT TYPE: likes it (random, rerollable like races in other games) but ON HOLD for now.
+  * WONDERS: yes. A Wonder is added to PROPERTIES, unlocked after the player's FIRST ERA UPGRADE. Needs an EPIC visual.
+  * WORLD EVENTS on the WORLD MAP: yes. Every 30-60 min an event appears; players send a CONVOY to it for a big payout.
+  * Approved (keep small for now): quick choice events, expeditions, research, property boosts, achievements + titles,
+    player profile, alliance XP/levels/quests/tabs (War = coming soon), season pass idea.
+  * PRIORITY: alliances and the main game must be fine-tuned: NO exploits, NO bugs. Research the bugs games like this
+    usually have (Kash's notes on his PC from his other games + online) and audit everything.
+- NEW (2 Oct 21:58): TESTER PANEL for Kash: a nice admin panel with lots of test options, plus a command box
+  (e.g. /reset fully resets his progress as a brand new player). Owner-only (his UserId), never for other players.

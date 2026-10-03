@@ -27,16 +27,18 @@ S.military = { build = function(host, App)
 		local cap = M.UnitCap(st.lv)
 		sub.Text = "Attack <font color='#e2695f'><b>" .. R.Short(st.atk) .. "</b></font> · Defense <font color='#7fb0e6'><b>" .. R.Short(st.def) .. "</b></font> · Army <b>" .. count .. "/" .. cap .. "</b> (+1 room per level)"
 		local shown = {}
+		local pe = R.PlayerEra(st)
+		local function isLocked(u) return u.lvl > st.lv or u.era > pe end
 		for i, u in ipairs(M.Units) do
-			if u.lvl <= st.lv or (st.units[tostring(i)] or 0) > 0 then table.insert(shown, i) end
+			if not isLocked(u) or (st.units[tostring(i)] or 0) > 0 then table.insert(shown, i) end
 		end
 		local nextLocked
-		for i, u in ipairs(M.Units) do if u.lvl > st.lv then nextLocked = i; break end end
+		for i, u in ipairs(M.Units) do if isLocked(u) then nextLocked = i; break end end
 		if nextLocked then table.insert(shown, nextLocked) end
 		-- Kash 19:19: strongest first (ATK + DEF); every locked unit after all available ones, by unlock level
 		table.sort(shown, function(a, b)
 			local ua, ub = M.Units[a], M.Units[b]
-			local la, lb = ua.lvl > st.lv, ub.lvl > st.lv
+			local la, lb = isLocked(ua), isLocked(ub)
 			if la ~= lb then return lb end
 			if la then
 				if ua.lvl ~= ub.lvl then return ua.lvl < ub.lvl end
@@ -49,16 +51,16 @@ S.military = { build = function(host, App)
 		for order, i in ipairs(shown) do
 			local u = M.Units[i]
 			local owned = st.units[tostring(i)] or 0
-			local locked = u.lvl > st.lv
+			local locked = isLocked(u)
 			local cost = M.UnitCost(i, owned)
 			local card = UI.card(list, { sz = UDim2.new(1, 0, 0, 70), z = 7, order = order })
 			UI.icon(card, locked and "icon_lock" or u.icon, 30, locked and C.dim or C.manila, UDim2.fromOffset(14, 20), { z = 8 })
 			text(card, u.name .. (owned > 0 and ("  <font color='#9a9fa6'>x" .. owned .. "</font>") or ""), { font = "heavy", size = 18, rich = true, pos = UDim2.fromOffset(58, 8), sz = UDim2.new(0.38, -58, 0, 24), z = 8, truncate = true })
-			text(card, D.Eras[u.era].name .. (locked and (" · unlocks at level " .. u.lvl) or ""), { size = 13, color = C.muted, pos = UDim2.fromOffset(58, 36), sz = UDim2.new(0.38, -58, 0, 18), z = 8 })
+			text(card, D.Eras[u.era].name .. (locked and (u.lvl > st.lv and (" · unlocks at level " .. u.lvl) or " · advance era in Laws") or ""), { size = 13, color = C.muted, pos = UDim2.fromOffset(58, 36), sz = UDim2.new(0.38, -58, 0, 18), z = 8 })
 			text(card, "<font color='#e2695f'>ATK " .. R.Short(u.atk) .. "</font>   <font color='#7fb0e6'>DEF " .. R.Short(u.def) .. "</font>", { font = "heavy", size = 16, rich = true, pos = UDim2.new(0.38, 0, 0, 10), sz = UDim2.new(0.22, 0, 0, 22), z = 8 })
 			text(card, "Each costs 6% more than the last", { size = 12, color = C.muted, pos = UDim2.new(0.38, 0, 0, 36), sz = UDim2.new(0.25, 0, 0, 18), z = 8 })
 			if locked then
-				UI.button(card, "locked", "LEVEL " .. u.lvl, nil, { pos = UDim2.new(1, -170, 0, 14), sz = UDim2.fromOffset(160, 42), z = 9 })
+				UI.button(card, "locked", u.lvl > st.lv and ("LEVEL " .. u.lvl) or "ERA LOCKED", nil, { pos = UDim2.new(1, -170, 0, 14), sz = UDim2.fromOffset(160, 42), z = 9 })
 			else
 				UI.button(card, (st.cash >= cost and count < cap) and "green" or "slate", "RECRUIT " .. R.Money(cost), function(btn)
 					local res = App.req("unit", { i = i, n = 1 }, btn)
@@ -155,7 +157,7 @@ S.bosses = { build = function(host, App)
 		UI.clear(list)
 		for e, Bx in ipairs(M.Bosses) do
 			local row = UI.card(list, { sz = UDim2.new(1, 0, 0, 34), z = 7, order = e })
-			text(row, (e == boss.era and "▶ " or "") .. Bx[1], { font = "heavy", size = 15, color = e <= R.EraOf(st.lv) and C.ink or C.dim, pos = UDim2.fromOffset(12, 0), sz = UDim2.new(0.5, 0, 1, 0), z = 8 })
+			text(row, (e == boss.era and "▶ " or "") .. Bx[1], { font = "heavy", size = 15, color = e <= R.PlayerEra(st) and C.ink or C.dim, pos = UDim2.fromOffset(12, 0), sz = UDim2.new(0.5, 0, 1, 0), z = 8 })
 			text(row, D.Eras[e].name .. " · " .. R.Short(M.BossHp(e)) .. " HP · " .. M.BossGold[e] .. " gold", { size = 14, color = C.muted, pos = UDim2.new(0.5, 0, 0, 0), sz = UDim2.new(0.5, -12, 1, 0), z = 8, align = Enum.TextXAlignment.Right })
 		end
 		obj:Tick(st)

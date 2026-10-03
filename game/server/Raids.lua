@@ -18,6 +18,7 @@ local RC = Config.Raid
 local O = require(RS.Shared.Officers)
 local RA = {}
 local findTargetPublic -- set below (findTarget is defined after the spy code)
+local remoteUid -- set below (audit H3: was a nil global inside RA.Spy)
 local PS
 local lastHit = {} -- [targetId] = os.time() of the last successful raid on it
 RA.AI = {}
@@ -258,8 +259,8 @@ function RA.PublishCard(plr, p)
 	local atk, def = PS.Power(p, qm)
 	local card = { n = d.name, f = d.flag, lv = d.lv, atk = atk, def = def, cash = math.floor(d.cash), sh = d.shield or 0, w = weaponOf(d),
 		u = M.UnitCount(d.units), loss = qm.losses or 0, t = now(), ht = d.hitApplied or 0 }
-	local ok = pcall(function() Store.DS(CARD_DS):SetAsync(tostring(plr.UserId), card) end)
-	if ok then cardCache[plr.UserId] = { t = os.clock(), card = card } end
+	local ok, err = pcall(function() Store.DS(CARD_DS):SetAsync(tostring(plr.UserId), card) end)
+	if ok then cardCache[plr.UserId] = { t = os.clock(), card = card } else warn("[Idle Country] war card publish failed: " .. tostring(err)) end
 end
 local function getCard(uid)
 	local c = cardCache[uid]
@@ -269,7 +270,7 @@ local function getCard(uid)
 	if ok and type(card) == "table" then cardCache[uid] = { t = os.clock(), card = card }; return card end
 	return nil
 end
-local function remoteUid(id)
+remoteUid = function(id)
 	local uid = type(id) == "string" and tonumber(id:match("^u(%d+)$"))
 	if not uid or Players:GetPlayerByUserId(uid) then return nil end
 	return uid
@@ -278,23 +279,33 @@ function RA.RemoteOk(id)
 	local uid = remoteUid(id)
 	return uid ~= nil and getCard(uid) ~= nil
 end
-local function ping(uid) pcall(function() MessagingService:PublishAsync(TOPIC, { u = uid }) end) end
+local function ping(uid)
+	local ok, err = pcall(function() MessagingService:PublishAsync(TOPIC, { u = uid }) end)
+	if not ok then warn("[Idle Country] hit ping failed: " .. tostring(err)) end
+end
 
--- push an entry onto the target's queue. fn(rec) may veto by returning a message
+-- The hit record is an ESCROW (audit C1): every raid stays in rec.q until the defender's own server has applied it
+-- exactly once (ids remembered in the profile). Nothing is pruned by time or count, so an offline war card can only
+-- be robbed down, never refilled. At most RA.MaxUnpaid raids may wait unpaid; spies live in their own short list.
+RA.MaxUnpaid = 8
+local HttpService = game:GetService("HttpService")
 local function queueHit(uid, fn)
 	local veto
 	local ok = Store.Update(Store.DS(HITS_DS), tostring(uid), function(rec)
 		veto = nil
 		rec = type(rec) == "table" and rec or {}
-		rec.q = rec.q or {}; rec.recent = rec.recent or {}
-		local keep = {}
-		for _, r in ipairs(rec.recent) do if now() - r.t < 900 then table.insert(keep, r) end end
-		rec.recent = keep
+		rec.q = rec.q or {}; rec.sp = rec.sp or {}
+		rec.recent = nil -- old format
 		local entry
 		entry, veto = fn(rec)
 		if veto then return nil end
-		table.insert(rec.q, entry)
-		while #rec.q > 30 do table.remove(rec.q, 1) end
+		entry.id = HttpService:GenerateGUID(false)
+		if entry.k == "spied" then
+			table.insert(rec.sp, entry)
+			while #rec.sp > 10 do table.remove(rec.sp, 1) end
+		else
+			table.insert(rec.q, entry)
+		end
 		return rec
 	end)
 	if not ok then return false, "The war office is busy. Try again in a moment" end
@@ -302,10 +313,27 @@ local function queueHit(uid, fn)
 	ping(uid)
 	return true
 end
+-- cash the defender still holds: the war card minus every raid that is still waiting to be paid
 local function cashOnHand(card, rec)
 	local taken = 0
-	for _, r in ipairs(rec and rec.recent or {}) do if r.t > (card.ht or 0) then taken += r.steal end end
+	for _, r in ipairs(rec and rec.q or {}) do if r.k == "raided" and (r.t or 0) > (card.ht or 0) then taken += (r.steal or 0) end end
 	return math.max(0, (card.cash or 0) - taken)
+end
+local function unpaid(rec)
+	local n = 0
+	for _, r in ipairs(rec and rec.q or {}) do if r.k == "raided" then n += 1 end end
+	return n
+end
+-- a shield bought anywhere is written into the hit record so other servers refuse new hits at once (audit H4)
+function RA.SetShield(uid, untilT)
+	if not Store.Online then return end
+	task.spawn(function()
+		Store.Update(Store.DS(HITS_DS), tostring(uid), function(rec)
+			rec = type(rec) == "table" and rec or {}
+			rec.sh = math.max(rec.sh or 0, untilT)
+			return rec
+		end)
+	end)
 end
 
 local function remoteSpy(plr, p, id, uid)
@@ -315,17 +343,19 @@ local function remoteSpy(plr, p, id, uid)
 	if d.sup < RA.SpySupply then return { ok = false, msg = "Not enough Supply (" .. RA.SpySupply .. " needed)" } end
 	if p.remoteBusy then return { ok = false, msg = "Still sending your last order" } end
 	p.remoteBusy = true
-	local avail = card.cash
+	local avail, sh = card.cash, card.sh or 0
 	local ok, err = queueHit(uid, function(rec)
 		avail = cashOnHand(card, rec)
+		sh = math.max(sh, rec.sh or 0)
 		return { k = "spied", by = d.name ~= "" and d.name or plr.Name, lv = d.lv, t = now() }
 	end)
 	p.remoteBusy = nil
 	if not ok then return { ok = false, msg = err } end
-	d.sup -= RA.SpySupply
+	if PS.Profiles[plr] ~= p or p.leaving then return { ok = false, msg = "Left" } end
+	d.sup = math.max(0, d.sup - RA.SpySupply)
 	p.spied = p.spied or {}
 	p.spied[id] = now()
-	return { ok = true, intel = { cash = math.floor(avail), atk = card.atk, def = card.def, lv = card.lv, units = card.u, shield = math.max(0, (card.sh or 0) - now()), remote = true } }
+	return { ok = true, intel = { cash = math.floor(avail), atk = card.atk, def = card.def, lv = card.lv, units = card.u, shield = math.max(0, sh - now()), remote = true } }
 end
 
 local function remoteAttack(plr, p, id, uid, guaranteed)
@@ -351,19 +381,20 @@ local function remoteAttack(plr, p, id, uid, guaranteed)
 	p.remoteBusy = true
 	local ok, err = queueHit(uid, function(rec)
 		steal = 0
+		if (rec.sh or 0) > t then return nil, "They are under a raid shield" end
+		if unpaid(rec) >= RA.MaxUnpaid then return nil, "They have been raided too often. Try again later" end
 		if win then
 			if (rec.last or 0) + RC.Cooldown > t then return nil, "They were just raided. Try again in " .. ((rec.last or 0) + RC.Cooldown - t) .. "s" end
 			local onHand = cashOnHand(card, rec)
 			steal = math.floor(math.min(onHand * RC.StealPct * (1 + (mods.loot or 0)), stealCap(card.lv or 1)))
 			steal = math.max(0, math.min(steal, onHand))
 			rec.last = t
-			table.insert(rec.recent, { t = t, steal = steal })
 		end
 		return { k = "raided", by = d.name, byId = "u" .. plr.UserId, win = win, steal = steal, loss = theirLoss, t = t }
 	end)
 	p.remoteBusy = nil
 	if not ok then return { ok = false, msg = err } end
-	if not PS.Profiles[plr] then return { ok = false, msg = "Left" } end
+	if PS.Profiles[plr] ~= p or p.leaving then return { ok = false, msg = "Left" } end
 	if not guaranteed then
 		p.raidCd[id] = t
 		d.sup = math.max(0, d.sup - RC.Supply)
@@ -390,42 +421,65 @@ local function remoteAttack(plr, p, id, uid, guaranteed)
 end
 RA._remoteSpy = remoteSpy
 
--- the defender's side: take everything queued against you and apply it (cash is clamped to what you have now)
+-- The defender's side, applied exactly once (audit C1/H4): read the queue, apply only ids this profile has not seen,
+-- remember those ids in the profile, SAVE, then remove them from the queue. A crash at any point either re-applies
+-- nothing (ids remembered) or leaves the entries to be applied next time.
 function RA.ApplyHits(plr, p)
 	if not Store.Online or not p or p.applying or p.loading or p.leaving or not p.data.onboarded then return end
 	p.applying = true
-	local got
-	Store.Update(Store.DS(HITS_DS), tostring(plr.UserId), function(rec)
-		got = nil
-		if type(rec) ~= "table" or not rec.q or #rec.q == 0 then return nil end
-		got = rec.q
-		rec.q = {}
-		return rec
-	end)
-	p.applying = nil
-	if not got or PS.Profiles[plr] ~= p then return end
+	local okG, rec = Store.Get(Store.DS(HITS_DS), tostring(plr.UserId))
+	if not okG or type(rec) ~= "table" or ((not rec.q or #rec.q == 0) and (not rec.sp or #rec.sp == 0)) then p.applying = nil; return end
+	if PS.Profiles[plr] ~= p or p.leaving then p.applying = nil; return end
 	local d = p.data
+	d.appliedHits = type(d.appliedHits) == "table" and d.appliedHits or {}
+	local seen = {}
+	for _, id in ipairs(d.appliedHits) do seen[id] = true end
+	local done = {}
 	local raids = { n = 0, cash = 0, lost = 0, win = false }
-	for _, e in ipairs(got) do
-		if e.k == "spied" then
+	for _, e in ipairs(rec.sp or {}) do
+		if e.id and not seen[e.id] then
+			seen[e.id] = true; table.insert(done, e.id)
 			PS.Note(p, { kind = "spied", by = e.by, lv = e.lv })
-		elseif e.k == "raided" then
-			local steal = math.floor(math.min(e.steal or 0, math.max(0, d.cash)))
-			d.cash -= steal
-			d.stats.lost += steal
-			if e.win then d.stats.raided += 1 end
-			local _, n = kill(d.units, tonumber(e.loss) or 0, PS.Mods(p).losses)
-			d.revenge = { id = e.byId, name = e.by, t = e.t }
-			raids.n += 1; raids.cash += steal; raids.lost += n; raids.win = raids.win or e.win
-			raids.by, raids.byId = e.by, e.byId
 		end
-		d.hitApplied = math.max(d.hitApplied or 0, e.t or 0)
 	end
+	for _, e in ipairs(rec.q or {}) do
+		if e.id and not seen[e.id] and e.k == "raided" then
+			seen[e.id] = true; table.insert(done, e.id)
+			local shielded = d.shieldFrom and (e.t or 0) >= d.shieldFrom and (e.t or 0) <= (d.shield or 0)
+			if not shielded then
+				local steal = math.floor(math.min(tonumber(e.steal) or 0, math.max(0, d.cash)))
+				PS.Spend(p, steal)
+				d.stats.lost += steal
+				if e.win then d.stats.raided += 1 end
+				local _, n = kill(d.units, math.clamp(tonumber(e.loss) or 0, 0, 0.5), PS.Mods(p).losses)
+				d.revenge = { id = e.byId, name = e.by, t = e.t }
+				raids.n += 1; raids.cash += steal; raids.lost += n; raids.win = raids.win or e.win
+				raids.by, raids.byId = e.by, e.byId
+			end
+			d.hitApplied = math.max(d.hitApplied or 0, e.t or 0)
+		end
+	end
+	for _, id in ipairs(done) do table.insert(d.appliedHits, id) end
+	while #d.appliedHits > 120 do table.remove(d.appliedHits, 1) end
 	if raids.n > 0 then
 		PS.Note(p, { kind = "raided", by = raids.by, byId = raids.byId, win = raids.win, cash = raids.cash, lost = raids.lost })
 		if raids.n > 1 then PS.Note(p, { kind = "toast", text = "You were raided " .. raids.n .. " times. The last attacker was " .. tostring(raids.by) .. ".", tone = "bad" }) end
 	end
 	p.dirty = true
+	if #done > 0 and PS.Save(plr) then
+		local gone = {}
+		for _, id in ipairs(done) do gone[id] = true end
+		Store.Update(Store.DS(HITS_DS), tostring(plr.UserId), function(r)
+			if type(r) ~= "table" then return nil end
+			local q, sp = {}, {}
+			for _, e in ipairs(r.q or {}) do if not gone[e.id] then table.insert(q, e) end end
+			for _, e in ipairs(r.sp or {}) do if not gone[e.id] then table.insert(sp, e) end end
+			r.q, r.sp = q, sp
+			return r
+		end)
+		task.spawn(RA.PublishCard, plr, p)
+	end
+	p.applying = nil
 end
 
 -- attacker p raids target id. guaranteed = Revenge Strike product
@@ -443,10 +497,10 @@ function RA.Attack(plr, p, id, guaranteed)
 	-- you can't hammer the same target: one attack per target per cooldown, win or lose (review #7)
 	p.raidCd = p.raidCd or {}
 	if not guaranteed and (p.raidCd[id] or 0) + RC.Cooldown > t then return { ok = false, msg = "You just attacked them. Try again in " .. ((p.raidCd[id] or 0) + RC.Cooldown - t) .. "s" } end
-	if not guaranteed then p.raidCd[id] = t end
 	if q and (q.data.shield or 0) > t then return { ok = false, msg = "They are under a raid shield" } end
 	if not guaranteed then
 		if d.sup < RC.Supply then return { ok = false, msg = "Not enough Supply (" .. RC.Supply .. " needed)" } end
+		p.raidCd[id] = t -- set only once the raid really happens (audit L9)
 		d.sup -= RC.Supply
 		PS.TaskProgress(p, "supply", RC.Supply)
 	end
@@ -488,7 +542,7 @@ function RA.Attack(plr, p, id, guaranteed)
 		local onHand = q and q.data.cash or ai.cash
 		local steal = math.floor(math.min(onHand * RC.StealPct * (1 + (mods.loot or 0)), stealCap(defLv)))
 		steal = math.max(0, math.min(steal, onHand))
-		if q then q.data.cash -= steal; q.data.stats.lost += steal; q.data.stats.raided += 1 else ai.cash -= steal end
+		if q then steal = PS.Spend(q, steal); q.data.stats.lost += steal; q.data.stats.raided += 1 else ai.cash -= steal end
 		local got = PS.Earn(p, steal, "raid")
 		local xp = math.max(1, math.floor(R.MinuteXp(d.lv) * 0.6 + 0.5))
 		PS.AddXp(p, xp)
@@ -533,7 +587,7 @@ local function aiRaid()
 	if win then
 		lastHit["u" .. plr.UserId] = t
 		steal = math.floor(math.min(q.data.cash * RC.StealPct, stealCap(q.data.lv)))
-		q.data.cash -= steal
+		steal = PS.Spend(q, steal)
 		q.data.stats.lost += steal; q.data.stats.raided += 1
 		ai.cash += steal
 	end
@@ -546,13 +600,14 @@ function RA.Start()
 	RA.MakeAI()
 	if Store.Online then
 		task.spawn(function()
-			pcall(function()
+			local okS, errS = pcall(function()
 				MessagingService:SubscribeAsync(TOPIC, function(msg)
 					local uid = type(msg.Data) == "table" and tonumber(msg.Data.u)
 					local plr = uid and Players:GetPlayerByUserId(uid)
 					if plr and PS.Profiles[plr] then RA.ApplyHits(plr, PS.Profiles[plr]) end
 				end)
 			end)
+			if not okS then warn("[Idle Country] hit subscription failed (the 90 s poll still applies hits): " .. tostring(errS)) end
 		end)
 		-- fallback poll + war cards
 		task.spawn(function()
@@ -575,7 +630,8 @@ function RA.Start()
 			for _ = 1, 4 do RA.TuneAI(false) end -- 5 s of growth (TuneAI adds one second's worth)
 			if os.clock() >= nextRaid then
 				nextRaid = os.clock() + math.random(RC.AIRaidEvery[1], RC.AIRaidEvery[2])
-				pcall(aiRaid)
+				local okA, errA = pcall(aiRaid)
+				if not okA then warn("[Idle Country] AI raid: " .. tostring(errA)) end
 			end
 		end
 	end)

@@ -295,7 +295,6 @@ S.tasks = { build = function(host, App)
 		local seals = st.seals or 0
 		local head = UI.mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 30), ZIndex = 7, LayoutOrder = 0 }, list)
 		text(head, "Merits come only from orders. They cannot be traded or bought.", { size = 15, color = C.muted, sz = UDim2.new(1, -180, 1, 0), z = 8, truncate = true })
-		UI.chip(head, (st.tickets or 0) .. " TICKETS", { pos = UDim2.new(1, -4, 0.5, 0), anchor = Vector2.new(1, 0.5), h = 26, size = 14, icon = "icon_ticket", iconColor = C.white, z = 8 })
 		local contentW = App.W() - App.NAVW - 20 - 28
 		local cols = contentW >= 980 and 4 or 3
 		local grid = UI.mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, ZIndex = 7, LayoutOrder = 1 }, list)

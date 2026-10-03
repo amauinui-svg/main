@@ -52,7 +52,17 @@ local memMaps = {}
 local localMaps = {}
 local memOk = S.Online and pcall(function() MemoryStoreService:GetHashMap("IC_Probe"):GetAsync("probe") end)
 S.MemOnline = memOk and true or false
-if S.Online and not memOk then warn("[Idle Country] MemoryStore unavailable: city state is local to this server.") end
+if S.Online and not memOk then
+	warn("[Idle Country] MemoryStore unavailable: city state is local to this server until it comes back.")
+	-- keep trying: one failed probe must not fork this server off the shared world for its whole life (audit M9)
+	task.spawn(function()
+		while not S.MemOnline do
+			task.wait(30)
+			local ok = pcall(function() MemoryStoreService:GetHashMap("IC_Probe"):GetAsync("probe") end)
+			if ok then S.MemOnline = true; warn("[Idle Country] MemoryStore is back: rejoined the shared world.") end
+		end
+	end)
+end
 function S.MapGet(name, key)
 	if S.MemOnline then
 		memMaps[name] = memMaps[name] or MemoryStoreService:GetHashMap(name)

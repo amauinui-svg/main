@@ -109,7 +109,7 @@ end
 -- Loads offered from city a to city b for a player. ctx = { lv, incHr, day, convoyMult, taxPct, taxFree }
 function T.Loads(a, b, ctx)
 	local A, B = World.Cities[a], World.Cities[b]
-	local era = Rules.EraOf(ctx.lv)
+	local era = ctx.era or Rules.EraOf(ctx.lv)
 	local kind = T.RouteKind(a, b)
 	local base = T.BaseMinutes(a, b)
 	local value = T.TradeValue(ctx.lv, ctx.incHr)

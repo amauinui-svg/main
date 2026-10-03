@@ -11,8 +11,8 @@ local O = require(RS.Shared.Officers)
 local TK = require(RS.Shared.Tasks)
 
 local A = {}
-local PS, MK, RA, TD
-function A.Init(ps, mk, ra, td) PS, MK, RA, TD = ps, mk, ra, td end
+local PS, MK, RA
+function A.Init(ps, mk, ra) PS, MK, RA = ps, mk, ra end
 
 local function ok(t) t = t or {}; t.ok = true; return t end
 local function no(msg) return { ok = false, msg = msg } end
@@ -58,6 +58,25 @@ function act.onboard(plr, p, a)
 	return ok()
 end
 
+local function eraGate(d, e)
+	if e and e > R.PlayerEra(d) then return no("Advance to the " .. D.Eras[e].name .. " Era first") end
+end
+
+-- Paid eras (Kash 2 Oct): the level unlocks the option, cash pays for the advance. One era at a time.
+function act.eraUp(plr, p)
+	local d = p.data
+	local cur = d.era or 1
+	local nxt = cur + 1
+	local E = D.Eras[nxt]
+	if not E then return no("You are already in the last era") end
+	if d.lv < E.start then return no("Reach level " .. E.start .. " to advance") end
+	local cost = R.EraCost(nxt)
+	if not PS.Spend(p, cost) then return no("Need " .. R.Money(cost) .. " to advance") end
+	d.era = nxt
+	PS.Note(p, { kind = "toast", text = "Welcome to the " .. E.name .. " Era! New laws, properties and units unlocked", tone = "gold" })
+	return ok({ era = nxt })
+end
+
 ---------------------------------------------------------------- laws
 function act.passLaw(plr, p, a)
 	local d = p.data
@@ -65,6 +84,7 @@ function act.passLaw(plr, p, a)
 	if not i then return no("Unknown law") end
 	local L = D.Laws[i]
 	if d.lv < L.lvl then return no("Unlocks at level " .. L.lvl) end
+	local eg = eraGate(d, L.era); if eg then return eg end
 	if d.inf < L.cost then return no("Not enough Influence") end
 	local t = os.clock()
 	if t - p.lastAct < 0.06 then return no("Too fast") end
@@ -100,6 +120,7 @@ function act.build(plr, p, a)
 	if not i then return no("Unknown property") end
 	local P = D.Props[i]
 	if d.lv < P.lvl then return no("Unlocks at level " .. P.lvl) end
+	local eg = eraGate(d, P.era); if eg then return eg end
 	local lot = int(a.lot, 1, PS.LotsMax(p))
 	if lot and d.lots[lot] and d.lots[lot] > 0 then return no("That lot is taken. Demolish it first.") end
 	if not lot then
@@ -150,6 +171,7 @@ function act.unit(plr, p, a)
 	if not i or not n then return no("Unknown unit") end
 	local u = M.Units[i]
 	if d.lv < u.lvl then return no("Unlocks at level " .. u.lvl) end
+	local eg = eraGate(d, u.era); if eg then return eg end
 	local bought, spent = 0, 0
 	for _ = 1, n do
 		if M.UnitCount(d.units) >= M.UnitCap(d.lv) then break end
@@ -182,17 +204,6 @@ function act.raid(plr, p, a)
 end
 function act.spy(plr, p, a) return RA.Spy(plr, p, a.id) end
 
----------------------------------------------------------------- alliance takedown
-function act.tdView(plr, p) return ok({ view = TD.View(p) }) end
-function act.tdAttack(plr, p, a)
-	local t = os.clock()
-	if t - (p.lastTd or 0) < 0.35 then return no("Too fast") end
-	p.lastTd = t
-	local r = TD.Attack(plr, p, a.e)
-	if r.ok then r.view = TD.View(p) end
-	return r
-end
-function act.tdClaim(plr, p) return TD.Claim(plr, p) end
 
 ---------------------------------------------------------------- bosses
 function act.bossHit(plr, p, a)
@@ -222,7 +233,7 @@ function act.bossHit(plr, p, a)
 		d.gold += gold
 		d.stats.bosses += 1
 		PS.TaskProgress(p, "boss", 1)
-		d.boss = { era = R.EraOf(d.lv), hp = M.BossHp(R.EraOf(d.lv)), next = now() + M.BossCooldown }
+		d.boss = { era = R.PlayerEra(d), hp = M.BossHp(R.PlayerEra(d)), next = now() + M.BossCooldown }
 		PS.AddXp(p, xp)
 		PS.Note(p, { kind = "boss", name = M.Bosses[e][1], gold = gold, cash = cash, xp = xp })
 		return ok({ dmg = dmg, killed = true })
@@ -320,7 +331,7 @@ function act.finishRobux(plr, p, a)
 	if not c or not c.to then return no("That convoy is not travelling") end
 	local mins = (c.t1 - now()) / 60
 	for _, key in ipairs({ "FinishConvoy1", "FinishConvoy2", "FinishConvoy3", "FinishConvoy4" }) do
-		if mins <= Config.Products[key].maxMinutes then return MK.PromptProduct(plr, key, i) end
+		if mins <= Config.Products[key].maxMinutes then return MK.PromptProduct(plr, key, { i = i, t1 = c.t1 }) end
 	end
 	return no("Bad request")
 end
@@ -420,12 +431,15 @@ function act.sealBuy(plr, p, a)
 	if it.refill == "inf" and d.inf >= R.MaxInfluence(d.lv, d.sk) then return no("Influence is already full") end
 	if it.refill == "sup" and d.sup >= R.MaxSupply(d.lv, d.sk) then return no("Supply is already full") end
 	d.seals -= it.cost
-	if it.tickets then d.tickets += it.tickets end
 	if it.refill == "inf" then d.inf = R.MaxInfluence(d.lv, d.sk) end
 	if it.refill == "sup" then d.sup = R.MaxSupply(d.lv, d.sk) end
 	if it.basicCrates then d.crates.basic += it.basicCrates end
 	if it.limitedCrates then d.crates.limited += it.limitedCrates end
-	if it.shieldHours then d.shield = math.max(d.shield or 0, os.time()) + it.shieldHours * 3600 end
+	if it.shieldHours then
+		if (d.shield or 0) < os.time() then d.shieldFrom = os.time() end
+		d.shield = math.max(d.shield or 0, os.time()) + it.shieldHours * 3600
+		RA.SetShield(plr.UserId, d.shield)
+	end
 	return ok({ item = it.key })
 end
 
@@ -456,10 +470,11 @@ function act.deposit(plr, p, a)
 	local d = p.data
 	local amt = amountArg(a.amount, d.cash)
 	if not amt or amt <= 0 then return no("No cash to deposit") end
-	local fee = math.floor(amt * Config.Bank.DepositFee)
+	local fee = math.ceil(amt * Config.Bank.DepositFee) -- ceil: tiny deposits pay the fee too (audit L4)
+	if fee >= amt then return no("Deposit more than that") end
 	d.cash -= amt
 	d.bank += amt - fee
-	PS.TaskProgress(p, "deposit", 1)
+	if amt >= R.MinuteValue(d.lv) then PS.TaskProgress(p, "deposit", 1) end
 	return ok({ deposited = amt - fee, fee = fee })
 end
 function act.withdraw(plr, p, a)
@@ -493,10 +508,15 @@ end
 function act.buyPass(plr, p, a) return MK.PromptPass(plr, a.key) end
 local BUYABLE = { GoldSmall = true, GoldBig = true, GoldHuge = true, Crate1 = true, Crate3 = true, Crate10 = true,
 	TreasuryGrant = true, InfluenceRefill = true, SupplyRefill = true, RaidShield = true, InstantArmy = true,
-	ChallengeRefresh = true, LimitedBundle = true }
+	ChallengeRefresh = true, LimitedBundle = true, StarterPack = true }
 function act.buyProduct(plr, p, a)
 	if not BUYABLE[a.key] then return no("Unknown item") end
 	if a.key == "LimitedBundle" and p.data.bundle then return no("You already own the Limited Bundle") end
+	if a.key == "StarterPack" then
+		if p.data.starter then return no("You already own the Starter Pack") end
+		if p.data.lv > Config.Products.StarterPack.maxLevel then return no("The Starter Pack is for new players") end
+		if Config.Products.StarterPack.id == 0 then return no("Coming soon") end
+	end
 	if (a.key == "LimitedBundle" or a.key == "Crate1" or a.key == "Crate3" or a.key == "Crate10") and os.time() > Config.Crates.Limited.ends then
 		return no("This limited offer has ended")
 	end
@@ -578,9 +598,7 @@ function act.hire(plr, p, a)
 	local tier
 	for _, h in ipairs(Config.Officers.Hire) do if h.key == a.tier then tier = h end end
 	if not tier then return no("Pick a hiring office") end
-	local benched = 0
-	for id in pairs(d.inv.officers) do if not table.find(d.cab.slots, id) then benched += 1 end end
-	if benched >= Config.Officers.BenchMax then return no("Your bench is full. Fire someone first.") end
+	if not PS.FreeSlot(p) then return no("Every officer slot is full. Fire someone or unlock a slot first.") end -- no bench (Kash 2 Oct)
 	if d.cash < tier.cost then return no(tier.name .. " costs " .. R.Money(tier.cost)) end
 	d.cash -= tier.cost
 	local rng = PS.Rng(p)
@@ -603,16 +621,18 @@ function act.fire(plr, p, a)
 	d.inv.officers[a.id] = nil
 	return ok()
 end
--- move an officer into slot i (swapping with whoever is there), or to the bench (slot 0)
+-- move an officer into slot i, swapping with whoever is there (there is no bench any more)
 function act.seat(plr, p, a)
 	local d = p.data
 	local o = type(a.id) == "string" and d.inv.officers[a.id]
 	if not o then return no("Unknown officer") end
-	local target = int(a.slot, 0, PS.OfficerSlots(p))
+	if o.limited then return no("Limited officers have their own slot") end
+	local target = int(a.slot, 1, PS.OfficerSlots(p))
 	if not target then return no("That slot is locked") end
 	local from = officerSlotIndex(d, a.id)
-	if target == 0 then if from then d.cab.slots[from] = false end; return ok() end
+	if not from then return no("Unknown officer") end
 	local other = d.cab.slots[target]
+	for k = 1, target - 1 do if d.cab.slots[k] == nil then d.cab.slots[k] = false end end -- no holes (audit L1)
 	d.cab.slots[target] = a.id
 	if from then d.cab.slots[from] = other or false end
 	for i = 1, 20 do if i > PS.OfficerSlots(p) and d.cab.slots[i] then d.cab.slots[i] = false end end
@@ -661,9 +681,19 @@ function A.OpenCrates(p, kind, n)
 	for k = 1, n do
 		-- a 10-pack guarantees at least one Epic or better
 		local force = (kind == "limited" and n >= 10 and k == n and not gotEpic)
-		local r = O.OpenCrate(rng, kind, luck, force)
+		local r = O.OpenCrate(rng, kind, luck, force, { era = PS.Era(p), slotFree = PS.FreeSlot(p) ~= nil })
 		if O.RarityByKey[r.item.rarity].index >= 4 then gotEpic = true end
-		if r.type == "officer" then r.where = PS.AddOfficer(p, r.item)
+		if r.type == "officer" then
+			r.where = PS.AddOfficer(p, r.item)
+			if not r.where then -- no room after all: turn it into gear so nothing is lost
+				r = { type = "gear", item = O.NewGear(rng, O.RarityByKey[r.item.rarity].index) }
+				if not PS.AddGear(p, r.item) then r.lost = true end
+			end
+		elseif r.type == "troops" then
+			d.elite = d.elite or {}
+			local key = tostring(r.item.era)
+			d.elite[key] = (d.elite[key] or 0) + r.item.n
+			r.item.name = M.Elite[r.item.era].name
 		elseif not PS.AddGear(p, r.item) then r.lost = true end
 		table.insert(results, r)
 	end
@@ -722,60 +752,114 @@ function act.allyList(plr, p)
 	return ok({ list = list })
 end
 
+-- per-player cooldowns on alliance writes (audit M6): join/leave/create 30 s, everything else 2 s
+local function allyCd(p, kind, secs)
+	p.allyCd = p.allyCd or {}
+	local t = os.clock()
+	if (p.allyCd[kind] or -1e9) + secs > t then return "Slow down a little (" .. math.ceil(p.allyCd[kind] + secs - t) .. "s)" end
+	p.allyCd[kind] = t
+	return nil
+end
+local function gone(plr, p) return PS.Profiles[plr] ~= p or p.leaving end
+local function startClaims(p, rec)
+	-- a new member starts claiming from the level the alliance is at now (no back pay for levels before they joined)
+	p.data.allyClaim = { id = rec.id, lv = rec.level or 1, q = {} }
+end
+
 function act.allyCreate(plr, p, a)
 	local d = p.data
 	if d.alliance then return no("Leave your alliance first") end
 	if d.lv < AC.MinLevel then return no("Founding an alliance needs level " .. AC.MinLevel) end
 	if d.cash < AC.CreateCost then return no("Founding costs " .. R.Money(AC.CreateCost)) end
+	local cd = allyCd(p, "join", 30); if cd then return no(cd) end
+	d.cash -= AC.CreateCost -- charged before the yield, refunded on failure (audit M3)
 	local rec, err = WS.CreateAlliance(plr, a.name, a.tag, a.color, d.name)
-	if not rec then return no(err) end
-	d.cash -= AC.CreateCost
+	if not rec then d.cash += AC.CreateCost; return no(err) end
+	if gone(plr, p) then WS.Leave(plr, rec.id, d.name); return no("Left") end
 	d.alliance = rec.id
+	startClaims(p, rec)
 	return ok()
 end
 function act.allyJoin(plr, p, a)
 	local d = p.data
 	if d.alliance then return no("Leave your alliance first") end
 	if type(a.id) ~= "string" or not WS.Index[a.id] then return no("Alliance not found") end
+	local cd = allyCd(p, "join", 30); if cd then return no(cd) end
 	if not WS.Alliances[a.id] then WS.LoadAlliance(a.id) end
-	local fee = (WS.Alliances[a.id] and WS.Alliances[a.id].joinFee) or 0
+	local fee = math.floor((WS.Alliances[a.id] and WS.Alliances[a.id].joinFee) or 0)
 	if d.cash < fee then return no("Joining costs " .. R.Money(fee)) end
-	local rec, err = WS.Join(plr, a.id, d.name, fee, d.lv)
-	if not rec then return no(err) end
-	d.cash -= fee
+	d.cash -= fee -- the most we agreed to pay, held before the yield; the difference is refunded (audit L2/M3)
+	local rec, charged = WS.Join(plr, a.id, d.name, fee, d.lv)
+	if not rec then d.cash += fee; return no(charged) end
+	d.cash += fee - (tonumber(charged) or 0)
+	if gone(plr, p) then WS.Leave(plr, a.id, d.name); return no("Left") end
 	d.alliance = a.id
-	return ok({ fee = fee })
+	startClaims(p, rec)
+	return ok({ fee = charged })
 end
 function act.allyLeave(plr, p)
 	local d = p.data
 	local _, id = myAlliance(p)
 	if not id then return no("You are not in an alliance") end
+	local cd = allyCd(p, "join", 30); if cd then return no(cd) end
 	local rec2, err = WS.Leave(plr, id, d.name)
 	if not rec2 and err ~= "Alliance not found" then return no(err) end
 	d.alliance = nil
+	d.allyClaim = nil
 	return ok()
 end
 function act.allyDonate(plr, p, a)
 	local d = p.data
 	local _, id = myAlliance(p)
 	if not id then return no("You are not in an alliance") end
+	local cd = allyCd(p, "donate", 2); if cd then return no(cd) end
 	local amt = math.floor(tonumber(a.amount) or 0)
 	if amt <= 0 or amt ~= amt then return no("Bad amount") end
 	amt = math.min(amt, math.floor(d.cash))
-	if amt <= 0 then return no("No cash to donate") end
+	local minute = math.max(1, math.floor(R.MinuteValue(d.lv)))
+	if amt < minute then return no("Donate at least " .. R.Money(minute)) end -- no $1 spam into the log (audit M6/L4)
 	d.cash -= amt -- taken before the yield, refunded if the write fails (review #11)
 	local rec, err = WS.MutateAlliance(id, function(x)
-		x.treasury = (x.treasury or 0) + amt
 		local m = x.members[tostring(plr.UserId)]
-		if m then m.donated = (m.donated or 0) + amt; m.active = now() end
+		if not m then return nil, "You are not in that alliance" end
+		x.treasury = (x.treasury or 0) + amt
+		m.donated = (m.donated or 0) + amt; m.active = now()
 		WS.AddLog(x, d.name ~= "" and (d.name .. " donated " .. R.Money(amt)) or (plr.Name .. " donated " .. R.Money(amt)))
 		return x, true
 	end)
 	if not rec then d.cash += amt; return no(err) end
 	PS.TaskProgress(p, "donate", 1)
+	PS.AllyProgress(p, "donate", math.min(120, amt / minute))
 	return ok({ amount = amt })
 end
+-- claim alliance level rewards and finished-quest rewards (Kash 2 Oct)
+function act.allyClaim(plr, p)
+	local d = p.data
+	local rec, id = myAlliance(p)
+	if not id or not rec then return no("You are not in an alliance") end
+	local c = PS.AllyClaimable(p)
+	if not c or (c.levels <= 0 and #c.quests == 0) then return no("Nothing to claim yet") end
+	local ac = d.allyClaim
+	local gold, basic, seals = 0, 0, 0
+	for lv = (ac.lv or 1) + 1, rec.level or 1 do
+		local r = WS.LevelReward(lv)
+		gold += r.gold; basic += r.basic
+	end
+	ac.lv = rec.level or 1
+	ac.q = ac.q or {}
+	for _, key in ipairs(c.quests) do
+		ac.q[tostring(rec.qweek) .. ":" .. key] = true
+		gold += 15; seals += 3
+	end
+	-- forget claims from older weeks so the record stays small
+	for k in pairs(ac.q) do if not k:find("^" .. tostring(rec.qweek) .. ":") then ac.q[k] = nil end end
+	d.gold += gold
+	d.seals = (d.seals or 0) + seals
+	d.crates.basic = (d.crates.basic or 0) + basic
+	return ok({ gold = gold, seals = seals, basic = basic })
+end
 function act.allyUpgrade(plr, p, a)
+	do local cd = allyCd(p, "manage", 2); if cd then return no(cd) end end
 	local rec, id = myAlliance(p)
 	if not id then return no("You are not in an alliance") end
 	if not canManage(rec, plr.UserId) then return no("Only the leader and officers can upgrade") end
@@ -798,6 +882,7 @@ function act.allyUpgrade(plr, p, a)
 	return ok()
 end
 function act.allyRole(plr, p, a)
+	do local cd = allyCd(p, "manage", 2); if cd then return no(cd) end end
 	local rec, id = myAlliance(p)
 	if not id then return no("You are not in an alliance") end
 	if WS.Role(rec, plr.UserId) ~= "leader" then return no("Only the leader can change roles") end
@@ -822,6 +907,7 @@ function act.allyRole(plr, p, a)
 	return ok()
 end
 function act.allyKick(plr, p, a)
+	do local cd = allyCd(p, "manage", 2); if cd then return no(cd) end end
 	local rec, id = myAlliance(p)
 	if not id then return no("You are not in an alliance") end
 	local target = tostring(a.uid or "")
@@ -840,6 +926,7 @@ function act.allyKick(plr, p, a)
 	return ok()
 end
 function act.allyOpen(plr, p, a)
+	do local cd = allyCd(p, "manage", 2); if cd then return no(cd) end end
 	local rec, id = myAlliance(p)
 	if not id or WS.Role(rec, plr.UserId) ~= "leader" then return no("Only the leader can change this") end
 	local rec2, err = WS.MutateAlliance(id, function(x)
@@ -853,6 +940,7 @@ end
 
 -- leader sets the join fee and dues (once a day)
 function act.allySettings(plr, p, a)
+	do local cd = allyCd(p, "manage", 2); if cd then return no(cd) end end
 	local rec, id = myAlliance(p)
 	if not id then return no("You are not in an alliance") end
 	local fee = tonumber(a.fee) or 0

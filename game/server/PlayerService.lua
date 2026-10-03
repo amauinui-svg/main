@@ -39,7 +39,7 @@ function PS.Fresh()
 		crates = { limited = 0, basic = 0 }, login = { idx = 1, last = 0 },
 		refresh = { day = 0, tokens = 0 }, weekly = nil, bundle = false,
 		-- 1 Oct evening: seals (task currency) and takedown tickets
-		seals = 0, tickets = 0,
+		seals = 0, tickets = 0, -- tickets: legacy, always 0
 	}
 end
 
@@ -52,7 +52,16 @@ local function sanitize(d)
 		for k2, v in pairs(f[k]) do if d[k][k2] == nil then d[k][k2] = v end end
 	end
 	d.rivals = nil
+	-- Takedown removed (2 Oct, Kash): unused tickets are refunded as Merits (2 each, their shop price)
+	if (d.tickets or 0) > 0 then d.seals = (d.seals or 0) + d.tickets * 2 end
+	d.tickets = 0; d.td = nil
+	-- paid eras (2 Oct): saves from before keep the era their level already gave them
+	if type(d.era) ~= "number" then d.era = R.EraOf(d.lv or 1) end
+	d.era = math.clamp(math.floor(d.era), 1, #D.Eras)
 	if not World.Cities[d.home] then d.home = 12 end
+	local keep = {}
+	for _, pi in ipairs(d.lots) do if type(pi) == "number" and (pi == 0 or D.Props[pi]) then table.insert(keep, pi) end end
+	d.lots = keep
 	for _, c in ipairs(d.convoys) do if not World.Cities[c.at] then c.at = d.home end end
 	return d
 end
@@ -64,7 +73,8 @@ local function migrate(old)
 	d.cash = math.max(500, old.cash or 0); d.lv = old.lv or 1; d.xp = old.xp or 0
 	d.passes = old.passes or {}
 	local owned = {}
-	for k, n in pairs(old.props or {}) do for _ = 1, n do table.insert(owned, tonumber(k)) end end
+	for k, n in pairs(old.props or {}) do local pi = tonumber(k)
+		if pi and D.Props[pi] then for _ = 1, n do table.insert(owned, pi) end end end
 	table.sort(owned, function(a, b) return a > b end)
 	local lots = R.Lots(d.sk, false)
 	for _, p in ipairs(owned) do
@@ -99,7 +109,7 @@ function PS.RegenSec(mods) return R.RegenSec / (mods and mods.regen or 1) end
 function PS.Has(p, pass) return p.gp[pass] == true end
 -- silent rent on property income to the alliance holding your home capital (Kash 18:49: never notified)
 function PS.PayRent(p, inc)
-	local rate, owner = WS.RentFor(p.data)
+	local rate, owner = WS.RentFor(p.data, p.userId)
 	if rate <= 0 or not owner or inc <= 0 then return inc end
 	local cut = inc * rate
 	WS.Credit(owner, cut)
@@ -125,7 +135,7 @@ function PS.LotsMax(p) return R.Lots(p.data.sk, PS.Has(p, "ExtraLots")) end
 function PS.Slots(p) return R.ConvoySlots(p.data.lv, PS.Has(p, "ExtraConvoys")) end
 function PS.Power(p, mods)
 	mods = mods or PS.Mods(p)
-	return M.Power(p.data.lv, p.data.sk, p.data.units, mods)
+	return M.Power(p.data.lv, p.data.sk, p.data.units, mods, p.data.elite)
 end
 function PS.GoldLaws(d)
 	local n = 0
@@ -157,6 +167,18 @@ function PS.Earn(p, amount, src)
 	return amount
 end
 
+-- money out that the player did not choose (raid losses, rent): never below zero, returns what was actually taken
+function PS.Era(p) return R.PlayerEra(p.data) end
+
+function PS.Spend(p, amount)
+	local d = p.data
+	amount = tonumber(amount) or 0
+	if amount ~= amount or amount <= 0 or amount == math.huge then return 0 end
+	amount = math.min(amount, math.max(0, d.cash))
+	d.cash -= amount
+	return amount
+end
+
 -- Kash 1 Oct: dues are a % of earnings. Style: flat, prog (higher levels pay more), regr (lower levels pay more).
 -- Each member's rate scales from half to double the base by their level vs the alliance average.
 function PS.DuesRate(p)
@@ -176,6 +198,35 @@ function PS.DuesRate(p)
 	return math.min(base, Config.Alliance.DuesCap / 100)
 end
 
+-- alliance progress from anything a member does (WS batches it; see WorldService "alliance progression")
+function PS.AllyProgress(p, kind, n)
+	local d = p.data
+	if d.alliance and WS.IsMember(d.alliance, p.userId) then WS.AddProgress(d.alliance, p.userId, kind, n) end
+end
+-- what this member can claim from the alliance: levels reached since they last claimed, and finished quests they helped
+function PS.AllyClaimable(p)
+	local d = p.data
+	local a = d.alliance and WS.IsMember(d.alliance, p.userId) and WS.Alliances[d.alliance]
+	if not a then return nil end
+	local ac = d.allyClaim
+	if type(ac) ~= "table" or ac.id ~= a.id then return nil end
+	local out = { levels = math.max(0, (a.level or 1) - (ac.lv or a.level or 1)), quests = {} }
+	for _, q in ipairs(a.quests or {}) do
+		local k = tostring(a.qweek) .. ":" .. q.key
+		if q.done and (q.by[tostring(p.userId)] or 0) > 0 and not (ac.q and ac.q[k]) then table.insert(out.quests, q.key) end
+	end
+	return out
+end
+
+function PS.AllyInfo(p, a)
+	if not a then return nil end
+	local lv = a.level or 1
+	return { level = lv, xp = a.xp or 0, xpReq = WS.LevelXp(lv), maxLevel = WS.MaxLevel, cap = WS.MemberCap(a), bonus = WS.LevelBonus(lv),
+		nextBonus = WS.LevelBonus(lv + 1), nextCap = WS.MemberCap({ level = lv + 1 }), nextReward = WS.LevelReward(lv + 1),
+		claim = PS.AllyClaimable(p), questXp = WS.QuestXp, week = WS.Week(), weekEnds = (WS.Week() + 1) * 604800 - 3 * 86400,
+		xpPer = WS.AllyXp }
+end
+
 ---------------------------------------------------------------- XP and levels (a level-up refills Influence and Supply)
 function PS.AddXp(p, xp, quiet)
 	local d = p.data
@@ -188,13 +239,14 @@ function PS.AddXp(p, xp, quiet)
 		levelled = true
 		if not quiet then
 			local laws, props, units = {}, {}, {}
-			for _, L in ipairs(D.Laws) do if L.lvl == d.lv then table.insert(laws, L.n) end end
-			for _, P in ipairs(D.Props) do if P.lvl == d.lv then table.insert(props, P.n) end end
-			for _, u in ipairs(M.Units) do if u.lvl == d.lv then table.insert(units, u.name) end end
-			local era
-			for _, E in ipairs(D.Eras) do if E.start == d.lv and d.lv > 1 then era = E.name end end
+			local pe = R.PlayerEra(d)
+			for _, L in ipairs(D.Laws) do if L.lvl == d.lv and L.era <= pe then table.insert(laws, L.n) end end
+			for _, P in ipairs(D.Props) do if P.lvl == d.lv and P.era <= pe then table.insert(props, P.n) end end
+			for _, u in ipairs(M.Units) do if u.lvl == d.lv and u.era <= pe then table.insert(units, u.name) end end
+			local era, eraCost
+			for e, E in ipairs(D.Eras) do if E.start == d.lv and d.lv > 1 then era = E.name; eraCost = R.EraCost(e) end end
 			local slot = table.find(R.ConvoySlotLevels, d.lv) and d.lv > 1
-			PS.Note(p, { kind = "level", lv = d.lv, laws = laws, props = props, units = units, era = era, slot = slot, points = R.SkillPerLevel })
+			PS.Note(p, { kind = "level", lv = d.lv, laws = laws, props = props, units = units, era = era, eraCost = eraCost, slot = slot, points = R.SkillPerLevel })
 		end
 	end
 	if levelled then
@@ -220,13 +272,13 @@ end
 
 function PS.TradeCtx(p, mods)
 	mods = mods or PS.Mods(p)
-	return { lv = p.data.lv, incHr = PS.IncHr(p, mods), day = R.Day(), convoyMult = mods.convoy }
+	return { lv = p.data.lv, era = R.PlayerEra(p.data), incHr = PS.IncHr(p, mods), day = R.Day(), convoyMult = mods.convoy }
 end
 -- tax for delivering into city b: 0 if your own alliance holds it
 function PS.TaxFor(p, b)
 	local c = WS.Cities[b]
 	if not c or not c.owner then return 0, nil end
-	if c.owner == p.data.alliance then return 0, nil end
+	if c.owner == p.data.alliance and WS.IsMember(p.data.alliance, p.userId) then return 0, nil end
 	return c.tax or 0, c.owner
 end
 function PS.LoadsFor(p, a, b, mods)
@@ -257,7 +309,7 @@ end
 -- start a trip. load = nil for an empty move. Returns ok, msg
 function PS.Dispatch(p, c, b, load, startAt)
 	local d = p.data
-	local era = R.EraOf(d.lv)
+	local era = R.PlayerEra(d)
 	local fast = PS.Has(p, "FastConvoys")
 	local secs = T.TripSeconds(c.at, b, era, fast)
 	c.from = c.at; c.to = b; c.t0 = startAt or now(); c.t1 = c.t0 + secs; c.load = load; c.empty = load == nil or nil
@@ -268,7 +320,7 @@ end
 
 -- best load anywhere from city a (Auto Dispatch). Scores net pay per second of travel.
 function PS.BestRoute(p, a, budget, mods)
-	local era = R.EraOf(p.data.lv)
+	local era = R.PlayerEra(p.data)
 	local fast = PS.Has(p, "FastConvoys")
 	local bestScore, bestB, bestLoad
 	-- spread the fleet: every other convoy already heading to a city makes it 20% less attractive
@@ -352,8 +404,10 @@ function PS.EnsureTasks(p)
 	if d.refresh.day ~= day then d.refresh.day = day; d.refresh.free = 1 end
 	return d.tasks
 end
+local ALLY_KIND = { laws = "law", trips = "convoy", raids = "raid", siege = "hit", boss = "boss" }
 function PS.TaskProgress(p, key, amount)
 	local d = p.data
+	if ALLY_KIND[key] then PS.AllyProgress(p, ALLY_KIND[key], amount) end -- alliance XP + quests credit live
 	if not d.tasks then return end
 	for _, list in ipairs({ d.tasks.list, d.weekly and d.weekly.list or {} }) do
 		for _, task in ipairs(list) do
@@ -399,7 +453,7 @@ end
 ---------------------------------------------------------------- bosses
 function PS.EnsureBoss(p)
 	local d = p.data
-	local era = R.EraOf(d.lv)
+	local era = R.PlayerEra(d)
 	if not d.boss or (d.boss.era < era and (d.boss.next or 0) <= now()) then
 		d.boss = { era = era, hp = M.BossHp(era), next = d.boss and d.boss.next or 0 }
 	end
@@ -413,14 +467,50 @@ end
 function PS.NextSlotCost(p)
 	return Config.Officers.SlotCosts[(p.data.cab.bought or 0) + 1]
 end
--- put a new officer in the first free slot, else on the bench
+-- Kash 2 Oct: NO BENCH. An officer can only join into an open slot. Limited officers (Mega VIP, bundle) get their own
+-- exclusive slot on top of the normal ones. Returns "slot"/"limited", or nil when there is no room (nothing added).
+function PS.FreeSlot(p)
+	local d = p.data
+	for i = 1, PS.OfficerSlots(p) do if not d.cab.slots[i] then return i end end
+	return nil
+end
 function PS.AddOfficer(p, o)
 	local d = p.data
-	d.inv.officers[o.id] = o
-	for i = 1, PS.OfficerSlots(p) do
-		if not d.cab.slots[i] then d.cab.slots[i] = o.id; return "slot" end
+	d.cab.ltd = d.cab.ltd or {}
+	if o.limited then
+		d.inv.officers[o.id] = o
+		if not table.find(d.cab.ltd, o.id) then table.insert(d.cab.ltd, o.id) end
+		return "limited"
 	end
-	return "bench"
+	local i = PS.FreeSlot(p)
+	if not i then return nil end
+	for k = 1, i - 1 do if d.cab.slots[k] == nil then d.cab.slots[k] = false end end
+	d.inv.officers[o.id] = o
+	d.cab.slots[i] = o.id
+	return "slot"
+end
+-- old saves: limited officers move to their exclusive slots; officers left on the retired bench are paid out in gold
+local BENCH_REFUND = { common = 2, uncommon = 4, rare = 8, epic = 15, legendary = 30, mythic = 60, secret = 120, forbidden = 250 }
+function PS.MigrateOfficers(p)
+	local d = p.data
+	d.cab.ltd = d.cab.ltd or {}
+	for i, oid in pairs(d.cab.slots) do
+		local o = oid and d.inv.officers[oid]
+		if o and o.limited then d.cab.slots[i] = false end
+	end
+	local gold, n = 0, 0
+	for oid, o in pairs(d.inv.officers) do
+		if o.limited then
+			if not table.find(d.cab.ltd, oid) then table.insert(d.cab.ltd, oid) end
+		elseif not table.find(d.cab.slots, oid) then
+			gold += BENCH_REFUND[o.rarity] or 2; n += 1
+			d.inv.officers[oid] = nil
+		end
+	end
+	if n > 0 then
+		d.gold += gold
+		PS.Note(p, { kind = "toast", text = "The officer bench is gone: " .. n .. " benched officer" .. (n > 1 and "s" or "") .. " retired for " .. gold .. " gold.", tone = "gold" })
+	end
 end
 function PS.AddGear(p, g)
 	local n = 0
@@ -459,23 +549,23 @@ function PS.Snapshot(p)
 	local boss = PS.EnsureBoss(p)
 	return {
 		name = d.name, flag = d.flag, ideo = d.ideo, home = d.home, onboarded = d.onboarded,
-		cash = d.cash, gold = d.gold, seals = d.seals, tickets = d.tickets, lv = d.lv, xp = d.xp, xpReq = R.XpReq(d.lv),
+		cash = d.cash, gold = d.gold, seals = d.seals, lv = d.lv, era = R.PlayerEra(d), eraCost = R.EraCost((d.era or 1) + 1), xp = d.xp, xpReq = R.XpReq(d.lv),
 		inf = d.inf, infMax = R.MaxInfluence(d.lv, d.sk), infT = d.infT, regenSec = PS.RegenSec(mods),
 		sup = d.sup, supMax = R.MaxSupply(d.lv, d.sk), supT = d.supT,
 		passes = d.passes, lots = d.lots, lotsMax = PS.LotsMax(p), sk = d.sk, skillFree = PS.SkillFree(d), goldLaws = PS.GoldLaws(d),
 		units = d.units, atk = atk, def = def, siege = M.SiegeDamage(d.lv, d.sk, d.units, { attack = mods.siege }),
 		convoys = d.convoys, slots = PS.Slots(p), boss = boss, tasks = tasks, loan = d.loan,
 		taskRewards = { easy = PS.TaskReward(p, { diff = "easy" }), medium = PS.TaskReward(p, { diff = "medium" }), hard = PS.TaskReward(p, { diff = "hard" }), weekly = PS.TaskReward(p, { src = "weekly" }) },
-		loanMax = PS.LoanMax(p, mods), alliance = d.alliance, alliance_rec = a, stats = d.stats,
+		loanMax = PS.LoanMax(p, mods), alliance = d.alliance, alliance_rec = a, stats = d.stats, allyInfo = PS.AllyInfo(p, a),
 		gp = p.gp, mods = mods, incHr = PS.IncHr(p, mods), serverTime = now(), autoOff = d.autoOff, studio = Store.IsStudio,
 		online = Store.Online, capitalCredit = d.capitalCredit or 0,
-		bank = d.bank, bankRate = Config.Bank.InterestPerHour * (1 + (mods.interest or 0)), shield = d.shield, revenge = d.revenge,
+		bank = d.bank, bankRate = Config.Bank.InterestPerHour * (1 + (mods.interest or 0)), bankCap = R.MinuteValue(d.lv) * R.BankCapMinutes, shield = d.shield, revenge = d.revenge,
 		inv = d.inv, cab = d.cab, officerSlots = PS.OfficerSlots(p), nextSlotCost = PS.NextSlotCost(p),
 		crates = d.crates, basicCratePrice = PS.BasicCratePrice(p), login = d.login, loginReady = PS.LoginReady(p),
-		weekly = d.weekly, refresh = d.refresh, bundle = d.bundle, duesRate = PS.DuesRate(p),
+		weekly = d.weekly, refresh = d.refresh, bundle = d.bundle, starter = d.starter, duesRate = PS.DuesRate(p),
 		targets = PS.Raids and PS.Raids.Targets(p) or {},
 		firstRefill = d.firstRefill or false, settings = d.settings or {}, meta = d.meta or {}, inGroup = p.inGroup or false, premium = p.premium or false, groupId = Config.Group.Id,
-		vip = (PS.VipTier(p) or {}).tag, version = Config.Version, td = d.td,
+		vip = (PS.VipTier(p) or {}).tag, version = Config.Version,
 	}
 end
 function PS.BasicCratePrice(p) return math.floor(R.MinuteValue(p.data.lv) * Config.Crates.Basic.lawMinutes) end
@@ -504,9 +594,21 @@ local function key(plr)
 	return "u" .. plr.UserId
 end
 
+-- saves for one player never overlap (audit M2): a save waits for the one in flight; nothing re-locks after the release
 function PS.Save(plr, release)
 	local p = PS.Profiles[plr]
-	if not (p and p.canSave) then return end
+	if not (p and p.canSave) or p.released then return end
+	local waited = 0
+	while p.saving and waited < 30 do task.wait(0.1); waited += 0.1 end
+	if p.released then return end
+	p.saving = true
+	local okS, res = pcall(PS._save, plr, p, release)
+	p.saving = nil
+	if release then p.released = true end
+	if not okS then warn("[Idle Country] save error for " .. plr.Name .. ": " .. tostring(res)); return false end
+	return res
+end
+function PS._save(plr, p, release)
 	p.data.last = now()
 	p.data.lock = (not release) and { job = Store.JobId, t = now() } or nil
 	local data = p.data
@@ -528,7 +630,22 @@ function PS.Save(plr, release)
 	return ok and wrote
 end
 
+-- a load that errors must never leave the player stuck on "Still loading" holding the lock (audit M8)
 function PS.Load(plr)
+	local ok, err = pcall(PS._load, plr)
+	if ok then return err end
+	warn("[Idle Country] load failed for " .. plr.Name .. ": " .. tostring(err))
+	local store = Store.DS(STORE)
+	if store then
+		Store.Update(store, key(plr), function(old)
+			if old and old.lock and old.lock.job == Store.JobId then old.lock = nil; return old end
+			return nil
+		end)
+	end
+	PS.Profiles[plr] = nil
+	if plr.Parent then plr:Kick("Your save could not be loaded. Please rejoin in a moment.") end
+end
+function PS._load(plr)
 	local store = Store.DS(STORE)
 	local data, canSave = nil, true
 	if store then
@@ -569,7 +686,12 @@ function PS.Load(plr)
 	if data.alliance then
 		local a, readOk = WS.LoadAlliance(data.alliance)
 		if readOk and (not a or a.disbanded or not a.members[tostring(plr.UserId)]) then data.alliance = nil end
+		-- members from before alliance levels existed start claiming from the current level
+		if data.alliance and a and (type(data.allyClaim) ~= "table" or data.allyClaim.id ~= data.alliance) then
+			data.allyClaim = { id = data.alliance, lv = a.level or 1, q = {} }
+		end
 	end
+	PS.MigrateOfficers(p)
 	PS.Market.CheckPasses(plr, p)
 	p.xpMult = PS.Mods(p).xp
 	PS.EnsureTasks(p)
@@ -616,7 +738,7 @@ function PS.CatchUp(p)
 	-- bank interest at half rate while away (simple interest over the capped window)
 	local interest = 0
 	if (d.bank or 0) > 0 then
-		interest = d.bank * Config.Bank.InterestPerHour * (1 + (mods.interest or 0)) * Config.Bank.OfflineShare * away / 3600
+		interest = R.BankInterestBase(d.bank, d.lv) * Config.Bank.InterestPerHour * (1 + (mods.interest or 0)) * Config.Bank.OfflineShare * away / 3600
 		d.bank += interest
 	end
 	PS.Note(p, { kind = "offline", away = away, cash = d.cash - cash0, props = inc, trips = trips, levels = d.lv - lv0, stipend = stipend, interest = interest })
@@ -626,7 +748,7 @@ end
 -- offline catch-up pays half. Funded by the STATE STIPEND upgrade bought from the treasury.
 function PS.StipendRate(p)
 	local d = p.data
-	local a = d.alliance and WS.Alliances[d.alliance]
+	local a = d.alliance and WS.IsMember(d.alliance, p.userId) and WS.Alliances[d.alliance]
 	local lvl = a and a.up and a.up.stipend or 0
 	if lvl <= 0 then return 0 end
 	return R.MinuteValue(d.lv) * 0.03 * lvl / 60 -- per second
@@ -638,7 +760,7 @@ function PS.Step(plr, p)
 	local mods = PS.Mods(p)
 	p.xpMult = mods.xp
 	PS.TaskProgress(p, "online", 1 / 60) -- playtime orders (minutes)
-	if (d.bank or 0) > 0 then d.bank += d.bank * Config.Bank.InterestPerHour * (1 + (mods.interest or 0)) / 3600 end
+	if (d.bank or 0) > 0 then d.bank += R.BankInterestBase(d.bank, d.lv) * Config.Bank.InterestPerHour * (1 + (mods.interest or 0)) / 3600 end
 	local regen = PS.RegenSec(mods)
 	local maxInf = R.MaxInfluence(d.lv, d.sk)
 	if d.inf < maxInf then
@@ -710,6 +832,7 @@ end
 
 ---------------------------------------------------------------- rankings (OrderedDataStores)
 local rankCache = {}
+local nameCache = {}
 function PS.Rank(plr, p)
 	if not Store.Online or key(plr):find("^test_") or not p.data.onboarded then return end
 	local d = p.data
@@ -737,7 +860,14 @@ function PS.Rankings(kind)
 		if ok then
 			local names = Store.DS("IC_Names")
 			for _, e in ipairs(pages:GetCurrentPage()) do
-				local okN, info = pcall(function() return names:GetAsync(e.key) end)
+				-- names are cached for 10 minutes so a board costs 50 reads at most every 10 minutes (audit L8)
+				local c = nameCache[e.key]
+				local okN, info
+				if c and os.clock() - c.t < 600 then okN, info = true, c.v
+				else
+					okN, info = pcall(function() return names:GetAsync(e.key) end)
+					if okN then nameCache[e.key] = { t = os.clock(), v = info } end
+				end
 				local value = kind == "level" and math.floor(e.value / 100000) or 10 ^ (e.value / 1e6)
 				table.insert(list, { name = okN and info and info.n or ("Player " .. e.key), flag = okN and info and info.f, tag = okN and info and info.a, value = value, uid = tonumber(e.key) })
 			end

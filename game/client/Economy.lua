@@ -158,7 +158,10 @@ S.laws = { build = function(host, App)
 				md.ImageTransparency = tier >= m and 0 or 0.25
 			end
 		end
-		if locked then card.btn:Set("locked", "LEVEL " .. L.lvl)
+		local eraLocked = L.era > R.PlayerEra(st)
+		if eraLocked and L.era == R.PlayerEra(st) + 1 and st.lv >= D.Eras[L.era].start then card.btn:Set("gold", "ADVANCE ERA")
+		elseif eraLocked and not locked then card.btn:Set("locked", "ERA LOCKED")
+		elseif locked then card.btn:Set("locked", "LEVEL " .. L.lvl)
 		elseif st.inf < L.cost then card.btn:Set("slate", "PASS")
 		else card.btn:Set("green", "PASS") end
 	end
@@ -182,6 +185,17 @@ S.laws = { build = function(host, App)
 				o.btn = UI.button(card, "green", "PASS", nil, { pos = UDim2.new(0, 12, 1, -48), sz = UDim2.new(1, -24, 0, 40), z = 9, textSize = 18 })
 				local function pass(btn, repeating)
 					local s = App.state
+					if L.era > R.PlayerEra(s) then
+						if repeating then return false end
+						local E = D.Eras[R.PlayerEra(s) + 1]
+						if not E or s.lv < E.start then App.toast("Reach level " .. (E and E.start or L.lvl) .. " to advance eras", nil, "bad"); App.shake(btn.Inst); return false end
+						local cost = R.EraCost(R.PlayerEra(s) + 1)
+						App.confirm("ADVANCE TO THE " .. string.upper(E.name) .. " ERA?", "Pay <font color='#5fd068'><b>" .. R.Money(cost) .. "</b></font> to unlock the " .. E.name .. " Era: new laws, properties, units, convoys and bosses.", "ADVANCE", "gold", function(cb)
+							local res = App.req("eraUp", {}, cb)
+							if res.ok then App.big("level"); obj.era = res.era; if tabs then tabs:Set(res.era) end; build(App.state) end
+						end)
+						return false
+					end
 					if s.lv < L.lvl then if not repeating then App.toast("Unlocks at level " .. L.lvl, nil, "bad"); App.shake(btn.Inst) end; return false end
 					if s.inf < L.cost then
 						-- Kash 19:19: out of Influence -> the REFILL popup (once per 10 s; a held button just stops)
@@ -212,7 +226,7 @@ S.laws = { build = function(host, App)
 	end
 
 	function obj:Refresh(st)
-		local cur = R.EraOf(st.lv)
+		local cur = R.PlayerEra(st)
 		local maxTab = math.min(#D.Eras, cur + 1)
 		if not tabs or obj.maxTab ~= maxTab then
 			if tabs then tabs.Inst:Destroy() end
@@ -229,7 +243,7 @@ S.laws = { build = function(host, App)
 		sub.Text = "Influence <font color='#e0a650'><b>" .. inf .. "</b></font> · 25/50/100 passes = Bronze/Silver/Gold mastery · Gold gives +1 skill point"
 	end
 	function obj:Opened()
-		local cur = R.EraOf(App.state.lv)
+		local cur = R.PlayerEra(App.state)
 		if obj.era ~= cur and tabs then obj.era = cur; tabs:Set(cur); build(App.state) end
 	end
 	App.on("tick", function(st) if host.Visible then for _, card in pairs(obj.cards) do updateCard(card, st) end end end)
@@ -498,7 +512,8 @@ S.properties = { build = function(host, App)
 			UI.button(bar, "slate", "ANY LOT", function() obj.pickLot = nil; obj:Refresh(App.state) end, { pos = UDim2.new(1, -120, 0, 4), sz = UDim2.fromOffset(110, 32), z = 9, textSize = 13 })
 		end
 		local rows = {}
-		for i, P in ipairs(D.Props) do if P.lvl <= st.lv then table.insert(rows, i) end end
+		local pe = R.PlayerEra(st)
+		for i, P in ipairs(D.Props) do if P.lvl <= st.lv and P.era <= pe then table.insert(rows, i) end end
 		-- Kash 19:19: highest income per hour first
 		table.sort(rows, function(a, b)
 			local ia, ib = D.Props[a].inc, D.Props[b].inc
@@ -507,7 +522,7 @@ S.properties = { build = function(host, App)
 		end)
 		while #rows > 24 do table.remove(rows) end
 		local locked = {}
-		for i, P in ipairs(D.Props) do if P.lvl > st.lv and #locked < 3 then table.insert(locked, i) end end
+		for i, P in ipairs(D.Props) do if (P.lvl > st.lv or P.era > pe) and #locked < 3 then table.insert(locked, i) end end
 		local order = 0
 		local function rowFor(i, isLocked)
 			order += 1
@@ -520,12 +535,12 @@ S.properties = { build = function(host, App)
 			UI.mk("UICorner", { CornerRadius = UDim.new(0, 5) }, thumb)
 			UI.img(thumb, propImg(i), { sz = UDim2.fromScale(0.92, 0.92), pos = UDim2.fromScale(0.5, 0.5), anchor = Vector2.new(0.5, 0.5), z = 9, slice = false, fit = true, color = isLocked and Color3.fromHex("555555") or nil })
 			text(card, P.n .. (owned > 0 and ("  <font color='#9a9fa6'>x" .. owned .. "</font>") or ""), { font = "heavy", size = 18, rich = true, pos = UDim2.fromOffset(92, 12), sz = UDim2.new(0.42, -92, 0, 24), z = 8, truncate = true })
-			text(card, D.Eras[P.era].name .. " · Tier " .. P.tier .. (isLocked and (" · unlocks at level " .. P.lvl) or ""), { size = 14, color = C.muted, pos = UDim2.fromOffset(92, 40), sz = UDim2.new(0.45, -92, 0, 18), z = 8 })
+			text(card, D.Eras[P.era].name .. " · Tier " .. P.tier .. (isLocked and (P.lvl > st.lv and (" · unlocks at level " .. P.lvl) or " · advance era in Laws") or ""), { size = 14, color = C.muted, pos = UDim2.fromOffset(92, 40), sz = UDim2.new(0.45, -92, 0, 18), z = 8 })
 			text(card, "+" .. R.Money(inc) .. "/hr", { font = "heavy", size = 18, color = C.good, pos = UDim2.new(0.44, 0, 0, 12), sz = UDim2.new(0.2, 0, 0, 24), z = 8 })
 			text(card, "Pays back in " .. R.Duration(cost / math.max(1, inc) * 3600), { size = 14, color = C.muted, pos = UDim2.new(0.44, 0, 0, 40), sz = UDim2.new(0.24, 0, 0, 18), z = 8 })
 			local kind = isLocked and "locked" or (free == 0 and "slate") or (st.cash >= cost and "green") or "slate"
-			UI.button(card, kind, isLocked and ("LEVEL " .. P.lvl) or ("BUILD " .. R.Money(cost)), function(btn)
-				if isLocked then App.toast("Unlocks at level " .. P.lvl, nil, "bad"); App.shake(btn.Inst); return end
+			UI.button(card, kind, isLocked and (P.lvl > st.lv and ("LEVEL " .. P.lvl) or "ERA LOCKED") or ("BUILD " .. R.Money(cost)), function(btn)
+				if isLocked then App.toast(P.lvl > st.lv and ("Unlocks at level " .. P.lvl) or ("Advance to the " .. D.Eras[P.era].name .. " Era in Laws"), nil, "bad"); App.shake(btn.Inst); return end
 				local res = App.req("build", { i = i, lot = obj.pickLot }, btn)
 				if res.ok then
 					obj.building[res.lot] = os.clock()
@@ -644,7 +659,8 @@ S.bank = { build = function(host, App)
 		local b = st.bank or 0
 		balance.Text = R.Money(b)
 		local rate = st.bankRate or Config.Bank.InterestPerHour
-		rateL.Text = "<font color='#8fd07a'><b>+" .. R.Money(b * rate) .. "/hr</b></font> interest (" .. (math.floor(rate * 1000 + 0.5) / 10) .. "%/h) · safe from raids"
+		local base = st.bankCap and math.min(b, st.bankCap) or b -- display = payout (interest on the capped balance)
+		rateL.Text = "<font color='#8fd07a'><b>+" .. R.Money(base * rate) .. "/hr</b></font> interest (" .. (math.floor(rate * 1000 + 0.5) / 10) .. "%/h" .. ((st.bankCap and b > st.bankCap) and (" on the first " .. R.Money(st.bankCap)) or "") .. ") · safe from raids"
 	end
 	function obj:Refresh(st)
 		buildVault(st); tickVault(st)

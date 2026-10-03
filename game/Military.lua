@@ -28,16 +28,29 @@ for e, names in ipairs(ERA_UNITS) do
 		})
 	end
 end
+-- ELITE troops (Kash 2 Oct): only from the Founder's Crate. One elite unit per era, much stronger than that era's
+-- regulars. Kept in their own table (d.elite[era] = count): they never die in raids and do not use army capacity.
+M.Elite = {}
+local ELITE_NAMES = { "Royal Guard", "Praetorians", "Templar Knights", "Grenadier Guard", "Imperial Hussars", "Commandos", "Ghost Operatives", "Star Legion" }
+for e, n in ipairs(ELITE_NAMES) do
+	local g = 2.6 ^ (e - 1)
+	M.Elite[e] = { name = n, era = e, atk = math.floor(14 * g + 0.5), def = math.floor(14 * g + 0.5), icon = "icon_crown" }
+end
+function M.EliteCount(elite) local n = 0; for _, c in pairs(elite or {}) do n += (tonumber(c) or 0) end; return n end
 M.UnitGrowth = 1.06 -- each copy of a unit costs 6% more
 function M.UnitCost(i, owned) return math.floor(M.Units[i].cost * M.UnitGrowth ^ (owned or 0) + 0.5) end
 function M.UnitCap(lv) return 10 + lv end
 function M.UnitCount(units) local n = 0; for _, c in pairs(units or {}) do n += c end; return n end
 
 -- player power. mods = { attack = 0.1, defense = 0.1 } from ideology + alliance cities
-function M.Power(lv, sk, units, mods)
+function M.Power(lv, sk, units, mods, elite)
 	local atk, def = 5 + 2 * lv + 4 * ((sk and sk.atk) or 0), 5 + 2 * lv + 4 * ((sk and sk.def) or 0)
 	for k, c in pairs(units or {}) do
 		local u = M.Units[tonumber(k)]
+		if u then atk += u.atk * c; def += u.def * c end
+	end
+	for k, c in pairs(elite or {}) do
+		local u = M.Elite[tonumber(k)]
 		if u then atk += u.atk * c; def += u.def * c end
 	end
 	atk = math.floor(atk * (1 + ((mods and mods.attack) or 0)))

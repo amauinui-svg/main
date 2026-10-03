@@ -99,7 +99,16 @@ function R.IncomePerHour(lots, mult)
 	for _, p in ipairs(lots or {}) do if p and p > 0 then t += D.Props[p].inc end end
 	return t * (mult or 1)
 end
+-- Bank (audit H2): interest only on the first BankCapMinutes of law income at your level, so an idle balance cannot
+-- compound forever. Rate per hour comes from Config.Bank.InterestPerHour x (1 + interest bonus, capped at +100%).
+R.BankCapMinutes = 720
+function R.BankInterestBase(bank, lv) return math.min(math.max(0, bank or 0), R.MinuteValue(lv) * R.BankCapMinutes) end
 function R.EraOf(lv) local e = 1; for i, E in ipairs(D.Eras) do if lv >= E.start then e = i end end; return e end
+-- Paid eras (2 Oct, Kash): reaching an era's level only unlocks the option; the player advances by paying cash.
+-- d.era is the paid era; the effective era can never be above what the level allows.
+function R.PlayerEra(d) if not d then return 1 end; return math.clamp(math.min(R.EraOf(d.lv or 1), d.era or 1), 1, #D.Eras) end
+-- price to advance into era e: about two hours of law income at that era's starting level
+function R.EraCost(e) local E = D.Eras[e]; if not E then return nil end; return math.floor(R.MinuteValue(E.start) * 120 / 1000 + 0.5) * 1000 end
 
 ---------------------------------------------------------------- ideologies (onboarding)
 R.Ideologies = {

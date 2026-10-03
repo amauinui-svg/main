@@ -11,13 +11,37 @@ local PS -- set by Init
 
 function MK.Init(playerService) PS = playerService; PS.Market = MK end
 
+-- Studio grants every pass only on the TEST profile, so a Studio session never writes free passes into a live save (audit L11)
+local function studioGrants()
+	return Store.IsStudio and Config.StudioGrantsPasses and workspace:GetAttribute("IC_TestProfile") and not workspace:GetAttribute("IC_NoPasses")
+end
+-- Passes must ALWAYS work (Kash's rule from Build a Swarm, audit H1): retry, and when Roblox cannot answer, fall back to
+-- the ownership this save last confirmed. A failed key is re-checked every minute; nothing is ever revoked on an error.
+local function askOwns(uid, id)
+	for i = 1, 3 do
+		local ok, r = pcall(MarketplaceService.UserOwnsGamePassAsync, MarketplaceService, uid, id)
+		if ok then return true, r end
+		task.wait(0.5 * i)
+	end
+	return false, nil
+end
 function MK.CheckPasses(plr, p)
+	local d = p.data
+	d.ownedPasses = type(d.ownedPasses) == "table" and d.ownedPasses or {}
+	p.passRetry = {}
 	for key, pass in pairs(Config.Passes) do
 		local owned = false
-		if Store.IsStudio and Config.StudioGrantsPasses and not workspace:GetAttribute("IC_NoPasses") then owned = true
+		if studioGrants() then owned = true
 		elseif pass.id ~= 0 then
-			local ok, r = pcall(MarketplaceService.UserOwnsGamePassAsync, MarketplaceService, plr.UserId, pass.id)
-			owned = ok and r or false
+			local ok, r = askOwns(plr.UserId, pass.id)
+			if ok then
+				owned = r and true or false
+				if owned then d.ownedPasses[key] = true end
+			else
+				owned = d.ownedPasses[key] == true
+				p.passRetry[key] = true
+				warn("[Idle Country] pass check failed for " .. key .. "; using the saved record (" .. tostring(owned) .. ")")
+			end
 		end
 		p.gp[key] = owned or nil
 	end
@@ -52,9 +76,12 @@ end
 
 -- product effects. Return true when granted.
 local grant = {}
-local function finishConvoy(p, i)
+-- the intent remembers WHICH trip was priced (audit M1): a different trip in that slot is refunded, never finished
+local function finishConvoy(p, intent)
+	local i, t1 = intent, nil
+	if type(intent) == "table" then i, t1 = tonumber(intent.i), tonumber(intent.t1) end
 	local c = p.data.convoys[i or 0]
-	if not c or not c.to then
+	if not c or not c.to or (t1 and c.t1 ~= t1) then
 		-- the convoy already arrived: refund as gold so the purchase is never wasted
 		p.data.gold += 5
 		PS.Note(p, { kind = "toast", text = "That convoy had already arrived. You got 5 gold instead.", tone = "good" })
@@ -68,7 +95,7 @@ grant.FinishConvoy2 = finishConvoy
 grant.FinishConvoy3 = finishConvoy
 grant.FinishConvoy4 = finishConvoy
 function grant.MoveCapital(p, city)
-	if type(city) ~= "number" or city < 1 or city > 41 then return false end
+	if type(city) ~= "number" or not require(RS.Shared.World).Cities[city] then return false end
 	p.data.home = city
 	PS.Note(p, { kind = "toast", text = "Your capital has moved.", tone = "good" })
 	return true
@@ -106,15 +133,18 @@ function grant.SupplyRefill(p)
 	return true
 end
 function grant.RaidShield(p)
+	if (p.data.shield or 0) < os.time() then p.data.shieldFrom = os.time() end
 	p.data.shield = math.max(os.time(), p.data.shield or 0) + Config.Products.RaidShield.hours * 3600
+	if PS.Raids then PS.Raids.SetShield(p.player.UserId, p.data.shield) end
 	PS.Note(p, { kind = "toast", text = "Raid shield up for " .. Config.Products.RaidShield.hours .. " hours", tone = "good" })
 	return true
 end
 function grant.InstantArmy(p)
 	local M = require(game:GetService("ReplicatedStorage").Shared.Military)
+	local R = require(game:GetService("ReplicatedStorage").Shared.Rules)
 	local d = p.data
 	local best = 1
-	for i, u in ipairs(M.Units) do if u.lvl <= d.lv then best = i end end
+	for i, u in ipairs(M.Units) do if u.lvl <= d.lv and u.era <= R.PlayerEra(d) then best = i end end
 	local room = M.UnitCap(d.lv) - M.UnitCount(d.units)
 	if room <= 0 then
 		d.gold += 25
@@ -140,6 +170,43 @@ function grant.ChallengeRefresh(p, intent)
 	if type(intent) == "table" then PS.RefreshTask(p, intent.src == "weekly" and "weekly" or "daily", tonumber(intent.i)) end
 	return true
 end
+-- Starter Pack: the best property your era allows up to 8 levels ahead of you, 4 elite troops of your era, gold.
+function grant.StarterPack(p)
+	local R = require(RS.Shared.Rules)
+	local D = require(RS.Shared.GameData)
+	local cfg = Config.Products.StarterPack
+	local d = p.data
+	if d.starter then
+		d.gold += 150
+		PS.Note(p, { kind = "toast", text = "You already own the Starter Pack. You got 150 gold instead.", tone = "good" })
+		return true
+	end
+	d.starter = true
+	local era = R.PlayerEra(d)
+	local best
+	for i, P in ipairs(D.Props) do if P.era <= era and P.lvl <= d.lv + 8 then best = i end end
+	best = best or 1
+	-- first empty lot, else replace your weakest building (refunded at its base price)
+	local lots = PS.LotsMax(p)
+	local slot
+	for i = 1, lots do if (d.lots[i] or 0) == 0 then slot = i; break end end
+	if not slot then
+		local low, lowInc = nil, math.huge
+		for i = 1, math.min(lots, #d.lots) do local P = D.Props[d.lots[i]]; if P and P.inc < lowInc then low, lowInc = i, P.inc end end
+		if low and D.Props[d.lots[low]].inc < D.Props[best].inc then d.cash += D.Props[d.lots[low]].cost; slot = low end
+	end
+	if slot then
+		for i = #d.lots + 1, slot - 1 do d.lots[i] = 0 end
+		d.lots[slot] = best
+	else
+		d.cash += D.Props[best].cost -- every lot already holds something better: pay it out
+	end
+	d.elite = d.elite or {}
+	d.elite[tostring(era)] = (d.elite[tostring(era)] or 0) + cfg.troops
+	d.gold += cfg.gold
+	PS.Note(p, { kind = "toast", text = "Starter Pack: " .. D.Props[best].n .. ", " .. cfg.troops .. " elite troops and " .. cfg.gold .. " gold!", tone = "gold" })
+	return true
+end
 function grant.LimitedBundle(p)
 	local O = require(game:GetService("ReplicatedStorage").Shared.Officers)
 	local d = p.data
@@ -158,10 +225,19 @@ end
 local byId = {}
 for key, prod in pairs(Config.Products) do if prod.id ~= 0 then byId[prod.id] = key end end
 
+local inFlight = {} -- PurchaseIds being granted right now (audit M2: a grant can yield and Roblox may call again)
 function MK.ProcessReceipt(info)
 	local plr = Players:GetPlayerByUserId(info.PlayerId)
 	local p = plr and PS.Profiles[plr]
-	if not p or not p.canSave then return Enum.ProductPurchaseDecision.NotProcessedYet end
+	if not p or not p.canSave or p.loading or p.leaving then return Enum.ProductPurchaseDecision.NotProcessedYet end
+	if inFlight[info.PurchaseId] then return Enum.ProductPurchaseDecision.NotProcessedYet end
+	inFlight[info.PurchaseId] = true
+	local okR, res = pcall(MK._receipt, plr, p, info)
+	inFlight[info.PurchaseId] = nil
+	if not okR then warn("[Idle Country] receipt " .. tostring(info.PurchaseId) .. " failed: " .. tostring(res)); return Enum.ProductPurchaseDecision.NotProcessedYet end
+	return res
+end
+function MK._receipt(plr, p, info)
 	local d = p.data
 	d.receipts = d.receipts or {}
 	d.pending = d.pending or {}
@@ -188,17 +264,37 @@ end
 
 function MK.Start()
 	MarketplaceService.ProcessReceipt = MK.ProcessReceipt
+	-- re-ask Roblox about any pass that could not be checked at join
+	task.spawn(function()
+		while true do
+			task.wait(60)
+			for plr, p in pairs(PS.Profiles) do
+				if p.passRetry and next(p.passRetry) and not p.leaving then
+					for key in pairs(p.passRetry) do
+						local pass = Config.Passes[key]
+						local ok, r = askOwns(plr.UserId, pass.id)
+						if ok then
+							p.passRetry[key] = nil
+							if r then p.gp[key] = true; p.data.ownedPasses[key] = true; p.dirty = true end
+						end
+					end
+					PS.EnsureConvoys(p)
+				end
+			end
+		end
+	end)
 	MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(plr, id, bought)
 		if not bought then return end
 		local p = PS.Profiles[plr]
 		if not p then return end
 		for key, pass in pairs(Config.Passes) do
 			if pass.id == id then
-				-- verify with Roblox before granting anything permanent (review #8)
-				local okO, owns = pcall(MarketplaceService.UserOwnsGamePassAsync, MarketplaceService, plr.UserId, id)
-				if (okO and owns) or (Store.IsStudio and Config.StudioGrantsPasses) then
-					p.gp[key] = true; PS.Note(p, { kind = "toast", text = pass.name .. " unlocked!", tone = "good" })
-				end
+				-- the server-side purchase event is reliable (Roblox docs); the ownership API can lag right after a purchase,
+				-- so trust it and remember it in the save (audit H1)
+				p.gp[key] = true
+				p.data.ownedPasses = type(p.data.ownedPasses) == "table" and p.data.ownedPasses or {}
+				p.data.ownedPasses[key] = true
+				PS.Note(p, { kind = "toast", text = pass.name .. " unlocked!", tone = "good" })
 			end
 		end
 		PS.EnsureConvoys(p)

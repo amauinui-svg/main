@@ -139,7 +139,7 @@ function Map.build(host, App)
 	end
 
 	---------------------------------------------------------------- convoys on the map
-	local era = function() return App.state and R.EraOf(App.state.lv) or 1 end
+	local era = function() return App.state and R.PlayerEra(App.state) or 1 end
 	local convoyIcons, routeDots = {}, {}
 	local function vehicleIcon(kind) return T.Vehicle(era(), kind or "land")[2] end
 	local function drawConvoyIcons()
@@ -412,12 +412,12 @@ function Map.build(host, App)
 		local st = App.state
 		local cs = App.world and App.world.cities[b]
 		local taxPct = (cs and cs.owner and cs.owner ~= st.alliance) and (cs.tax or 0) or 0
-		return { lv = st.lv, incHr = st.incHr, day = R.Day(math.floor(App.now())), convoyMult = st.mods.convoy, taxPct = taxPct }
+		return { lv = st.lv, era = R.PlayerEra(st), incHr = st.incHr, day = R.Day(math.floor(App.now())), convoyMult = st.mods.convoy, taxPct = taxPct }
 	end
 
 	local function loadRow(order, c, ci, b, L, kind)
 		local st = App.state
-		local secs = T.TripSeconds(c.at, b, R.EraOf(st.lv), st.gp and st.gp.FastConvoys)
+		local secs = T.TripSeconds(c.at, b, R.PlayerEra(st), st.gp and st.gp.FastConvoys)
 		local card = UI.card(plist, { sz = UDim2.new(1, 0, 0, 96), z = 27, order = order, hot = L.hot })
 		UI.icon(card, L.icon, 26, L.hot and C.gold or C.manila, UDim2.fromOffset(10, 10), { z = 28 })
 		text(card, L.name, { font = "heavy", size = 17, pos = UDim2.fromOffset(44, 6), sz = UDim2.new(1, -150, 0, 20), z = 28, truncate = true })
@@ -439,7 +439,7 @@ function Map.build(host, App)
 	local function moveRow(order, c, ci, b, label, icon)
 		local st = App.state
 		local fee = T.MoveFee(c.at, b, st.lv, st.incHr)
-		local secs = T.TripSeconds(c.at, b, R.EraOf(st.lv), st.gp and st.gp.FastConvoys)
+		local secs = T.TripSeconds(c.at, b, R.PlayerEra(st), st.gp and st.gp.FastConvoys)
 		local card = UI.card(plist, { sz = UDim2.new(1, 0, 0, 60), z = 27, order = order })
 		UI.icon(card, icon, 22, C.muted, UDim2.fromOffset(10, 10), { z = 28 })
 		text(card, label, { font = "heavy", size = 15, pos = UDim2.fromOffset(40, 6), sz = UDim2.new(1, -150, 0, 20), z = 28 })
@@ -453,7 +453,7 @@ function Map.build(host, App)
 	local function bestTrips(order, c, ci)
 		local st = App.state
 		local list = {}
-		local eraN = R.EraOf(st.lv)
+		local eraN = R.PlayerEra(st)
 		for b = 1, #W.Cities do
 			if b ~= c.at then
 				local loads = T.Loads(c.at, b, tradeCtx(b))
@@ -653,12 +653,12 @@ function Map.build(host, App)
 	local function convoyKey(st)
 		local parts = {}
 		for _, c in ipairs(st.convoys) do table.insert(parts, tostring(c.at) .. ":" .. tostring(c.to) .. ":" .. tostring(c.t1)) end
-		return table.concat(parts, "|") .. R.EraOf(st.lv)
+		return table.concat(parts, "|") .. R.PlayerEra(st)
 	end
 	function obj:Refresh(st)
 		local key = convoyKey(st)
 		if key ~= lastConvoyKey then lastConvoyKey = key; drawConvoyIcons() end
-		local e = R.EraOf(st.lv)
+		local e = R.PlayerEra(st)
 		eraLbl.Text = string.upper(require(Shared.GameData).Eras[e].name) .. " ERA · " .. string.upper(T.Vehicle(e, "land")[1]) .. " & " .. string.upper(T.Vehicle(e, "sea")[1])
 		drawDock()
 		drawPanel()

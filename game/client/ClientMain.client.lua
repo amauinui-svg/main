@@ -254,13 +254,12 @@ for _, modName in ipairs({ "Sound", "Map", "Economy", "War", "Social", "Warfare"
 		end
 	else warn("[Idle Country] " .. modName .. ": " .. tostring(mod)) end
 end
--- tabbed screens (Kash 19:19): Officers live inside Military, the Weekly Takedown inside Alliance.
+-- tabbed screens (Kash 19:19): Officers live inside Military. (Weekly Takedown removed 2 Oct, Kash.)
 -- The child screen's own title is replaced by two tab buttons in the same spot.
 local COMPOSITE = {
 	military = { { key = "military", label = "ARMY", title = "MILITARY" }, { key = "officers", label = "OFFICERS", title = "OFFICERS" } },
-	alliance = { { key = "alliance", label = "ALLIANCE", title = "ALLIANCE" }, { key = "takedown", label = "WEEKLY TAKEDOWN", below = true } },
 }
-local ROUTE = { officers = { "military", 2 }, takedown = { "alliance", 2 } }
+local ROUTE = { officers = { "military", 2 } }
 for parentKey, kids in pairs(COMPOSITE) do
 	local childDefs = {}
 	for i, k in ipairs(kids) do childDefs[i] = defs[k.key] end
@@ -417,7 +416,7 @@ end
 ---------------------------------------------------------------- notes from the server
 local function levelBanner(n)
 	local bits = {}
-	if n.era then table.insert(bits, "THE " .. string.upper(n.era) .. " ERA BEGINS") end
+	if n.era then table.insert(bits, "THE " .. string.upper(n.era) .. " ERA IS AVAILABLE: ADVANCE IN LAWS") end
 	if #n.laws > 0 then table.insert(bits, #n.laws .. " new law" .. (#n.laws > 1 and "s" or "")) end
 	if #n.props > 0 then table.insert(bits, "new property: " .. n.props[1]) end
 	if #n.units > 0 then table.insert(bits, "new unit: " .. n.units[1]) end
@@ -427,8 +426,16 @@ local function levelBanner(n)
 	App.play("level_up")
 	if n.era or n.lv % 5 == 0 then App.big("level") end
 end
+local handleNote
 local function handleNotes(notes)
-	for _, n in ipairs(notes) do
+	-- one bad note must never swallow the rest (audit L13)
+	for _, n in ipairs(type(notes) == "table" and notes or {}) do
+		local ok, err = pcall(handleNote, n)
+		if not ok then warn("[Idle Country] note " .. tostring(n and n.kind) .. ": " .. tostring(err)) end
+	end
+end
+handleNote = function(n)
+	do
 		if n.kind == "level" then levelBanner(n)
 		elseif n.kind == "mastery" then
 			App.toast(R.MasteryName[n.tier + 1] .. " MASTERY", n.law .. ": +" .. n.pct .. "% cash and XP" .. (n.tier >= 2 and " · 5% less Influence" or "") .. (n.point and " · +1 skill point" or ""), "gold")

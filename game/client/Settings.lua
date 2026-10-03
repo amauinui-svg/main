@@ -337,12 +337,7 @@ M._settings = { init = function(App)
 				kw("Daily orders", G) .. " (easy, medium, hard) pay " .. kw("Merits", M2) .. " and cash. Finish all for a bonus.",
 				kw("Weekly challenges", P) .. " reset Monday. Clear all 5 for a chest with Rare+ gear.",
 				"One " .. kw("free replace", B) .. " per day for an order you do not like.",
-				"Spend Merits in the " .. kw("Merits Shop", M2) .. ": Takedown tickets, refills, shields, crates.",
-			} },
-			{ title = "ALLIANCE TAKEDOWN", img = "takedown_bg", crop = true, color = Rd, lines = {
-				"Every week your alliance storms a stronghold: " .. kw("5 stages", Rd) .. ", the last one is a boss.",
-				kw("10 free attacks", G) .. " (+1 per hour), then " .. kw("Takedown tickets", M2) .. ".",
-				kw("BIG HITS", O2) .. ", a weekly damage leaderboard and stage rewards for every member.",
+				"Spend Merits in the " .. kw("Merits Shop", M2) .. ": refills, shields, crates.",
 			} },
 			{ title = "CONVOYS", img = "convoy_ship", color = B, lines = {
 				"Send goods between world capitals. Pay is " .. kw("locked", M2) .. " when you send.",

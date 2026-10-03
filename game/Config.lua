@@ -19,9 +19,12 @@ C.Passes = {
 C.PassOrder = { "FastConvoys", "AutoDispatch", "ExtraConvoys", "ExtraLots", "BonusOfficer", "VIP", "MegaVIP", "CrateLuck", "CustomFlag" }
 
 C.Products = {
-	Crate1 = { id = 3715911170, robux = 29, crates = 1 },
-	Crate3 = { id = 3715911208, robux = 79, crates = 3 },
-	Crate10 = { id = 3715911255, robux = 229, crates = 10 },
+	-- Founder's Crate: 49 R$ each (Kash 2 Oct), bulk cheaper per crate
+	Crate1 = { id = 3715911170, robux = 49, crates = 1 },
+	Crate3 = { id = 3715911208, robux = 129, crates = 3 },
+	Crate10 = { id = 3715911255, robux = 399, crates = 10 },
+	-- Starter Pack (Kash 2 Oct): one time, new players only. A strong property for your era + elite troops + gold.
+	StarterPack = { id = 0, robux = 99, gold = 100, troops = 4, maxLevel = 40 },
 	GoldSmall = { id = 3715911284, robux = 49, gold = 50 },
 	GoldBig = { id = 3715911319, robux = 199, gold = 250 },
 	GoldHuge = { id = 3715911358, robux = 699, gold = 1000 },

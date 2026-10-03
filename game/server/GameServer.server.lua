@@ -3,6 +3,9 @@ local Players = game:GetService("Players")
 local RS = game:GetService("ReplicatedStorage")
 local Server = script.Parent:WaitForChild("Server")
 
+-- Kash 2 Oct: no shift lock
+game:GetService("StarterPlayer").EnableMouseLockOption = false
+
 local Remotes = RS:FindFirstChild("Remotes") or Instance.new("Folder")
 Remotes.Name = "Remotes"; Remotes.Parent = RS
 local function remote(class, name)
@@ -19,21 +22,21 @@ local PS = require(Server.PlayerService)
 local MK = require(Server.Market)
 local A = require(Server.Actions)
 local RA = require(Server.Raids)
-local TD = require(Server.Takedown)
 MK.Init(PS)
 RA.Init(PS)
-TD.Init(PS, WS)
-A.Init(PS, MK, RA, TD)
+A.Init(PS, MK, RA)
 
--- simple flood guard: 25 requests per second per player
+-- flood guard (audit M7): a token bucket per player, 8 requests a second with bursts of 15
 local budget = {}
+local RATE, BURST = 8, 15
 Request.OnServerInvoke = function(plr, action, args)
 	local p = PS.Profiles[plr]
 	if not p or p.loading or p.leaving then return { ok = false, msg = "Still loading" } end
-	local b = budget[plr] or { n = 0, t = os.clock() }
-	if os.clock() - b.t > 1 then b.n = 0; b.t = os.clock() end
-	b.n += 1; budget[plr] = b
-	if b.n > 25 then return { ok = false, msg = "Slow down" } end
+	local b = budget[plr] or { tokens = BURST, t = os.clock() }
+	b.tokens = math.min(BURST, b.tokens + (os.clock() - b.t) * RATE); b.t = os.clock()
+	budget[plr] = b
+	if b.tokens < 1 then return { ok = false, msg = "Slow down" } end
+	b.tokens -= 1
 	local fn = type(action) == "string" and A.list[action]
 	if not fn then return { ok = false, msg = "Unknown action" } end
 	if not p.data.onboarded and not A.PreOnboard[action] then return { ok = false, msg = "Finish setting up your country first" } end
@@ -43,6 +46,7 @@ Request.OnServerInvoke = function(plr, action, args)
 	local waited = 0
 	while p.busy and waited < 8 do waited += task.wait() end
 	if p.busy then return { ok = false, msg = "Busy, try again" } end
+	if PS.Profiles[plr] ~= p or p.leaving then return { ok = false, msg = "Left" } end -- audit M3
 	p.busy = true
 	local okCall, res = pcall(fn, plr, p, args)
 	p.busy = false
@@ -50,10 +54,19 @@ Request.OnServerInvoke = function(plr, action, args)
 		warn("[Idle Country] action " .. action .. " failed: " .. tostring(res))
 		res = { ok = false, msg = "Something went wrong. Try again." }
 	end
-	if not A.NoSync[action] then PS.Sync(plr) end
+	-- a failed request changes nothing worth a full snapshot; successes sync now (at most ~7 a second), else next tick
+	if not A.NoSync[action] and PS.Profiles[plr] == p then
+		if type(res) == "table" and res.ok and os.clock() - (p.lastSync or 0) > 0.12 then p.lastSync = os.clock(); PS.Sync(plr)
+		else p.dirty = true end
+	end
 	return res
 end
 Players.PlayerRemoving:Connect(function(plr) budget[plr] = nil end)
+
+WS.Interest = function(id)
+	for _, p in pairs(PS.Profiles) do if p.data.alliance == id then return true end end
+	return false
+end
 
 -- the shared world: push to everyone (throttled) whenever a city or alliance changes
 local worldDirty = true
@@ -82,6 +95,7 @@ task.spawn(function()
 	end
 end)
 Players.PlayerAdded:Connect(function(plr)
+	plr.DevEnableMouseLock = false
 	task.wait(1)
 	if plr.Parent then Sync:FireClient(plr, "world", WS.PublicState()) end
 end)
@@ -89,9 +103,8 @@ end)
 WS.Start()
 MK.Start()
 RA.Start()
-TD.Start()
 PS.Start()
-game:BindToClose(function() pcall(TD.Flush); pcall(WS.FlushTreasury) end)
+game:BindToClose(function() pcall(WS.FlushTreasury) end)
 print("[Idle Country] server ready", WS.PublicState and "" or "")
 
 -- Studio-only test hook (LESSONS: never test destructive actions on a real profile; use IC_TestProfile).
