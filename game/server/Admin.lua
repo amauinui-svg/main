@@ -186,6 +186,7 @@ cmd("passes", "/passes off|on  turn the Studio free gamepasses off or on", funct
 	return off and "Studio passes OFF (you only have what you bought)" or "Studio passes ON"
 end)
 cmd("onboard", "/onboard  replay the first-time setup", function(_, p) p.data.onboarded = false; return "Onboarding will show" end)
+cmd("tutorial", "/tutorial  restart the tutorial from step 1", function(_, p) p.data.tut = 0; return "Tutorial restarted" end)
 cmd("save", "/save  save your data now", function(plr) task.spawn(PS.Save, plr); return "Saving" end)
 
 ---------------------------------------------------------------- alliance

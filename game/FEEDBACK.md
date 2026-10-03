@@ -295,3 +295,8 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 
 ## 2 Oct 22:39 (Kash)
 - Onboarding capital step: recommend the 6 capitals where most players live at the top, so new players get busier trade. Done: live counts per home capital (OrderedDataStore IC_HomePop, refreshed every 10 min), starting list New York, London, Sao Paulo, Los Angeles, Mexico City, Jakarta until 30+ players have picked. Default pick is the top one.
+
+## 2 Oct 22:41 (Kash)
+- Onboarding asks if the player wants a tutorial. Done: after FOUND MY COUNTRY a WELCOME popup (YES, SHOW ME / NO THANKS). The tutorial is a small guide card with a pulsing frame on the tab to open: open Laws, pass a law, reach level 2, open Properties, build, open World, send a convoy. Skippable, resumes after rejoin. Tester: /tutorial restarts it.
+- Tabs unlock by level so players are not overwhelmed; at first only LAWS and WORLD. Done (Config.NavUnlock): Properties 2, Shop 3, Country 4, Orders 5, Military 6, Inventory 7, Bank 8, Raids 10, Bosses 12, Rankings 12, Alliance 15. A dim "LV x" row teases the next tab; unlocking shows a toast and a badge.
+- Also fixed: brand new players never ran the screen inits until they rejoined.

@@ -143,12 +143,19 @@ function O.show(App)
 		local res = App.req("onboard", form, nextB)
 		if res.ok then
 			cover:Destroy()
-			App.toast("WELCOME, " .. string.upper(form.name), "Pass your first laws, then send a convoy from the WORLD map", "gold")
-			App.open("map")
+			App.state.onboarded = true
+			if App.updateNav then App.updateNav(App.state) end
+			App.open("laws")
+			-- run the screen inits now, then ask about the tutorial (Kash 2 Oct)
+			if App.runInits then App.runInits() end
+			task.delay(0.6, function()
+				if App.askTutorial then App.askTutorial()
+				else App.toast("WELCOME, " .. string.upper(form.name), "Pass your first laws to grow your nation", "gold") end
+			end)
 		end
 	end)
 	draw()
 	-- finished elsewhere (another server, or a retry): close the cover
-	App.on("full", function(st) if st.onboarded and cover.Parent then cover:Destroy(); App.open("map") end end)
+	App.on("full", function(st) if st.onboarded and cover.Parent then cover:Destroy(); App.open("laws") end end)
 end
 return O

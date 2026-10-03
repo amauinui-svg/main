@@ -7,7 +7,7 @@ local S = {}
 local GROUPS = {
 	{ "PROGRESS", {
 		{ "RESET (new player)", "/reset", "red" }, { "+10 LEVELS", "/levelup" }, { "LEVEL 30", "/level 30" }, { "LEVEL 100", "/level 100" },
-		{ "NEXT ERA", "/era" }, { "+50K XP", "/xp 50k" }, { "WONDER +1", "/wonder" }, { "REPLAY ONBOARDING", "/onboard" },
+		{ "NEXT ERA", "/era" }, { "+50K XP", "/xp 50k" }, { "WONDER +1", "/wonder" }, { "REPLAY ONBOARDING", "/onboard" }, { "RESTART TUTORIAL", "/tutorial" },
 	} },
 	{ "MONEY", {
 		{ "+$1M", "/cash 1m", "green" }, { "+$1B", "/cash 1b", "green" }, { "+$1T", "/cash 1t", "green" }, { "CASH TO 0", "/setcash 0" },

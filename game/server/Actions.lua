@@ -1067,6 +1067,14 @@ function act.rankings(plr, p, a)
 end
 
 -- requests that return data the client shows, without needing a full resync
+-- tutorial progress (Kash 2 Oct): step number, or -1 when skipped or finished
+function act.tutorial(plr, p, a)
+	local step = tonumber(a and a.step)
+	if not step or step ~= step or step < -1 or step > 50 then return no("Bad step") end
+	p.data.tut = math.floor(step)
+	return ok()
+end
+
 -- player profiles
 function act.profile(plr, p, a)
 	local uid = tonumber(a and a.uid) or plr.UserId
@@ -1093,7 +1101,7 @@ function act.adminList(plr, p)
 	return ok({ list = AD.List() })
 end
 
-A.NoSync = { allyList = true, rankings = true, profile = true, adminList = true }
+A.NoSync = { tutorial = true, allyList = true, rankings = true, profile = true, adminList = true }
 -- requests allowed before onboarding finishes
 A.PreOnboard = { sync = true, onboard = true, rankings = true, admin = true, adminList = true }
 return A

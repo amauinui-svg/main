@@ -13,6 +13,7 @@ local pgui = plr:WaitForChild("PlayerGui")
 local Shared = RS:WaitForChild("Shared")
 local ClientMods = RS:WaitForChild("Client")
 local R = require(Shared.Rules)
+local Config = require(Shared.Config)
 local Assets = require(Shared.Assets)
 local UI = require(ClientMods.UI)
 local C = UI.C
@@ -231,6 +232,39 @@ for i, n in ipairs(NAV) do
 	navButtons[n.key] = { Inst = b, Icon = ic, Label = l }
 	b.Activated:Connect(function() App.open(n.key) end)
 end
+App.navButtons = navButtons
+-- level-gated tabs (Kash 2 Oct): hidden until unlocked, plus one dim "LV x" teaser row for the next tab
+local NAV_UNLOCK = (Config and Config.NavUnlock) or {}
+local navTeaser = UI.img(nav, "nav_off", { name = "NextUnlock", sz = UDim2.fromOffset(NAVW, 44), z = 16, order = 999 })
+navTeaser.ImageTransparency = 0.5
+UI.icon(navTeaser, "icon_lock", 20, C.dim, UDim2.new(0, 12, 0.5, 0), { z = 17, anchor = Vector2.new(0, 0.5) })
+local teaserL = text(navTeaser, "", { font = "heavy", size = 14, color = C.dim, pos = UDim2.fromOffset(42, 0), sz = UDim2.new(1, -48, 1, 0), z = 17, rich = true })
+local navLv
+function App.navUnlocked(key)
+	local need = NAV_UNLOCK[key]
+	return not need or not App.state or (App.state.lv or 1) >= need
+end
+local function navLabel(key) for _, n in ipairs(NAV) do if n.key == key then return n.label end end return string.upper(key) end
+local function updateNav(st)
+	if not st or not st.onboarded then return end
+	local lv = st.lv or 1
+	local nextKey, nextLv
+	for _, n in ipairs(NAV) do
+		local need = NAV_UNLOCK[n.key] or 1
+		local open = lv >= need
+		navButtons[n.key].Inst.Visible = open
+		if not open and (not nextLv or need < nextLv) then nextKey, nextLv = n.key, need end
+		-- newly unlocked this session: announce it
+		if open and navLv and navLv < need then
+			App.toast("NEW TAB UNLOCKED: " .. navLabel(n.key), "Find it in the menu on the left", "gold")
+			App.navBadge(n.key, "!")
+		end
+	end
+	navTeaser.Visible = nextKey ~= nil
+	if nextKey then teaserL.Text = "LV " .. nextLv .. " · " .. navLabel(nextKey) end
+	navLv = lv
+end
+App.updateNav = updateNav
 local navBadges = {}
 function App.navBadge(key, n)
 	local nb = navButtons[key]
@@ -245,7 +279,7 @@ App.content = content
 local defs = {}
 local inits = {} -- modules can return entries without a build field: { init = function(App) end }
 -- later modules override earlier ones (Warfare's raids replace War's battle, Contracts replaces Economy's tasks)
-for _, modName in ipairs({ "Sound", "Map", "Economy", "War", "Social", "Warfare", "Cabinet", "Country", "Contracts", "Settings", "Shop", "Tester" }) do
+for _, modName in ipairs({ "Sound", "Map", "Economy", "War", "Social", "Warfare", "Cabinet", "Country", "Contracts", "Settings", "Shop", "Tester", "Tutorial" }) do
 	local okReq, mod = pcall(require, ClientMods:WaitForChild(modName, 5))
 	if okReq and type(mod) == "table" then
 		for k, def in pairs(mod) do
@@ -312,7 +346,7 @@ for parentKey, kids in pairs(COMPOSITE) do
 end
 local initsDone = false
 local function runInits()
-	if initsDone then return end
+	if initsDone or not (App.state and App.state.onboarded) then return end
 	initsDone = true
 	for _, fn in ipairs(inits) do
 		-- each init in its own thread: one that yields (sound preloading) must not hold up the rest
@@ -334,6 +368,9 @@ function App.open(key)
 		return
 	end
 	if not defs[key] then App.toast("Coming soon", nil, "info"); return end
+	if not App.navUnlocked(key) then App.toast("Unlocks at level " .. NAV_UNLOCK[key], nil, "info"); return end
+	local MANAGED = { country = true, tasks = true, map = true, bosses = true }
+	if not MANAGED[key] then App.navBadge(key, nil) end
 	if App.state and not App.state.onboarded then return end
 	for k, s in pairs(App.screens) do s.host.Visible = (k == key) or (k == "map" and key ~= "map" and false) end
 	local s = App.screens[key]
@@ -355,6 +392,7 @@ function App.open(key)
 	if s.obj and s.obj.Opened then pcall(s.obj.Opened, s.obj) end
 end
 
+App.runInits = function() runInits() end
 local function refreshCurrent()
 	local s = App.current and App.screens[App.current]
 	if s and s.obj and s.obj.Refresh then
@@ -481,6 +519,7 @@ Remotes.Sync.OnClientEvent:Connect(function(kind, data)
 	if kind == "full" then
 		App.state = data
 		App.tickClock = os.clock()
+		updateNav(data)
 		drawTop(); badges()
 		if not data.onboarded then
 			-- shown on first join, and again after the tester panel's /reset (App.onboarding guards repeats)
@@ -498,6 +537,7 @@ Remotes.Sync.OnClientEvent:Connect(function(kind, data)
 			if data.loginReady and App.showLogin then task.delay(1.5, function() pcall(App.showLogin) end) end
 		else
 			App.onboarding = nil
+			runInits() -- a brand new player finishes onboarding with a screen already open: inits still need to run
 			refreshCurrent()
 		end
 		App.emit("full", data)

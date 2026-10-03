@@ -1,0 +1,126 @@
+-- TUTORIAL (Kash 2 Oct): offered at the end of onboarding. A small guide card at the bottom of the screen and a
+-- pulsing frame on the tab to open. It never blocks the game and can be skipped any time.
+-- Progress is saved on the server (App.state.tut: step number, -1 = skipped or finished, nil = never offered).
+local TweenService = game:GetService("TweenService")
+
+local S = {}
+
+local function trips(st) return st.stats and st.stats.trips or 0 end
+local function built(st) for _, v in ipairs(st.lots or {}) do if v and v ~= 0 then return true end end return false end
+local function sending(st)
+	for _, c in ipairs(st.convoys or {}) do if c.to then return true end end
+	return trips(st) > 0
+end
+
+-- each step: text, the tab to point at (or nil), and when it is done
+local STEPS = {
+	{ title = "PASS LAWS", text = "Open <b>LAWS</b>. Laws are how your nation makes money.", tab = "laws", done = function(st, App) return App.current == "laws" end },
+	{ title = "YOUR FIRST LAW", text = "Tap <b>PASS</b> on a law. It costs Influence and pays cash and XP.", done = function(st) return (st.stats and st.stats.laws or 0) >= 1 end },
+	{ title = "LEVEL UP", text = "Keep passing laws to reach <b>level 2</b>. Influence refills over time and on every level up.", done = function(st) return (st.lv or 1) >= 2 end },
+	{ title = "PROPERTIES", text = "You unlocked <b>PROPERTIES</b>! Open it to earn money even while you are away.", tab = "properties", done = function(st, App) return App.current == "properties" end },
+	{ title = "BUILD", text = "Build your first property. It pays you every hour.", done = function(st) return built(st) end },
+	{ title = "THE WORLD", text = "Open the <b>WORLD</b> map. Your convoys trade between real capitals.", tab = "map", done = function(st, App) return App.current == "map" end },
+	{ title = "SEND A CONVOY", text = "Tap a city, pick a load and <b>SEND</b>. Cities that want your goods pay more.", done = function(st) return sending(st) end },
+	{ title = "YOU ARE READY", text = "New tabs unlock as you level up. Good luck, leader!", final = true },
+}
+
+S._tutorial = { init = function(App)
+	local UI = App.UI
+	local C = UI.C
+	local mk, text = UI.mk, UI.text
+	local card, titleL, bodyL, stepL, ring, ringTw, nextBtn
+	local saving = -99
+
+	local function save(step)
+		if saving == step then return end
+		saving = step
+		task.spawn(function() App.req("tutorial", { step = step }) end)
+		if App.state then App.state.tut = step end
+	end
+
+	local function clearRing()
+		if ringTw then ringTw:Cancel(); ringTw = nil end
+		if ring then ring:Destroy(); ring = nil end
+	end
+	local function pointAt(tab)
+		clearRing()
+		local nb = tab and App.navButtons and App.navButtons[tab]
+		if not nb or not nb.Inst.Visible then return end
+		ring = mk("Frame", { Name = "TutorialRing", BackgroundTransparency = 1, Size = UDim2.new(1, 8, 1, 8), Position = UDim2.fromOffset(-4, -4), ZIndex = 30 }, nb.Inst)
+		local s = mk("UIStroke", { Color = C.gold, Thickness = 3, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, ring)
+		mk("UICorner", { CornerRadius = UDim.new(0, 8) }, ring)
+		ringTw = TweenService:Create(s, TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Transparency = 0.8, Thickness = 6 })
+		ringTw:Play()
+	end
+
+	local function hide()
+		clearRing()
+		if card then card.Visible = false end
+	end
+
+	local function finish(skipped)
+		hide()
+		save(-1)
+		if skipped then App.toast("Tutorial skipped", "The GAME GUIDE in Settings explains everything", "info") end
+	end
+
+	local function build()
+		card = UI.img(App.root, "panel", { name = "Tutorial", sz = UDim2.fromOffset(520, 118), pos = UDim2.new(0.5, (App.NAVW or 176) / 2, 1, -18), anchor = Vector2.new(0.5, 1), z = 70 })
+		mk("UIStroke", { Color = C.gold, Thickness = 2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, card)
+		UI.icon(card, "icon_sparkles", 26, C.gold, UDim2.fromOffset(16, 16), { z = 71 })
+		titleL = text(card, "", { font = "display", size = 20, color = C.manila, pos = UDim2.fromOffset(50, 12), sz = UDim2.new(1, -170, 0, 26), z = 71 })
+		stepL = text(card, "", { font = "heavy", size = 12, color = C.muted, pos = UDim2.new(1, -116, 0, 16), sz = UDim2.fromOffset(100, 18), z = 71, align = Enum.TextXAlignment.Right })
+		bodyL = text(card, "", { size = 16, rich = true, wrap = true, pos = UDim2.fromOffset(18, 42), sz = UDim2.new(1, -150, 0, 64), z = 71, valign = Enum.TextYAlignment.Top })
+		nextBtn = UI.button(card, "green", "GOT IT", function() finish(false) end, { pos = UDim2.new(1, -14, 1, -14), anchor = Vector2.new(1, 1), sz = UDim2.fromOffset(116, 38), z = 72, textSize = 15 })
+		UI.button(card, "slate", "SKIP", function() finish(true) end, { pos = UDim2.new(1, -14, 1, -14), anchor = Vector2.new(1, 1), sz = UDim2.fromOffset(116, 38), z = 72, textSize = 14, name = "Skip" })
+	end
+
+	local shown = 0
+	local function update()
+		local st = App.state
+		if not st or not st.onboarded or type(st.tut) ~= "number" or st.tut < 0 then hide(); return end
+		local step = st.tut + 1
+		-- skip ahead past anything already done (rejoins, players who explore on their own)
+		while STEPS[step] and STEPS[step].done and STEPS[step].done(st, App) do step += 1 end
+		if step - 1 ~= st.tut then save(step - 1) end
+		local S1 = STEPS[step]
+		if not S1 then finish(false); return end
+		if not card then build() end
+		card.Visible = true
+		titleL.Text = S1.title
+		bodyL.Text = S1.text
+		stepL.Text = "TUTORIAL " .. math.min(step, #STEPS) .. "/" .. #STEPS
+		nextBtn.Inst.Visible = S1.final == true
+		local skip = card:FindFirstChild("Skip")
+		if skip then skip.Visible = not S1.final end
+		if shown ~= step then
+			shown = step
+			pointAt(S1.tab)
+			card.Position = UDim2.new(0.5, (App.NAVW or 176) / 2, 1, 120)
+			TweenService:Create(card, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Position = UDim2.new(0.5, (App.NAVW or 176) / 2, 1, -18) }):Play()
+			if App.play and step > 1 then pcall(App.play, "tab_open") end
+		end
+	end
+	App.tutorialUpdate = update
+
+	-- asked once at the end of onboarding
+	function App.askTutorial()
+		local host = mk("TextButton", { Name = "TutorialAsk", Text = "", AutoButtonColor = false, BackgroundColor3 = C.black, BackgroundTransparency = 0.4, Size = UDim2.fromScale(1, 1), ZIndex = 88 }, App.root)
+		local pnl, b = UI.panel(host, "WELCOME, LEADER", { sz = UDim2.fromOffset(500, 250), pos = UDim2.fromScale(0.5, 0.5), anchor = Vector2.new(0.5, 0.5), z = 89 })
+		local _ = pnl
+		text(b, "Would you like a quick tutorial? It takes about two minutes and shows you how to grow your nation.", { size = 18, wrap = true, sz = UDim2.new(1, 0, 0, 90), z = 90, valign = Enum.TextYAlignment.Top })
+		UI.button(b, "slate", "NO THANKS", function() host:Destroy(); save(-1) end, { pos = UDim2.new(0, 0, 1, -48), sz = UDim2.fromOffset(170, 46), z = 90, textSize = 16 })
+		UI.button(b, "green", "YES, SHOW ME", function() host:Destroy(); save(0); update() end, { pos = UDim2.new(1, 0, 1, -48), anchor = Vector2.new(1, 0), sz = UDim2.fromOffset(220, 46), z = 90, textSize = 17 })
+	end
+
+	App.on("full", function() update() end)
+	task.spawn(function()
+		while true do
+			task.wait(0.5)
+			if card and card.Visible then pcall(update) end
+		end
+	end)
+	update()
+end }
+
+return S

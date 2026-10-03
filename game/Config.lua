@@ -23,6 +23,10 @@ C.PassOrder = { "FastConvoys", "AutoDispatch", "ExtraConvoys", "ExtraLots", "Bon
 C.PopularCapitals = { 1, 12, 9, 2, 6, 33 }
 C.PopularMinPlayers = 30
 
+-- Tabs unlock by level (Kash 2 Oct): new players see only WORLD and LAWS, the rest open up as they level.
+C.NavUnlock = { map = 1, laws = 1, properties = 2, shop = 3, country = 4, tasks = 5, military = 6, inventory = 7, bank = 8,
+	battle = 10, bosses = 12, rankings = 12, alliance = 15 }
+
 C.Products = {
 	-- Founder's Crate: 49 R$ each (Kash 2 Oct), bulk cheaper per crate
 	Crate1 = { id = 3715911170, robux = 49, crates = 1 },
