@@ -12591,7 +12591,7 @@ S.inventory = { build = function(host, App)
 		local t = {}
 		for k, tr in ipairs(o.traits or {}) do if k <= 2 then table.insert(t, traitLine(tr)) end end
 		-- one bonus per line so the second one is never cut off on narrow cards
-		text(c, table.concat(t, "\n"), { font = "bold", size = 12, color = C.good, align = Enum.TextXAlignment.Center, pos = UDim2.fromOffset(6, 162), sz = UDim2.new(1, -12, 0, 22), z = 9, wrap = true, scaled = true })
+		text(c, table.concat(t, "\n"), { font = "bold", size = 12, color = C.good, align = Enum.TextXAlignment.Center, pos = UDim2.fromOffset(6, 158), sz = UDim2.new(1, -12, 0, 29), z = 9, wrap = true, scaled = true })
 		rarityBar(c, rar(o.rarity).name, rc)
 		c.Activated:Connect(function() officerDetails(o) end)
 	end
