@@ -979,6 +979,10 @@ C.PassOrder = { "FastConvoys", "AutoDispatch", "ExtraConvoys", "ExtraLots", "Bon
 C.PopularCapitals = { 1, 12, 9, 2, 6, 33 }
 C.PopularMinPlayers = 30
 
+-- Tabs unlock by level (Kash 2 Oct): new players see only WORLD and LAWS, the rest open up as they level.
+C.NavUnlock = { map = 1, laws = 1, properties = 2, shop = 3, country = 4, tasks = 5, military = 6, inventory = 7, bank = 8,
+	battle = 10, bosses = 12, rankings = 12, alliance = 15 }
+
 C.Products = {
 	-- Founder's Crate: 49 R$ each (Kash 2 Oct), bulk cheaper per crate
 	Crate1 = { id = 3715911170, robux = 49, crates = 1 },
@@ -3388,7 +3392,7 @@ function PS.Snapshot(p)
 		bank = d.bank, bankRate = Config.Bank.InterestPerHour * (1 + (mods.interest or 0)), bankCap = R.MinuteValue(d.lv) * R.BankCapMinutes, shield = d.shield, revenge = d.revenge,
 		inv = d.inv, cab = d.cab, officerSlots = PS.OfficerSlots(p), nextSlotCost = PS.NextSlotCost(p),
 		crates = d.crates, basicCratePrice = PS.BasicCratePrice(p), login = d.login, loginReady = PS.LoginReady(p),
-		weekly = d.weekly, refresh = d.refresh, bundle = d.bundle, starter = d.starter, wev = d.wev, wonder = d.wonder or 0, admin = PS.Admin and PS.Admin.IsAdmin(p.player) or nil, title = d.title, created = d.created, elite = d.elite, govCredit = d.govCredit, pity = d.pity or {}, duesRate = PS.DuesRate(p),
+		weekly = d.weekly, refresh = d.refresh, bundle = d.bundle, starter = d.starter, wev = d.wev, wonder = d.wonder or 0, admin = PS.Admin and PS.Admin.IsAdmin(p.player) or nil, title = d.title, created = d.created, elite = d.elite, govCredit = d.govCredit, pity = d.pity or {}, tut = d.tut, duesRate = PS.DuesRate(p),
 		targets = PS.Raids and PS.Raids.Targets(p) or {},
 		firstRefill = d.firstRefill or false, settings = d.settings or {}, meta = d.meta or {}, inGroup = p.inGroup or false, premium = p.premium or false, groupId = Config.Group.Id,
 		vip = (PS.VipTier(p) or {}).tag, version = Config.Version,
@@ -4889,6 +4893,7 @@ cmd("passes", "/passes off|on  turn the Studio free gamepasses off or on", funct
 	return off and "Studio passes OFF (you only have what you bought)" or "Studio passes ON"
 end)
 cmd("onboard", "/onboard  replay the first-time setup", function(_, p) p.data.onboarded = false; return "Onboarding will show" end)
+cmd("tutorial", "/tutorial  restart the tutorial from step 1", function(_, p) p.data.tut = 0; return "Tutorial restarted" end)
 cmd("save", "/save  save your data now", function(plr) task.spawn(PS.Save, plr); return "Saving" end)
 
 ---------------------------------------------------------------- alliance
@@ -6003,6 +6008,14 @@ function act.rankings(plr, p, a)
 end
 
 -- requests that return data the client shows, without needing a full resync
+-- tutorial progress (Kash 2 Oct): step number, or -1 when skipped or finished
+function act.tutorial(plr, p, a)
+	local step = tonumber(a and a.step)
+	if not step or step ~= step or step < -1 or step > 50 then return no("Bad step") end
+	p.data.tut = math.floor(step)
+	return ok()
+end
+
 -- player profiles
 function act.profile(plr, p, a)
 	local uid = tonumber(a and a.uid) or plr.UserId
@@ -6029,7 +6042,7 @@ function act.adminList(plr, p)
 	return ok({ list = AD.List() })
 end
 
-A.NoSync = { allyList = true, rankings = true, profile = true, adminList = true }
+A.NoSync = { tutorial = true, allyList = true, rankings = true, profile = true, adminList = true }
 -- requests allowed before onboarding finishes
 A.PreOnboard = { sync = true, onboard = true, rankings = true, admin = true, adminList = true }
 return A
@@ -9600,13 +9613,20 @@ function O.show(App)
 		local res = App.req("onboard", form, nextB)
 		if res.ok then
 			cover:Destroy()
-			App.toast("WELCOME, " .. string.upper(form.name), "Pass your first laws, then send a convoy from the WORLD map", "gold")
-			App.open("map")
+			App.state.onboarded = true
+			if App.updateNav then App.updateNav(App.state) end
+			App.open("laws")
+			-- run the screen inits now, then ask about the tutorial (Kash 2 Oct)
+			if App.runInits then App.runInits() end
+			task.delay(0.6, function()
+				if App.askTutorial then App.askTutorial()
+				else App.toast("WELCOME, " .. string.upper(form.name), "Pass your first laws to grow your nation", "gold") end
+			end)
 		end
 	end)
 	draw()
 	-- finished elsewhere (another server, or a retry): close the cover
-	App.on("full", function(st) if st.onboarded and cover.Parent then cover:Destroy(); App.open("map") end end)
+	App.on("full", function(st) if st.onboarded and cover.Parent then cover:Destroy(); App.open("laws") end end)
 end
 return O
 ]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX27"><Properties><string name="Name">ReplicatedStorage.Client|Warfare|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- Warfare screens: RAIDS (key "battle", replaces the old rival list in War.lua: Kash 1 Oct 2026, raid only players in your server
@@ -14739,7 +14759,7 @@ local S = {}
 local GROUPS = {
 	{ "PROGRESS", {
 		{ "RESET (new player)", "/reset", "red" }, { "+10 LEVELS", "/levelup" }, { "LEVEL 30", "/level 30" }, { "LEVEL 100", "/level 100" },
-		{ "NEXT ERA", "/era" }, { "+50K XP", "/xp 50k" }, { "WONDER +1", "/wonder" }, { "REPLAY ONBOARDING", "/onboard" },
+		{ "NEXT ERA", "/era" }, { "+50K XP", "/xp 50k" }, { "WONDER +1", "/wonder" }, { "REPLAY ONBOARDING", "/onboard" }, { "RESTART TUTORIAL", "/tutorial" },
 	} },
 	{ "MONEY", {
 		{ "+$1M", "/cash 1m", "green" }, { "+$1B", "/cash 1b", "green" }, { "+$1T", "/cash 1t", "green" }, { "CASH TO 0", "/setcash 0" },
@@ -14859,7 +14879,133 @@ S._tester = { init = function(App)
 end }
 
 return S
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX34"><Properties><string name="Name">StarterPlayer.StarterPlayerScripts|ClientMain|LocalScript</string><ProtectedString name="Source"><![CDATA[-- ClientMain: the shell. Top bar, the left nav (flush with the screen's left edge, Kash 26 Sep), the screen host,
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX34"><Properties><string name="Name">ReplicatedStorage.Client|Tutorial|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- TUTORIAL (Kash 2 Oct): offered at the end of onboarding. A small guide card at the bottom of the screen and a
+-- pulsing frame on the tab to open. It never blocks the game and can be skipped any time.
+-- Progress is saved on the server (App.state.tut: step number, -1 = skipped or finished, nil = never offered).
+local TweenService = game:GetService("TweenService")
+
+local S = {}
+
+local function trips(st) return st.stats and st.stats.trips or 0 end
+local function built(st) for _, v in ipairs(st.lots or {}) do if v and v ~= 0 then return true end end return false end
+local function sending(st)
+	for _, c in ipairs(st.convoys or {}) do if c.to then return true end end
+	return trips(st) > 0
+end
+
+-- each step: text, the tab to point at (or nil), and when it is done
+local STEPS = {
+	{ title = "PASS LAWS", text = "Open <b>LAWS</b>. Laws are how your nation makes money.", tab = "laws", done = function(st, App) return App.current == "laws" end },
+	{ title = "YOUR FIRST LAW", text = "Tap <b>PASS</b> on a law. It costs Influence and pays cash and XP.", done = function(st) return (st.stats and st.stats.laws or 0) >= 1 end },
+	{ title = "LEVEL UP", text = "Keep passing laws to reach <b>level 2</b>. Influence refills over time and on every level up.", done = function(st) return (st.lv or 1) >= 2 end },
+	{ title = "PROPERTIES", text = "You unlocked <b>PROPERTIES</b>! Open it to earn money even while you are away.", tab = "properties", done = function(st, App) return App.current == "properties" end },
+	{ title = "BUILD", text = "Build your first property. It pays you every hour.", done = function(st) return built(st) end },
+	{ title = "THE WORLD", text = "Open the <b>WORLD</b> map. Your convoys trade between real capitals.", tab = "map", done = function(st, App) return App.current == "map" end },
+	{ title = "SEND A CONVOY", text = "Tap a city, pick a load and <b>SEND</b>. Cities that want your goods pay more.", done = function(st) return sending(st) end },
+	{ title = "YOU ARE READY", text = "New tabs unlock as you level up. Good luck, leader!", final = true },
+}
+
+S._tutorial = { init = function(App)
+	local UI = App.UI
+	local C = UI.C
+	local mk, text = UI.mk, UI.text
+	local card, titleL, bodyL, stepL, ring, ringTw, nextBtn
+	local saving = -99
+
+	local function save(step)
+		if saving == step then return end
+		saving = step
+		task.spawn(function() App.req("tutorial", { step = step }) end)
+		if App.state then App.state.tut = step end
+	end
+
+	local function clearRing()
+		if ringTw then ringTw:Cancel(); ringTw = nil end
+		if ring then ring:Destroy(); ring = nil end
+	end
+	local function pointAt(tab)
+		clearRing()
+		local nb = tab and App.navButtons and App.navButtons[tab]
+		if not nb or not nb.Inst.Visible then return end
+		ring = mk("Frame", { Name = "TutorialRing", BackgroundTransparency = 1, Size = UDim2.new(1, 8, 1, 8), Position = UDim2.fromOffset(-4, -4), ZIndex = 30 }, nb.Inst)
+		local s = mk("UIStroke", { Color = C.gold, Thickness = 3, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, ring)
+		mk("UICorner", { CornerRadius = UDim.new(0, 8) }, ring)
+		ringTw = TweenService:Create(s, TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Transparency = 0.8, Thickness = 6 })
+		ringTw:Play()
+	end
+
+	local function hide()
+		clearRing()
+		if card then card.Visible = false end
+	end
+
+	local function finish(skipped)
+		hide()
+		save(-1)
+		if skipped then App.toast("Tutorial skipped", "The GAME GUIDE in Settings explains everything", "info") end
+	end
+
+	local function build()
+		card = UI.img(App.root, "panel", { name = "Tutorial", sz = UDim2.fromOffset(520, 118), pos = UDim2.new(0.5, (App.NAVW or 176) / 2, 1, -18), anchor = Vector2.new(0.5, 1), z = 70 })
+		mk("UIStroke", { Color = C.gold, Thickness = 2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, card)
+		UI.icon(card, "icon_sparkles", 26, C.gold, UDim2.fromOffset(16, 16), { z = 71 })
+		titleL = text(card, "", { font = "display", size = 20, color = C.manila, pos = UDim2.fromOffset(50, 12), sz = UDim2.new(1, -170, 0, 26), z = 71 })
+		stepL = text(card, "", { font = "heavy", size = 12, color = C.muted, pos = UDim2.new(1, -116, 0, 16), sz = UDim2.fromOffset(100, 18), z = 71, align = Enum.TextXAlignment.Right })
+		bodyL = text(card, "", { size = 16, rich = true, wrap = true, pos = UDim2.fromOffset(18, 42), sz = UDim2.new(1, -150, 0, 64), z = 71, valign = Enum.TextYAlignment.Top })
+		nextBtn = UI.button(card, "green", "GOT IT", function() finish(false) end, { pos = UDim2.new(1, -14, 1, -14), anchor = Vector2.new(1, 1), sz = UDim2.fromOffset(116, 38), z = 72, textSize = 15 })
+		UI.button(card, "slate", "SKIP", function() finish(true) end, { pos = UDim2.new(1, -14, 1, -14), anchor = Vector2.new(1, 1), sz = UDim2.fromOffset(116, 38), z = 72, textSize = 14, name = "Skip" })
+	end
+
+	local shown = 0
+	local function update()
+		local st = App.state
+		if not st or not st.onboarded or type(st.tut) ~= "number" or st.tut < 0 then hide(); return end
+		local step = st.tut + 1
+		-- skip ahead past anything already done (rejoins, players who explore on their own)
+		while STEPS[step] and STEPS[step].done and STEPS[step].done(st, App) do step += 1 end
+		if step - 1 ~= st.tut then save(step - 1) end
+		local S1 = STEPS[step]
+		if not S1 then finish(false); return end
+		if not card then build() end
+		card.Visible = true
+		titleL.Text = S1.title
+		bodyL.Text = S1.text
+		stepL.Text = "TUTORIAL " .. math.min(step, #STEPS) .. "/" .. #STEPS
+		nextBtn.Inst.Visible = S1.final == true
+		local skip = card:FindFirstChild("Skip")
+		if skip then skip.Visible = not S1.final end
+		if shown ~= step then
+			shown = step
+			pointAt(S1.tab)
+			card.Position = UDim2.new(0.5, (App.NAVW or 176) / 2, 1, 120)
+			TweenService:Create(card, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Position = UDim2.new(0.5, (App.NAVW or 176) / 2, 1, -18) }):Play()
+			if App.play and step > 1 then pcall(App.play, "tab_open") end
+		end
+	end
+	App.tutorialUpdate = update
+
+	-- asked once at the end of onboarding
+	function App.askTutorial()
+		local host = mk("TextButton", { Name = "TutorialAsk", Text = "", AutoButtonColor = false, BackgroundColor3 = C.black, BackgroundTransparency = 0.4, Size = UDim2.fromScale(1, 1), ZIndex = 88 }, App.root)
+		local pnl, b = UI.panel(host, "WELCOME, LEADER", { sz = UDim2.fromOffset(500, 250), pos = UDim2.fromScale(0.5, 0.5), anchor = Vector2.new(0.5, 0.5), z = 89 })
+		local _ = pnl
+		text(b, "Would you like a quick tutorial? It takes about two minutes and shows you how to grow your nation.", { size = 18, wrap = true, sz = UDim2.new(1, 0, 0, 90), z = 90, valign = Enum.TextYAlignment.Top })
+		UI.button(b, "slate", "NO THANKS", function() host:Destroy(); save(-1) end, { pos = UDim2.new(0, 0, 1, -48), sz = UDim2.fromOffset(170, 46), z = 90, textSize = 16 })
+		UI.button(b, "green", "YES, SHOW ME", function() host:Destroy(); save(0); update() end, { pos = UDim2.new(1, 0, 1, -48), anchor = Vector2.new(1, 0), sz = UDim2.fromOffset(220, 46), z = 90, textSize = 17 })
+	end
+
+	App.on("full", function() update() end)
+	task.spawn(function()
+		while true do
+			task.wait(0.5)
+			if card and card.Visible then pcall(update) end
+		end
+	end)
+	update()
+end }
+
+return S
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX35"><Properties><string name="Name">StarterPlayer.StarterPlayerScripts|ClientMain|LocalScript</string><ProtectedString name="Source"><![CDATA[-- ClientMain: the shell. Top bar, the left nav (flush with the screen's left edge, Kash 26 Sep), the screen host,
 -- toasts and level-up banners. The Capitol world map is the home screen (Kash, 1 Oct 2026, Q12).
 -- Everything is laid out in design pixels on a top-left anchored root scaled by ONE UIScale
 -- (LESSONS: a UIScale scales about the AnchorPoint; read TopbarInset lazily).
@@ -14874,6 +15020,7 @@ local pgui = plr:WaitForChild("PlayerGui")
 local Shared = RS:WaitForChild("Shared")
 local ClientMods = RS:WaitForChild("Client")
 local R = require(Shared.Rules)
+local Config = require(Shared.Config)
 local Assets = require(Shared.Assets)
 local UI = require(ClientMods.UI)
 local C = UI.C
@@ -15092,6 +15239,39 @@ for i, n in ipairs(NAV) do
 	navButtons[n.key] = { Inst = b, Icon = ic, Label = l }
 	b.Activated:Connect(function() App.open(n.key) end)
 end
+App.navButtons = navButtons
+-- level-gated tabs (Kash 2 Oct): hidden until unlocked, plus one dim "LV x" teaser row for the next tab
+local NAV_UNLOCK = (Config and Config.NavUnlock) or {}
+local navTeaser = UI.img(nav, "nav_off", { name = "NextUnlock", sz = UDim2.fromOffset(NAVW, 44), z = 16, order = 999 })
+navTeaser.ImageTransparency = 0.5
+UI.icon(navTeaser, "icon_lock", 20, C.dim, UDim2.new(0, 12, 0.5, 0), { z = 17, anchor = Vector2.new(0, 0.5) })
+local teaserL = text(navTeaser, "", { font = "heavy", size = 14, color = C.dim, pos = UDim2.fromOffset(42, 0), sz = UDim2.new(1, -48, 1, 0), z = 17, rich = true })
+local navLv
+function App.navUnlocked(key)
+	local need = NAV_UNLOCK[key]
+	return not need or not App.state or (App.state.lv or 1) >= need
+end
+local function navLabel(key) for _, n in ipairs(NAV) do if n.key == key then return n.label end end return string.upper(key) end
+local function updateNav(st)
+	if not st or not st.onboarded then return end
+	local lv = st.lv or 1
+	local nextKey, nextLv
+	for _, n in ipairs(NAV) do
+		local need = NAV_UNLOCK[n.key] or 1
+		local open = lv >= need
+		navButtons[n.key].Inst.Visible = open
+		if not open and (not nextLv or need < nextLv) then nextKey, nextLv = n.key, need end
+		-- newly unlocked this session: announce it
+		if open and navLv and navLv < need then
+			App.toast("NEW TAB UNLOCKED: " .. navLabel(n.key), "Find it in the menu on the left", "gold")
+			App.navBadge(n.key, "!")
+		end
+	end
+	navTeaser.Visible = nextKey ~= nil
+	if nextKey then teaserL.Text = "LV " .. nextLv .. " · " .. navLabel(nextKey) end
+	navLv = lv
+end
+App.updateNav = updateNav
 local navBadges = {}
 function App.navBadge(key, n)
 	local nb = navButtons[key]
@@ -15106,7 +15286,7 @@ App.content = content
 local defs = {}
 local inits = {} -- modules can return entries without a build field: { init = function(App) end }
 -- later modules override earlier ones (Warfare's raids replace War's battle, Contracts replaces Economy's tasks)
-for _, modName in ipairs({ "Sound", "Map", "Economy", "War", "Social", "Warfare", "Cabinet", "Country", "Contracts", "Settings", "Shop", "Tester" }) do
+for _, modName in ipairs({ "Sound", "Map", "Economy", "War", "Social", "Warfare", "Cabinet", "Country", "Contracts", "Settings", "Shop", "Tester", "Tutorial" }) do
 	local okReq, mod = pcall(require, ClientMods:WaitForChild(modName, 5))
 	if okReq and type(mod) == "table" then
 		for k, def in pairs(mod) do
@@ -15173,7 +15353,7 @@ for parentKey, kids in pairs(COMPOSITE) do
 end
 local initsDone = false
 local function runInits()
-	if initsDone then return end
+	if initsDone or not (App.state and App.state.onboarded) then return end
 	initsDone = true
 	for _, fn in ipairs(inits) do
 		-- each init in its own thread: one that yields (sound preloading) must not hold up the rest
@@ -15195,6 +15375,9 @@ function App.open(key)
 		return
 	end
 	if not defs[key] then App.toast("Coming soon", nil, "info"); return end
+	if not App.navUnlocked(key) then App.toast("Unlocks at level " .. NAV_UNLOCK[key], nil, "info"); return end
+	local MANAGED = { country = true, tasks = true, map = true, bosses = true }
+	if not MANAGED[key] then App.navBadge(key, nil) end
 	if App.state and not App.state.onboarded then return end
 	for k, s in pairs(App.screens) do s.host.Visible = (k == key) or (k == "map" and key ~= "map" and false) end
 	local s = App.screens[key]
@@ -15216,6 +15399,7 @@ function App.open(key)
 	if s.obj and s.obj.Opened then pcall(s.obj.Opened, s.obj) end
 end
 
+App.runInits = function() runInits() end
 local function refreshCurrent()
 	local s = App.current and App.screens[App.current]
 	if s and s.obj and s.obj.Refresh then
@@ -15342,6 +15526,7 @@ Remotes.Sync.OnClientEvent:Connect(function(kind, data)
 	if kind == "full" then
 		App.state = data
 		App.tickClock = os.clock()
+		updateNav(data)
 		drawTop(); badges()
 		if not data.onboarded then
 			-- shown on first join, and again after the tester panel's /reset (App.onboarding guards repeats)
@@ -15359,6 +15544,7 @@ Remotes.Sync.OnClientEvent:Connect(function(kind, data)
 			if data.loginReady and App.showLogin then task.delay(1.5, function() pcall(App.showLogin) end) end
 		else
 			App.onboarding = nil
+			runInits() -- a brand new player finishes onboarding with a screen already open: inits still need to run
 			refreshCurrent()
 		end
 		App.emit("full", data)
@@ -15414,7 +15600,7 @@ if game:GetService("RunService"):IsStudio() then
 		end)
 	end)
 end
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX35"><Properties><string name="Name">ReplicatedFirst|IC_Loading|LocalScript</string><ProtectedString name="Source"><![CDATA[-- Loading screen (ReplicatedFirst): war-room art, the IDLE COUNTRY logo, a shimmering bar, version and disclaimer.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX36"><Properties><string name="Name">ReplicatedFirst|IC_Loading|LocalScript</string><ProtectedString name="Source"><![CDATA[-- Loading screen (ReplicatedFirst): war-room art, the IDLE COUNTRY logo, a shimmering bar, version and disclaimer.
 -- Modelled on the reference game's loading screen (Kash 1 Oct 16:45). Hides once the HUD exists and the save is in.
 local Players = game:GetService("Players")
 local ReplicatedFirst = game:GetService("ReplicatedFirst")
