@@ -14,6 +14,8 @@ server/WorldService.lua|ServerScriptService.Server|WorldService|ModuleScript
 server/PlayerService.lua|ServerScriptService.Server|PlayerService|ModuleScript
 server/Market.lua|ServerScriptService.Server|Market|ModuleScript
 server/Raids.lua|ServerScriptService.Server|Raids|ModuleScript
+server/Analytics.lua|ServerScriptService.Server|Analytics|ModuleScript
+server/Badges.lua|ServerScriptService.Server|Badges|ModuleScript
 server/Admin.lua|ServerScriptService.Server|Admin|ModuleScript
 server/Actions.lua|ServerScriptService.Server|Actions|ModuleScript
 server/GameServer.server.lua|ServerScriptService|GameServer|Script

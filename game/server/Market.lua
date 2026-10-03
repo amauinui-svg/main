@@ -59,6 +59,8 @@ function MK.PromptPass(plr, key)
 	local pass = Config.Passes[key]
 	if not pass then return { ok = false, msg = "Unknown pass" } end
 	if pass.id == 0 then return { ok = false, msg = "Coming soon" } end
+	local p = PS.Profiles[plr]
+	if p and PS.AN then pcall(PS.AN.ShopStep, p, key, 1, "Prompted") end
 	MarketplaceService:PromptGamePassPurchase(plr, pass.id)
 	return { ok = true }
 end
@@ -70,6 +72,7 @@ function MK.PromptProduct(plr, key, intent)
 	local p = PS.Profiles[plr]
 	-- intents are saved with the profile so a receipt processed in a later session still knows what to do
 	if p then p.data.pending = p.data.pending or {}; p.data.pending[key] = intent end
+	if p and PS.AN then pcall(PS.AN.ShopStep, p, key, 1, "Prompted") end
 	MarketplaceService:PromptProductPurchase(plr, prod.id)
 	return { ok = true }
 end
@@ -270,6 +273,7 @@ function MK._receipt(plr, p, info)
 		local key = byId[info.ProductId]
 		if not key or not grant[key] then return Enum.ProductPurchaseDecision.NotProcessedYet end
 		local intent = d.pending[key]
+		local snap = PS.AN and PS.AN.Before(p)
 		if key == "MoveCapital" and type(intent) ~= "number" then
 			-- the target city was lost (very rare): keep a free move to use from the map
 			d.capitalCredit = (d.capitalCredit or 0) + 1
@@ -280,6 +284,7 @@ function MK._receipt(plr, p, info)
 		d.pending[key] = nil
 		table.insert(d.receipts, info.PurchaseId)
 		if (info.CurrencySpent or 0) > 0 then MK.Announce(plr, Config.ProductNames[key] or key, info.CurrencySpent) end
+		if PS.AN then pcall(PS.AN.Purchase, p, snap, key, info.CurrencySpent or 0) end
 		while #d.receipts > 50 do table.remove(d.receipts, 1) end
 	end
 	-- only tell Roblox it is granted once the profile (with the receipt id) is safely saved
@@ -322,6 +327,7 @@ function MK.Start()
 				p.data.ownedPasses[key] = true
 				PS.Note(p, { kind = "toast", text = pass.name .. " unlocked!", tone = "good" })
 				MK.Announce(plr, pass.name, pass.price)
+				if PS.AN then pcall(PS.AN.Purchase, p, nil, key, pass.price) end
 			end
 		end
 		PS.EnsureConvoys(p)

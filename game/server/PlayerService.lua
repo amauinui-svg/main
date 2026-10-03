@@ -247,6 +247,7 @@ function PS.AddXp(p, xp, quiet)
 			local era, eraCost
 			for e, E in ipairs(D.Eras) do if E.start == d.lv and d.lv > 1 then era = E.name; eraCost = R.EraCost(e) end end
 			local slot = table.find(R.ConvoySlotLevels, d.lv) and d.lv > 1
+			if PS.AN then pcall(PS.AN.Level, p, d.lv) end
 			PS.Note(p, { kind = "level", lv = d.lv, laws = laws, props = props, units = units, era = era, eraCost = eraCost, slot = slot, points = R.SkillPerLevel })
 		end
 	end
@@ -302,6 +303,7 @@ function PS.Arrive(p, c, when, quiet)
 		if load.owner and load.tax > 0 then WS.Credit(load.owner, load.tax) end
 		PS.AddXp(p, load.xp, quiet)
 		d.stats.trips += 1
+		if PS.AN and d.stats.trips == 1 then pcall(PS.AN.Step, p, "First convoy") end
 		PS.TaskProgress(p, "trips", 1)
 		if not quiet then
 			PS.Note(p, { kind = "arrive", city = c.at, cash = got, xp = load.xp, good = load.good, tax = load.tax })
@@ -696,6 +698,7 @@ function PS._load(plr)
 		end
 	end
 	PS.MigrateOfficers(p)
+	if PS.AN then pcall(PS.AN.Step, p, "Joined") end
 	PS.Market.CheckPasses(plr, p)
 	p.xpMult = PS.Mods(p).xp
 	PS.EnsureTasks(p)

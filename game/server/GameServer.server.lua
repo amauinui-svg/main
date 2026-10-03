@@ -23,10 +23,14 @@ local MK = require(Server.Market)
 local A = require(Server.Actions)
 local RA = require(Server.Raids)
 local AD = require(Server.Admin)
+local AN = require(Server.Analytics)
+local BG = require(Server.Badges)
 MK.Init(PS)
 RA.Init(PS)
 AD.Init(PS, WS, RA)
 PS.Admin = AD
+PS.AN = AN
+BG.Start(PS, WS)
 A.Init(PS, MK, RA, AD)
 
 -- flood guard (audit M7): a token bucket per player, 8 requests a second with bursts of 15
@@ -51,8 +55,10 @@ Request.OnServerInvoke = function(plr, action, args)
 	if p.busy then return { ok = false, msg = "Busy, try again" } end
 	if PS.Profiles[plr] ~= p or p.leaving then return { ok = false, msg = "Left" } end -- audit M3
 	p.busy = true
+	local snap = AN.Before(p)
 	local okCall, res = pcall(fn, plr, p, args)
 	p.busy = false
+	if okCall and type(res) == "table" and res.ok then pcall(AN.After, p, snap, action) end
 	if not okCall then
 		warn("[Idle Country] action " .. action .. " failed: " .. tostring(res))
 		res = { ok = false, msg = "Something went wrong. Try again." }

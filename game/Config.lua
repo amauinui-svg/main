@@ -27,6 +27,20 @@ C.PopularMinPlayers = 30
 C.NavUnlock = { map = 1, laws = 1, properties = 2, shop = 3, country = 4, tasks = 5, military = 6, inventory = 7, bank = 8,
 	battle = 10, bosses = 12, rankings = 12, alliance = 15 }
 
+-- BADGES (Kash 2 Oct): one easy welcome badge, the rest are very hard goals. id 0 = not created yet (skipped).
+C.Badges = {
+	{ key = "welcome", id = 0, name = "Founding Father", desc = "Found your own country." },
+	{ key = "wonder", id = 0, name = "Wonder of the World", desc = "Complete every stage of your Wonder." },
+	{ key = "stars", id = 0, name = "To the Stars", desc = "Advance your nation to the Space Age." },
+	{ key = "warlord", id = 0, name = "Warlord", desc = "Win 1,000 raids." },
+	{ key = "trade", id = 0, name = "Trade Empire", desc = "Deliver 10,000 convoys." },
+	{ key = "quadrillion", id = 0, name = "Richest Nation on Earth", desc = "Earn $1 Quadrillion in total." },
+	{ key = "lawgiver", id = 0, name = "Supreme Lawgiver", desc = "Reach Gold mastery on 100 laws." },
+	{ key = "slayer", id = 0, name = "Tyrant Slayer", desc = "Defeat 500 bosses." },
+	{ key = "alliance", id = 0, name = "Legendary Alliance", desc = "Be in an alliance that reaches level 30." },
+	{ key = "forbidden", id = 0, name = "Forbidden Power", desc = "Own a FORBIDDEN officer." },
+}
+
 C.Products = {
 	-- Founder's Crate: 49 R$ each (Kash 2 Oct), bulk cheaper per crate
 	Crate1 = { id = 3716173429, robux = 49, crates = 1 },

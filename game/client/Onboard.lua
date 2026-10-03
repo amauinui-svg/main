@@ -139,6 +139,8 @@ function O.show(App)
 	end
 	nextB.Inst.Activated:Connect(function()
 		if not check() then return end
+		local FUN = { "name", "flag", "gov" }
+		if FUN[step] then task.spawn(function() App.req("funnel", { step = FUN[step] }) end) end
 		if step < 4 then step += 1; draw(); return end
 		local res = App.req("onboard", form, nextB)
 		if res.ok then

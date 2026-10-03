@@ -52,6 +52,7 @@ function act.onboard(plr, p, a)
 	local home = int(a.home, 1, #World.Cities)
 	if not home then return no("Pick a home capital") end
 	WS.HomeMoved(nil, home)
+	if PS.AN then PS.AN.Step(p, "Founded country") end
 	d.name, d.flag, d.ideo, d.home, d.onboarded = name, { l = layout, c = cols }, ideo, home, true
 	for _, c in ipairs(d.convoys) do if not c.to then c.at = home end end
 	PS.EnsureConvoys(p)
@@ -74,6 +75,7 @@ function act.eraUp(plr, p)
 	local cost = R.EraCost(nxt)
 	if not PS.Spend(p, cost) then return no("Need " .. R.Money(cost) .. " to advance") end
 	d.era = nxt
+	if PS.AN then PS.AN.Era(p, nxt, E.name) end
 	PS.Note(p, { kind = "toast", text = "Welcome to the " .. E.name .. " Era! New laws, properties and units unlocked", tone = "gold" })
 	return ok({ era = nxt })
 end
@@ -118,6 +120,7 @@ function act.passLaw(plr, p, a)
 	local xp = R.LawXp(i, before)
 	d.passes[key] = before + 1
 	d.stats.laws += 1
+	if d.stats.laws == 1 and PS.AN then PS.AN.Step(p, "First law") end
 	PS.TaskProgress(p, "laws", 1)
 	PS.TaskProgress(p, "influence", L.cost)
 	local tb, ta = R.MasteryTier(before), R.MasteryTier(before + 1)
@@ -149,6 +152,7 @@ function act.build(plr, p, a)
 	for k = #d.lots + 1, lot - 1 do d.lots[k] = 0 end
 	d.lots[lot] = i
 	d.stats.built += 1
+	if d.stats.built == 1 and PS.AN then PS.AN.Step(p, "First property") end
 	PS.TaskProgress(p, "build", 1)
 	return ok({ cost = cost, lot = lot })
 end
@@ -814,6 +818,7 @@ function act.allyCreate(plr, p, a)
 	if gone(plr, p) then WS.Leave(plr, rec.id, d.name); return no("Left") end
 	d.alliance = rec.id
 	startClaims(p, rec)
+	if PS.AN then PS.AN.Step(p, "Joined an alliance") end
 	return ok()
 end
 function act.allyJoin(plr, p, a)
@@ -831,6 +836,7 @@ function act.allyJoin(plr, p, a)
 	if gone(plr, p) then WS.Leave(plr, a.id, d.name); return no("Left") end
 	d.alliance = a.id
 	startClaims(p, rec)
+	if PS.AN then PS.AN.Step(p, "Joined an alliance") end
 	return ok({ fee = charged })
 end
 function act.allyLeave(plr, p)
@@ -1110,10 +1116,22 @@ function act.adRefill(plr, p)
 	return ok()
 end
 
+-- onboarding funnel steps reported by the onboarding screens (analytics only)
+local FUNNEL_UI = { name = "Named country", flag = "Designed flag", gov = "Chose government" }
+function act.funnel(plr, p, a)
+	local s = FUNNEL_UI[a and a.step]
+	if s and PS.AN and not p.data.onboarded then PS.AN.Step(p, s) end
+	return ok()
+end
+
 -- tutorial progress (Kash 2 Oct): step number, or -1 when skipped or finished
 function act.tutorial(plr, p, a)
 	local step = tonumber(a and a.step)
 	if not step or step ~= step or step < -1 or step > 50 then return no("Bad step") end
+	if PS.AN then
+		if step == 0 or (step == -1 and p.data.tut == nil) then PS.AN.Step(p, "Answered tutorial"); PS.AN.Custom(p, step == 0 and "TutorialYes" or "TutorialNo") end
+		if step == -1 and type(p.data.tut) == "number" and p.data.tut >= 0 then PS.AN.Custom(p, "TutorialEnded", p.data.tut) end
+	end
 	p.data.tut = math.floor(step)
 	return ok()
 end
@@ -1144,7 +1162,7 @@ function act.adminList(plr, p)
 	return ok({ list = AD.List() })
 end
 
-A.NoSync = { tutorial = true, adRefill = true, allyList = true, rankings = true, profile = true, adminList = true }
+A.NoSync = { funnel = true, tutorial = true, adRefill = true, allyList = true, rankings = true, profile = true, adminList = true }
 -- requests allowed before onboarding finishes
-A.PreOnboard = { sync = true, onboard = true, rankings = true, admin = true, adminList = true }
+A.PreOnboard = { sync = true, onboard = true, rankings = true, admin = true, adminList = true, funnel = true }
 return A
