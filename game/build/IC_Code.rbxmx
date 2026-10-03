@@ -966,7 +966,7 @@ C.Passes = {
 	AutoDispatch = { id = 2005970704, name = "Auto Dispatch", desc = "Convoys pick the best load and keep trading while you are offline.", price = 399 },
 	ExtraConvoys = { id = 2006912670, name = "+2 Convoy Slots", desc = "Run two more convoys at once.", price = 199 },
 	ExtraLots = { id = 2006660680, name = "+3 Building Lots", desc = "Three more lots for properties.", price = 149 },
-	BonusOfficer = { id = 2005112703, name = "Bonus Officer Slot", desc = "One extra officer slot on top of the ones you buy.", price = 299 },
+	BonusOfficer = { id = 2005112703, name = "Bonus Officer Slot", desc = "One extra officer slot, forever.", price = 299 },
 	VIP = { id = 2006120681, name = "VIP", desc = "+10% cash from everything, +10% faster Influence regen and the VIP chat tag.", price = 499 },
 	MegaVIP = { id = 2006588683, name = "Mega VIP", desc = "+25% cash, +25% faster Influence regen, a unique LIMITED officer and the MEGA VIP chat tag.", price = 899 },
 	CustomFlag = { id = 2005754689, name = "Custom Flag", desc = "Design your own flag: extra layouts, emblems and colours, or use your own image.", price = 99 },
@@ -1005,6 +1005,14 @@ C.GearShop = {
 	PerRarity = 3,
 	Levels = { 1, 10, 25, 50, 80, 110, 140, 170 },        -- common .. forbidden
 	Minutes = { 4, 10, 25, 60, 150, 360, 900, 2400 },    -- price in minutes of law income
+}
+
+-- AFK CHAMBER (Kash 3 Oct): idle 15 min -> full-screen chamber. Every 60 s a small chance to find gear.
+-- Odds per minute: Find = chance anything is found; Rarity = weights for common .. forbidden (lottery-low above rare).
+C.Afk = {
+	IdleSeconds = 900,
+	Find = 0.08,
+	Rarity = { 75, 20, 4.9, 0.09, 0.009, 0.0009, 0.00009, 0.000009 },
 }
 
 C.Products = {
@@ -1154,7 +1162,7 @@ R.Skills = {
 	{ key = "sup", name = "MAX SUPPLY", icon = "icon_supply", per = 1, unit = "", desc = "+1 max Supply per upgrade", cost = function(n) return 2 end },
 	{ key = "atk", name = "ATTACK", icon = "icon_attack", per = 4, unit = "", desc = "+4 attack per upgrade", cost = function(n) return 1 end },
 	{ key = "def", name = "DEFENSE", icon = "icon_defense", per = 4, unit = "", desc = "+4 defense per upgrade", cost = function(n) return 1 end },
-	{ key = "lot", name = "BUILDING LOTS", icon = "icon_properties", per = 1, unit = "", desc = "+1 lot (cost doubles each time)", cost = function(n) return 2 ^ (n + 1) end },
+	{ key = "lot", name = "BUILDING LOTS", icon = "icon_properties", per = 1, unit = "", desc = "+1 building lot", cost = function(n) return 2 ^ (n + 1) end },
 }
 R.SkillByKey = {}
 for _, s in ipairs(R.Skills) do R.SkillByKey[s.key] = s end
@@ -1191,7 +1199,8 @@ end
 ---------------------------------------------------------------- XP curve (26 Sep 2026)
 -- A level costs a multiple of what one FULL Influence bar earns at that level with the best law you have,
 -- so the refill on level-up can never chain into the next level by itself.
-R.XpFirst, R.XpBase, R.XpStep, R.XpCap = 0.75, 1.3, 0.2, 5
+-- 3 Oct (Kash: progress too fast, levels should be a lot harder): about twice the XP per level
+R.XpFirst, R.XpBase, R.XpStep, R.XpCap = 1.0, 2.5, 0.4, 10
 local bestXp, bestCash = {}, {}
 function R.BestXpPerInfluence(lv)
 	if bestXp[lv] then return bestXp[lv] end
@@ -1791,11 +1800,11 @@ O.BasicOfficerChance = 0.08
 O.CrateInfo = {
 	limited = {
 		{ label = "Gear (weapon or armor)", pct = 75, odds = O.GearOdds.limited },
-		{ label = "Elite troops (pack size by rarity)", pct = 25, odds = O.GearOdds.limited },
+		{ label = "Elite troops", pct = 25, odds = O.GearOdds.limited },
 	},
 	basic = {
 		{ label = "Gear (weapon or armor)", pct = 92, odds = O.GearOdds.basic },
-		{ label = "Officer (only with an open slot, else gear)", pct = 8, odds = O.HireOdds.basic_officer },
+		{ label = "Officer", pct = 8, odds = O.HireOdds.basic_officer },
 	},
 }
 -- ctx = { era = your era, slotFree = true/false }
@@ -1921,7 +1930,7 @@ T.WeeklyChest = { seals = 12, limitedCrates = 1, gearMinRarity = 3 } -- all 5 we
 T.Shop = {
 	{ key = "influence", name = "Influence Refill", desc = "Fill your Influence to max.", cost = 3, refill = "inf", icon = "icon_influence" },
 	{ key = "supply", name = "Supply Refill", desc = "Fill your Supply to max.", cost = 3, refill = "sup", icon = "icon_supply" },
-	{ key = "basic", name = "Supply Crate", desc = "A crate of gear, sometimes an officer.", cost = 6, basicCrates = 1, icon = "crate_basic" },
+	{ key = "basic", name = "Supply Crate", desc = "A crate of gear and officers.", cost = 6, basicCrates = 1, icon = "crate_basic" },
 	{ key = "shield", name = "Raid Shield (1h)", desc = "Nobody can raid you for an hour.", cost = 10, shieldHours = 1, icon = "icon_defense" },
 	{ key = "limited", name = "Founder's Crate", desc = "The premium crate: great gear and officers.", cost = 30, limitedCrates = 1, icon = "crate_limited" },
 }
@@ -1955,18 +1964,18 @@ return {
 			"RAIDS: attack players in your server and 3 AI nations that raid back; take 10% of their cash on hand",
 			"REVENGE: when someone raids you, strike back in one tap",
 			"THE BANK: deposit cash (10% fee) to keep it safe from raids and earn 1.5% interest per hour",
-			"ALLIANCES: leaders can set a join fee and dues (flat, progressive or regressive)",
-			"ORDERS: 5 daily orders from a pool of 20 plus 5 weekly challenges, all paying MERITS; one free replace a day",
+			"ALLIANCES: leaders can set a join fee and dues",
+			"ORDERS: daily orders and weekly challenges that pay MERITS",
 			"MERITS SHOP: trade Merits for Takedown tickets, refills, raid shields and crates",
-			"DAILY LOGIN SHEET: 7 rewards that pause instead of reset; day 7 gives gold and a Founder's Crate",
+			"DAILY LOGIN: come back every day for a reward; day 7 gives gold and a Founder's Crate",
 			"ALLIANCE WEEKLY TAKEDOWN: 5 stages against a weekly stronghold, with free attacks, tickets and a damage leaderboard",
 			"LAW MASTERY: Bronze, Silver and Gold medals for every law; Gold gives a skill point",
-			"CONVOYS: pay now depends on trading between different regions, and city wants change as players deliver",
+			"CONVOYS: trade between different regions for bigger pay",
 			"VIP and MEGA VIP passes with chat tags; Mega VIP includes a limited officer",
 			"New painted art everywhere: country scenes, buildings, gear, officers, crates and enemies",
 			"RAID FIGHTS: watch three rounds of blows with crits, weapons (or fists) and impact effects",
-			"SPIES: other nations' stats are hidden until you spy on them (they will know)",
-			"RENT: alliances holding a capital can charge its residents rent; new players are exempt for 48 hours",
+			"SPIES: spy on other nations to see their stats",
+			"RENT: alliances holding a capital can charge its residents rent",
 			"GLOBAL CITIES: New York, Los Angeles, London, Tokyo, Paris and Shanghai are the richest prizes",
 			"LIVING CITY: buildings glow and flicker, construction plays out on the lot",
 			"The world map now loops around the globe",
@@ -2186,8 +2195,8 @@ for i, c in ipairs(World.Cities) do
 	table.insert(WS.Countries[c.country], i)
 end
 WS.Upgrades = {
-	{ key = "stipend", name = "STATE STIPEND", icon = "icon_coins", max = 10, desc = "Every member is paid an hourly wage (more for active members)" },
-	{ key = "trade", name = "TRADE NETWORK", icon = "icon_globe", max = 5, desc = "+3% convoy pay per level for all members" },
+	{ key = "stipend", name = "STATE STIPEND", icon = "icon_coins", max = 10, desc = "Every member earns an hourly wage" },
+	{ key = "trade", name = "TRADE NETWORK", icon = "icon_globe", max = 5, desc = "+3% convoy pay for every member" },
 	{ key = "war", name = "WAR COLLEGE", icon = "icon_attack", max = 5, desc = "+5% siege damage per level" },
 	{ key = "fort", name = "FORTIFICATIONS", icon = "icon_castle", max = 5, desc = "+10% garrison per level on captured cities" },
 }
@@ -2503,7 +2512,7 @@ WS.QuestPool = {
 	{ key = "raid", name = "Win raids", per = 12 },
 	{ key = "hit", name = "Land siege hits", per = 25 },
 	{ key = "boss", name = "Defeat bosses", per = 2 },
-	{ key = "donate", name = "Donate (minutes of law income)", per = 40 },
+	{ key = "donate", name = "Donate to the treasury", per = 40 },
 }
 WS.QuestXp = 600
 WS.MaxLevel = 30
@@ -3418,7 +3427,7 @@ function PS.MigrateOfficers(p)
 	end
 	if n > 0 then
 		d.gold += gold
-		PS.Note(p, { kind = "toast", text = "The officer bench is gone: " .. n .. " benched officer" .. (n > 1 and "s" or "") .. " retired for " .. gold .. " gold.", tone = "gold" })
+		PS.Note(p, { kind = "toast", text = n .. " officer" .. (n > 1 and "s" or "") .. " retired with honors: +" .. gold .. " gold!", tone = "gold" })
 	end
 end
 function PS.AddGear(p, g)
@@ -6443,6 +6452,37 @@ function act.funnel(plr, p, a)
 	return ok()
 end
 
+-- AFK chamber: the client says when the player enters / leaves it. Finds roll on the server every 60 s.
+function act.afk(plr, p, a)
+	if a and a.on then
+		p.afkSince = p.afkSince or os.time()
+		p.afkFinds = p.afkFinds or {}
+		return ok({ since = p.afkSince })
+	end
+	local finds = p.afkFinds or {}
+	p.afkSince, p.afkFinds = nil, nil
+	return ok({ finds = finds })
+end
+function A.AfkTick(plr, p)
+	if not p.afkSince or os.time() - p.afkSince < 55 then return end
+	local rng = PS.Rng(p)
+	if rng:NextNumber() >= Config.Afk.Find then return end
+	if invFull(p.data, 1) then return end
+	local W = Config.Afk.Rarity
+	local tot = 0
+	for _, w in ipairs(W) do tot += w end
+	local x, r = rng:NextNumber() * tot, 1
+	for i, w in ipairs(W) do x -= w; if x <= 0 then r = i; break end end
+	local g = O.NewGear(rng, r)
+	g.id = string.format("g%x%06x", os.time(), rng:NextInteger(0, 16777215))
+	if not PS.AddGear(p, g) then return end
+	p.afkFinds = p.afkFinds or {}
+	table.insert(p.afkFinds, { name = g.name, rarity = g.rarity, icon = g.icon, t = os.time() })
+	PS.Note(p, { kind = "afkFind", gear = g })
+	if PS.AN then PS.AN.Custom(p, "AfkFind", r) end
+	PS.Sync(plr)
+end
+
 -- tutorial progress (Kash 2 Oct): step number, or -1 when skipped or finished
 function act.tutorial(plr, p, a)
 	local step = tonumber(a and a.step)
@@ -6481,7 +6521,7 @@ function act.adminList(plr, p)
 	return ok({ list = AD.List() })
 end
 
-A.NoSync = { globalChat = true, gearShop = true, funnel = true, tutorial = true, adRefill = true, allyList = true, rankings = true, profile = true, adminList = true }
+A.NoSync = { afk = true, globalChat = true, gearShop = true, funnel = true, tutorial = true, adRefill = true, allyList = true, rankings = true, profile = true, adminList = true }
 -- requests allowed before onboarding finishes
 A.PreOnboard = { buyPass = true, sync = true, onboard = true, rankings = true, admin = true, adminList = true, funnel = true }
 return A
@@ -6519,6 +6559,12 @@ AD.Init(PS, WS, RA)
 PS.Admin = AD
 PS.AN = AN
 BG.Start(PS, WS)
+task.spawn(function()
+	while true do
+		task.wait(60)
+		for plr, p in pairs(PS.Profiles) do if p.afkSince and plr.Parent then pcall(A.AfkTick, plr, p) end end
+	end
+end)
 CH.Start()
 PS.Chat = CH
 A.Init(PS, MK, RA, AD)
@@ -6544,6 +6590,8 @@ Request.OnServerInvoke = function(plr, action, args)
 	while p.busy and waited < 8 do waited += task.wait() end
 	if p.busy then return { ok = false, msg = "Busy, try again" } end
 	if PS.Profiles[plr] ~= p or p.leaving then return { ok = false, msg = "Left" } end -- audit M3
+	-- any real action ends AFK (the chamber only sends sync/afk while it is up)
+	if action ~= "afk" and action ~= "sync" and p.afkSince then p.afkSince = nil end
 	p.busy = true
 	local snap = AN.Before(p)
 	local okCall, res = pcall(fn, plr, p, args)
@@ -6843,6 +6891,29 @@ function UI.card(parent, p)
 	return UI.img(parent, p.hot and "card_hot" or "card", { name = p.name or "Card", pos = p.pos, sz = p.sz, z = p.z or 6, order = p.order, anchor = p.anchor, button = p.button })
 end
 
+-- outline(plate, color, thickness, p) -> frame, stroke: a highlight outline that sits exactly on a kit plate's own
+-- border. Every plate has a 2 px dark border with ~3 px rounded corners on screen, so the stroke is drawn on an inner
+-- frame inset by its thickness (its outer edge lands on the plate edge) with a corner radius that gives the same ~3 px
+-- outer radius. Use this for every highlight on a plate (never a raw UIStroke / UICorner on the plate itself).
+-- p.alpha = stroke transparency (default 0), p.enabled = false starts it hidden, p.z = ZIndex, p.name.
+-- Not for plates whose children are laid out by a UIListLayout / UIGridLayout (chips, auto-sized tags).
+function UI.outline(plate, color, t, p)
+	p = p or {}
+	t = t or 2
+	-- a UIPadding on the plate would shift the frame: compensate so it still covers the plate exactly
+	local pad = plate:FindFirstChildOfClass("UIPadding")
+	local pl, pr, pt, pb = UDim.new(), UDim.new(), UDim.new(), UDim.new()
+	if pad then pl, pr, pt, pb = pad.PaddingLeft, pad.PaddingRight, pad.PaddingTop, pad.PaddingBottom end
+	local f = mk("Frame", { Name = p.name or "Outline", BackgroundTransparency = 1, BorderSizePixel = 0, Active = false, Selectable = false,
+		Position = UDim2.new(-pl.Scale, t - pl.Offset, -pt.Scale, t - pt.Offset),
+		Size = UDim2.new(1 + pl.Scale + pr.Scale, -2 * t + pl.Offset + pr.Offset, 1 + pt.Scale + pb.Scale, -2 * t + pt.Offset + pb.Offset),
+		ZIndex = p.z or (plate.ZIndex + 8) }, plate)
+	mk("UICorner", { CornerRadius = UDim.new(0, math.max(0, 3 - t)) }, f)
+	local st = mk("UIStroke", { Name = "Stroke", Color = color or UI.C.manila, Thickness = t, Transparency = p.alpha or 0,
+		ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Enabled = p.enabled ~= false }, f)
+	return f, st
+end
+
 -- chip(parent, text, p) -> chipImage, label. p.w = fixed width (content centred) instead of sizing to the text;
 -- p.button = true makes it an ImageButton (use UI.chipBtn for a clickable chip with press / hover feedback)
 function UI.chip(parent, s, p)
@@ -7092,6 +7163,10 @@ local SFX = {
 	reveal_rare      = { id = rid(4612374495), volume = 0.5, gap = 0.1, alt = rid(4612374393) },
 	reveal_epic      = { id = rid(1841209502), volume = 0.55, gap = 0.3, duck = true, alt = rid(1846631123) },
 	reveal_legendary = { id = rid(134527763388412), volume = 0.65, gap = 0.5, duck = true, alt = rid(9039690188) },
+	-- rarer unlocks (Kash 2 Oct 23:48): officers and items above Legendary get their own bigger stings
+	reveal_mythic    = { id = rid(9047100306), volume = 0.7, gap = 0.6, duck = true, alt = rid(1836860398) },
+	reveal_secret    = { id = rid(9047103106), volume = 0.7, gap = 0.6, duck = true, alt = rid(9047100306) },
+	reveal_forbidden = { id = rid(1836860398), volume = 0.75, gap = 0.6, duck = true, alt = rid(9047103106) },
 	-- war
 	raid_start       = { id = rid(1846284814), volume = 0.55, gap = 1, duck = true, with = "unsheath", alt = rid(1835324771) },
 	unsheath         = { id = rid(12222225), volume = 0.45, gap = 0.2 },
@@ -7101,7 +7176,7 @@ local SFX = {
 	crit             = { id = rid(9120730097), volume = 0.6, jitter = 0.03, gap = 0.1, alt = rid(9114559389) },
 	takedown_hit     = { id = rid(9120974378), volume = 0.35, gap = 0.6, stop = 2.5, with = "crit", alt = rid(9120975204) },
 	victory          = { id = rid(1835295052), volume = 0.6, gap = 2, duck = true, alt = rid(1835324771) },
-	defeat           = { id = rid(115055593775910), volume = 0.55, gap = 2, duck = true, alt = rid(125909120236588) },
+	defeat           = { id = rid(125909120236588), volume = 0.6, gap = 2, duck = true, alt = rid(1837950656) }, -- Kash 23:48: new defeat sound
 	boss_defeat      = { id = rid(1835324771), volume = 0.65, gap = 2, duck = true, with = "takedown_hit", alt = rid(119099828605032) },
 }
 
@@ -7263,6 +7338,14 @@ M._sound = { init = function(App)
 		if d.with then play(d.with, { volume = opts.volume }, false) end
 	end
 	function App.sfx(name, opts) play(name, opts, true) end
+	-- sound board (tester panel): every sound key, and raw candidate ids to audition
+	App.sfxKeys = function() local k = {}; for n in pairs(SFX) do table.insert(k, n) end; table.sort(k); return k end
+	local preview
+	function App.sfxPreview(id)
+		if preview then preview:Stop(); preview:Destroy() end
+		preview = Instance.new("Sound"); preview.SoundId = "rbxassetid://" .. tostring(id); preview.Volume = 0.7; preview.SoundGroup = gSFX; preview.Parent = root
+		preview:Play()
+	end
 	local function stopAllSfx()
 		for _, pool in pairs(pools) do for _, c in ipairs(pool) do c:Stop() end end
 		live = 0
@@ -7857,10 +7940,6 @@ function Map.build(host, App)
 		local secs = T.TripSeconds(c.at, b, R.PlayerEra(st), st.gp and st.gp.FastConvoys)
 		local card = UI.card(plist, { sz = UDim2.new(1, 0, 0, 96), z = 27, order = order, hot = L.hot or L.ev ~= nil })
 		UI.icon(card, L.icon, 26, (L.hot or L.ev) and C.gold or C.manila, UDim2.fromOffset(10, 10), { z = 28 })
-		if L.ev then
-			-- event loads get a gold edge so they stand out in the list
-			mk("Frame", { Name = "EventEdge", BorderSizePixel = 0, BackgroundColor3 = C.gold, Position = UDim2.fromOffset(3, 8), Size = UDim2.new(0, 4, 1, -16), ZIndex = 28 }, card)
-		end
 		text(card, L.name, { font = "heavy", size = 17, pos = UDim2.fromOffset(44, 6), sz = UDim2.new(1, -150, 0, 20), z = 28, truncate = true })
 		local tags = {}
 		if L.demand then table.insert(tags, "<font color='#8fd07a'>WANTED +30%</font>") end
@@ -8050,7 +8129,7 @@ function Map.build(host, App)
 			UI.button(war, protected and "locked" or "red", "x5", function(btn) local r = App.req("siege", { city = b, n = 5 }, btn); if r.ok then App.float(btn.Inst, "-" .. R.Short(r.dmg), C.bad) end end, { sz = UDim2.new(0.25, -4, 1, 0), pos = UDim2.new(0.5, 4, 0, 0), z = 29, textSize = 14 })
 			UI.button(war, protected and "locked" or "red", "MAX", function(btn) local r = App.req("siege", { city = b, n = 50 }, btn); if r.ok then App.float(btn.Inst, "-" .. R.Short(r.dmg), C.bad) end end, { sz = UDim2.new(0.25, -4, 1, 0), pos = UDim2.new(0.75, 4, 0, 0), z = 29, textSize = 14 })
 			local note = row(34, nx())
-			text(note, "1 Supply per hit. When the garrison hits 0 the alliance that did the most damage in the last 30 min takes the city.", { size = 12, color = C.muted, sz = UDim2.fromScale(1, 1), z = 28, wrap = true })
+			text(note, "1 Supply per hit. Break the garrison to capture the city!", { size = 12, color = C.muted, sz = UDim2.fromScale(1, 1), z = 28, wrap = true })
 		end
 
 		if b ~= st.home then
@@ -8167,7 +8246,7 @@ function Map.build(host, App)
 			obj.focus(act.city)
 		else
 			local nx = Events.Next(now)
-			App.toast("NEXT WORLD EVENT IN " .. R.Clock(nx.starts - now), "For 15 minutes the first convoy you send to the event city pays big.", "info")
+			App.toast("NEXT WORLD EVENT IN " .. R.Clock(nx.starts - now), "Send a convoy to the event city for big pay!", "info")
 		end
 	end)
 	App.on("tick", function() updateEvent() end)
@@ -8480,26 +8559,38 @@ S.laws = { build = function(host, App)
 	end
 
 	function obj:Refresh(st)
+		-- Kash 3 Oct: every era tab is shown; eras you don't have yet only show a lock and the level they open at
 		local cur = R.PlayerEra(st)
-		local maxTab = math.min(#D.Eras, cur + 1)
 		local giftOn = giftBtn.Inst.Visible
-		if not tabs or obj.maxTab ~= maxTab or obj.tabsGift ~= giftOn then
+		if not tabs or obj.curEra ~= cur or obj.tabsGift ~= giftOn then
 			if tabs then tabs.Inst:Destroy() end
 			local labels = {}
-			for e = 1, maxTab do table.insert(labels, string.upper(D.Eras[e].name)) end
-			obj.maxTab = maxTab
+			for e = 1, #D.Eras do table.insert(labels, e <= cur and string.upper(D.Eras[e].name) or ("LV " .. D.Eras[e].start)) end
+			obj.curEra = cur
 			obj.tabsGift = giftOn
-			-- era tabs shrink to share the row with the FREE GIFT button instead of running under it
 			local avail = App.W() - (App.NAVW or 176) - 48 - (giftOn and 184 or 0)
-			local tabW = math.clamp(math.floor(avail / maxTab) - 6, 72, 132)
-			tabs = UI.tabs(body, labels, function(i) obj.era = i; build(App.state) end, { w = tabW, sz = UDim2.new(1, giftOn and -184 or 0, 0, 34), textSize = 13, z = 7 })
-			obj.era = obj.era or cur
+			local tabW = math.clamp(math.floor(avail / #D.Eras) - 6, 64, 132)
+			tabs = UI.tabs(body, labels, function(i)
+				if i > cur + 1 then
+					App.toast("Unlocks at level " .. D.Eras[i].start, nil, "info")
+					tabs:Set(obj.era)
+					return
+				end
+				obj.era = i; build(App.state)
+			end, { w = tabW, sz = UDim2.new(1, giftOn and -184 or 0, 0, 34), textSize = 13, z = 7 })
+			for e = cur + 1, #D.Eras do
+				local b = tabs.buttons[e]
+				if b then
+					UI.icon(b.Inst, "icon_lock", 14, C.muted, UDim2.new(0, 10, 0.5, 0), { z = b.Inst.ZIndex + 2, anchor = Vector2.new(0, 0.5) })
+					b.Label.Position = UDim2.fromOffset(18, 0); b.Label.Size = UDim2.new(1, -22, 1, 0)
+				end
+			end
+			obj.era = math.min(obj.era or cur, cur + 1)
 			tabs:Set(obj.era)
 			build(st)
 		end
 		for _, card in pairs(obj.cards) do updateCard(card, st) end
-		local inf = st.inf .. "/" .. st.infMax
-		sub.Text = "Influence <font color='#e0a650'><b>" .. inf .. "</b></font> · 25/50/100 passes = Bronze/Silver/Gold mastery · Gold gives +1 skill point"
+		sub.Text = "Influence <font color='#e0a650'><b>" .. st.inf .. "/" .. st.infMax .. "</b></font>"
 	end
 	function obj:Opened()
 		local cur = R.PlayerEra(App.state)
@@ -8663,7 +8754,7 @@ S.properties = { build = function(host, App)
 		text(b1, "INCOME", { font = "bold", size = 13, color = C.muted, pos = UDim2.fromOffset(16, 8), sz = UDim2.new(1, -20, 0, 16), z = 8 })
 		text(b1, R.Money(st.incHr) .. "/hr", { font = "display", size = 28, color = C.good, pos = UDim2.fromOffset(16, 26), sz = UDim2.new(1, -20, 0, 32), z = 8 })
 		local bonus = math.floor(((st.mods and st.mods.props or 1) - 1) * 100 + 0.5)
-		plate(b1, (bonus > 0 and ("+" .. bonus .. "% bonus · ") or "") .. "50% while offline", UDim2.new(1, -12, 0, 10), Vector2.new(1, 0), 9, C.muted)
+		plate(b1, (bonus > 0 and ("+" .. bonus .. "% bonus · ") or "") .. "earns while offline", UDim2.new(1, -12, 0, 10), Vector2.new(1, 0), 9, C.muted)
 		local b2 = UI.card(head, { sz = UDim2.new(0.5, -5, 1, 0), pos = UDim2.new(0.5, 5, 0, 0), z = 7 })
 		text(b2, "LOTS", { font = "bold", size = 13, color = C.muted, pos = UDim2.fromOffset(16, 8), sz = UDim2.new(1, -20, 0, 16), z = 8 })
 		text(b2, used .. " / " .. st.lotsMax, { font = "display", size = 28, pos = UDim2.fromOffset(16, 26), sz = UDim2.new(0.5, 0, 0, 32), z = 8 })
@@ -8954,7 +9045,7 @@ S.skills = { build = function(host, App)
 	end
 	function obj:Refresh(st)
 		UI.clear(list)
-		sub.Text = "<font color='#f0c75a'><b>" .. st.skillFree .. " POINTS FREE</b></font> · +3 every level · +1 for every law at Gold mastery (" .. st.goldLaws .. " so far)"
+		sub.Text = "<font color='#f0c75a'><b>" .. st.skillFree .. " POINTS FREE</b></font> · level up and master laws to earn more"
 		for k, s in ipairs(R.Skills) do
 			local n = st.sk[s.key] or 0
 			local cost = s.cost(n)
@@ -8992,7 +9083,7 @@ S.bank = { build = function(host, App)
 		UI.icon(vault, "icon_bank", 30, C.gold, UDim2.fromOffset(16, 14), { z = 7 })
 		text(vault, "THE VAULT", { font = "display", size = 22, pos = UDim2.fromOffset(56, 14), sz = UDim2.new(1, -110, 0, 30), z = 7 })
 		UI.infoBtn(vault, UDim2.new(1, -40, 0, 14), function()
-			App.confirm("HOW THE BANK WORKS", "• Banked cash <b>can't be stolen</b> in raids.\n• Depositing costs a <b>" .. math.floor(Config.Bank.DepositFee * 100) .. "% fee</b>. Withdrawing is free.\n• It earns <b>" .. (Config.Bank.InterestPerHour * 100) .. "% interest per hour</b> (half while you're offline), with no cap.\n• You can't buy things straight from the bank: withdraw first.", "GOT IT", "manila", function() end)
+			App.confirm("HOW THE BANK WORKS", "• Banked cash <b>can't be stolen</b> in raids.\n• Depositing costs a <b>" .. math.floor(Config.Bank.DepositFee * 100) .. "% fee</b>. Withdrawing is free.\n• It earns <b>" .. (Config.Bank.InterestPerHour * 100) .. "% interest every hour</b>.\n• Withdraw your cash before you buy things.", "GOT IT", "manila", function() end)
 		end, { z = 8, size = 28 })
 		balance = text(vault, R.Money(st.bank or 0), { font = "display", size = 38, color = C.gold, pos = UDim2.fromOffset(16, 52), sz = UDim2.new(1, -32, 0, 44), z = 7 })
 		rateL = text(vault, "", { size = 15, color = C.muted, rich = true, pos = UDim2.fromOffset(16, 98), sz = UDim2.new(1, -32, 0, 20), z = 7 })
@@ -9025,7 +9116,7 @@ S.bank = { build = function(host, App)
 		balance.Text = R.Money(b)
 		local rate = st.bankRate or Config.Bank.InterestPerHour
 		local base = st.bankCap and math.min(b, st.bankCap) or b -- display = payout (interest on the capped balance)
-		rateL.Text = "<font color='#8fd07a'><b>+" .. R.Money(base * rate) .. "/hr</b></font> interest (" .. (math.floor(rate * 1000 + 0.5) / 10) .. "%/h" .. ((st.bankCap and b > st.bankCap) and (" on the first " .. R.Money(st.bankCap)) or "") .. ") · safe from raids"
+		rateL.Text = "<font color='#8fd07a'><b>+" .. R.Money(base * rate) .. "/hr</b></font> interest (" .. (math.floor(rate * 1000 + 0.5) / 10) .. "%/h) · safe from raids"
 	end
 	function obj:Refresh(st)
 		buildVault(st); tickVault(st)
@@ -9035,7 +9126,7 @@ S.bank = { build = function(host, App)
 		text(left, "STATE LOAN", { font = "display", size = 20, pos = UDim2.fromOffset(52, 12), sz = UDim2.new(1, -70, 0, 26), z = 7 })
 		if st.loan then
 			local total = math.floor(st.loan.amt * 1.1)
-			text(left, "You owe <b>" .. R.Money(st.loan.owed) .. "</b>. 20% of what you earn repays it.", { size = 15, rich = true, wrap = true, pos = UDim2.fromOffset(16, 44), sz = UDim2.new(1, -32, 0, 40), z = 7, valign = Enum.TextYAlignment.Top })
+			text(left, "You owe <b>" .. R.Money(st.loan.owed) .. "</b>. It pays itself back as you earn.", { size = 15, rich = true, wrap = true, pos = UDim2.fromOffset(16, 44), sz = UDim2.new(1, -32, 0, 40), z = 7, valign = Enum.TextYAlignment.Top })
 			local bar = UI.bar(left, C.good, { pos = UDim2.fromOffset(16, 88), sz = UDim2.new(1, -32, 0, 22), z = 7 })
 			bar:Set(1 - st.loan.owed / math.max(1, total), "REPAID " .. math.floor((1 - st.loan.owed / math.max(1, total)) * 100) .. "%", "")
 			UI.button(left, st.cash > 0 and "manila" or "locked", "REPAY " .. R.Money(math.min(st.cash, st.loan.owed)), function(btn) App.req("loanRepay", {}, btn) end, { pos = UDim2.new(0, 16, 1, -54), sz = UDim2.new(1, -32, 0, 40), z = 8 })
@@ -9101,7 +9192,7 @@ S.tasks = { build = function(host, App)
 		UI.icon(card, "icon_gift", 30, C.gold, UDim2.fromOffset(16, 20), { z = 8 })
 		text(card, "ALL THREE DONE: +5 GOLD", { font = "display", size = 20, color = C.gold, pos = UDim2.fromOffset(62, 0), sz = UDim2.new(1, -260, 1, 0), z = 8 })
 		UI.button(card, t.bonus and "locked" or (all and "gold" or "slate"), t.bonus and "CLAIMED" or "CLAIM", function(btn) App.req("taskBonus", {}, btn) end, { pos = UDim2.new(1, -186, 0, 13), sz = UDim2.fromOffset(170, 44), z = 9 })
-		obj.subBase = "New orders every day at 00:00 UTC"
+		obj.subBase = "New orders every day"
 	end
 	function obj:Tick()
 		local now = App.now()
@@ -9141,7 +9232,7 @@ S.military = { build = function(host, App)
 		UI.clear(list)
 		local count = M.UnitCount(st.units)
 		local cap = M.UnitCap(st.lv)
-		sub.Text = "Attack <font color='#e2695f'><b>" .. R.Short(st.atk) .. "</b></font> · Defense <font color='#7fb0e6'><b>" .. R.Short(st.def) .. "</b></font> · Army <b>" .. count .. "/" .. cap .. "</b> (+1 room per level)"
+		sub.Text = "Attack <font color='#e2695f'><b>" .. R.Short(st.atk) .. "</b></font> · Defense <font color='#7fb0e6'><b>" .. R.Short(st.def) .. "</b></font> · Army <b>" .. count .. "/" .. cap .. "</b>"
 		local shown = {}
 		local pe = R.PlayerEra(st)
 		local function isLocked(u) return u.lvl > st.lv or u.era > pe end
@@ -9174,7 +9265,7 @@ S.military = { build = function(host, App)
 			text(card, u.name .. (owned > 0 and ("  <font color='#9a9fa6'>x" .. owned .. "</font>") or ""), { font = "heavy", size = 18, rich = true, pos = UDim2.fromOffset(58, 8), sz = UDim2.new(0.38, -58, 0, 24), z = 8, truncate = true })
 			text(card, D.Eras[u.era].name .. (locked and (u.lvl > st.lv and (" · unlocks at level " .. u.lvl) or " · advance era in Laws") or ""), { size = 13, color = C.muted, pos = UDim2.fromOffset(58, 36), sz = UDim2.new(0.38, -58, 0, 18), z = 8 })
 			text(card, "<font color='#e2695f'>ATK " .. R.Short(u.atk) .. "</font>   <font color='#7fb0e6'>DEF " .. R.Short(u.def) .. "</font>", { font = "heavy", size = 16, rich = true, pos = UDim2.new(0.38, 0, 0, 10), sz = UDim2.new(0.22, 0, 0, 22), z = 8 })
-			text(card, "Each costs 6% more than the last", { size = 12, color = C.muted, pos = UDim2.new(0.38, 0, 0, 36), sz = UDim2.new(0.22, 0, 0, 18), z = 8, truncate = true })
+			text(card, "Grows your army", { size = 12, color = C.muted, pos = UDim2.new(0.38, 0, 0, 36), sz = UDim2.new(0.22, 0, 0, 18), z = 8, truncate = true })
 			if locked then
 				UI.button(card, "locked", u.lvl > st.lv and ("LEVEL " .. u.lvl) or "ERA LOCKED", nil, { pos = UDim2.new(1, -170, 0, 14), sz = UDim2.fromOffset(160, 42), z = 9 })
 			else
@@ -9204,7 +9295,7 @@ S.battle = { build = function(host, App)
 	local list = UI.list(body, { pos = UDim2.fromOffset(0, 52), sz = UDim2.new(1, 0, 1, -52), gap = 8, z = 6 })
 	local obj = {}
 	local refresh = UI.button(body, "slate", "NEW RIVALS", function(btn) App.req("rivals", { refresh = true }, btn) end, { sz = UDim2.fromOffset(170, 40), z = 7, icon = "icon_flag", textSize = 15 })
-	UI.text(body, "Each attack costs " .. M.BattleSupply .. " Supply. Win to take their treasury and XP. Losing only costs the Supply.", { size = 14, color = C.muted, pos = UDim2.fromOffset(184, 0), sz = UDim2.new(1, -184, 0, 40), z = 7, wrap = true })
+	UI.text(body, "Each attack costs " .. M.BattleSupply .. " Supply. Win to take their treasury and XP!", { size = 14, color = C.muted, pos = UDim2.fromOffset(184, 0), sz = UDim2.new(1, -184, 0, 40), z = 7, wrap = true })
 	function obj:Opened() if not App.state.rivals or App.now() - App.state.rivals.t > 600 then App.req("rivals", {}) end end
 	function obj:Refresh(st)
 		UI.clear(list)
@@ -9226,7 +9317,7 @@ S.battle = { build = function(host, App)
 					local res = App.req("battle", { i = i }, btn)
 					if res.ok then
 						if res.win then App.toast("VICTORY OVER " .. string.upper(rv.name), "+" .. R.Money(res.cash) .. " · +" .. res.xp .. " XP", "good")
-						else App.toast("DEFEAT", "Their defense held (" .. math.floor(res.chance * 100 + 0.5) .. "% chance). Build your army in Military.", "bad") end
+						else App.toast("DEFEAT", "Their defense held. Build your army in Military.", "bad") end
 					end
 				end, { pos = UDim2.new(1, -170, 0, 16), sz = UDim2.fromOffset(160, 44), z = 9, icon = "icon_attack" })
 			end
@@ -9267,8 +9358,8 @@ S.bosses = { build = function(host, App)
 		local max = M.BossHp(boss.era)
 		hp:Set(boss.hp / max, R.Short(boss.hp) .. " / " .. R.Short(max) .. " HP", "")
 		local per = M.BossDamage(st.atk)
-		info.Text = string.format("Each hit deals about <b>%s</b> (3x your attack %s). Reward: <font color='#f0c75a'><b>%d gold</b></font>, <font color='#8fd07a'><b>%s</b></font> and XP. A new boss arrives an hour after each kill.",
-			R.Short(per), R.Short(st.atk), M.BossGold[boss.era], R.Money(R.MinuteValue(st.lv) * 20))
+		info.Text = string.format("Each hit deals about <b>%s</b>. Reward: <font color='#f0c75a'><b>%d gold</b></font>, <font color='#8fd07a'><b>%s</b></font> and XP.",
+			R.Short(per), M.BossGold[boss.era], R.Money(R.MinuteValue(st.lv) * 20))
 		sub.Text = "Supply <font color='#6fb3c8'><b>" .. st.sup .. "/" .. st.supMax .. "</b></font> · Bosses defeated <b>" .. st.stats.bosses .. "</b>"
 		UI.clear(list)
 		for e, Bx in ipairs(M.Bosses) do
@@ -9307,7 +9398,7 @@ local Config = require(Shared.Config)
 local S = {}
 local AC = Config.Alliance
 local UPGRADES = {
-	{ key = "stipend", name = "STATE STIPEND", icon = "icon_coins", max = 10, desc = function(l) return "Every member is paid an hourly wage (level " .. l .. ", more for active members)" end },
+	{ key = "stipend", name = "STATE STIPEND", icon = "icon_coins", max = 10, desc = function(l) return "Every member earns an hourly wage (level " .. l .. ")" end },
 	{ key = "trade", name = "TRADE NETWORK", icon = "icon_globe", max = 5, desc = function(l) return "+" .. (3 * l) .. "% convoy pay for every member" end },
 	{ key = "war", name = "WAR COLLEGE", icon = "icon_attack", max = 5, desc = function(l) return "+" .. (5 * l) .. "% siege damage" end },
 	{ key = "fort", name = "FORTIFICATIONS", icon = "icon_castle", max = 5, desc = function(l) return "+" .. (10 * l) .. "% garrison on cities you capture" end },
@@ -9318,7 +9409,7 @@ local PERK_SIZE = { 3, 5, 8, 12 }
 local PERK_NAMES = { law = "law cash", props = "property income", convoy = "convoy pay", regen = "Influence regen", attack = "attack", defense = "defense" }
 -- alliance quests: what each kind is called and drawn with
 local QUEST_ICON = { law = "icon_laws", convoy = "icon_container", raid = "icon_attack", hit = "icon_crosshair", boss = "icon_bosses", donate = "icon_coins" }
-local XP_LABELS = { { "law", "Law" }, { "convoy", "Convoy" }, { "raid", "Raid win" }, { "hit", "Siege hit" }, { "boss", "Boss" }, { "donate", "Donation (per minute of law cash)" } }
+local XP_LABELS = { { "law", "Law" }, { "convoy", "Convoy" }, { "raid", "Raid win" }, { "hit", "Siege hit" }, { "boss", "Boss" }, { "donate", "Donation" } }
 -- what a finished quest pays each member who helped (act.allyClaim)
 local QUEST_GOLD, QUEST_SEALS = 15, 3
 
@@ -9494,7 +9585,7 @@ local function showProfile(App, uid)
 			text(cell, A.desc, { size = 12, color = earned and C.muted or C.dim, pos = UDim2.fromOffset(58, 26), sz = UDim2.new(1, -64, 0, 30), z = 75, wrap = true, valign = Enum.TextYAlignment.Top })
 			text(cell, "Title: " .. A.title, { font = "bold", size = 12, color = earned and C.manila or C.dim, pos = UDim2.fromOffset(58, 60), sz = UDim2.new(1, -64, 0, 18), z = 75, truncate = true })
 			if pickable then
-				local stroke = UI.mk("UIStroke", { Color = C.gold, Thickness = 2, Enabled = false, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, cell)
+				local _, stroke = UI.outline(cell, C.gold, 2, { enabled = false })
 				local shown = text(cell, "SHOWN", { font = "heavy", size = 11, color = C.gold, pos = UDim2.new(1, -60, 0, 4), sz = UDim2.fromOffset(52, 14), z = 77, align = Enum.TextXAlignment.Right, visible = false })
 				strokes[A.key] = { stroke = stroke, shown = shown }
 				hover(UI, cell)
@@ -9539,7 +9630,7 @@ S.alliance = { build = function(host, App)
 	App.showProfile = App.showProfile or function(uid) showProfile(App, uid) end
 
 	local function noAlliance(st)
-		sub.Text = "Alliances fight over the 41 capitals, tax trade through them, and pay their members"
+		sub.Text = "Team up, capture capitals and get rich together"
 		local left = UI.list(area, { sz = UDim2.new(0.6, -8, 1, 0), gap = 6, z = 7 })
 		local right = UI.card(area, { sz = UDim2.new(0.4, -8, 1, 0), pos = UDim2.new(0.6, 8, 0, 0), z = 7 })
 		local hdr = UI.mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 26), ZIndex = 7, LayoutOrder = 0 }, left)
@@ -9581,7 +9672,7 @@ S.alliance = { build = function(host, App)
 			-- colour swatch on an inset plate, with a manila ring on the picked one
 			local cell = UI.img(sw, "inset", { button = true, name = "Swatch", order = k, z = 9 })
 			UI.mk("Frame", { BackgroundColor3 = Color3.fromHex(col), BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(1, -8, 1, -8), ZIndex = 10 }, cell)
-			local ring = UI.mk("UIStroke", { Color = C.manila, Thickness = 2, Enabled = false, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, cell)
+			local _, ring = UI.outline(cell, C.manila, 2, { enabled = false })
 			local s = cell
 			swatches[col] = { ring = ring }
 			s.Activated:Connect(function() obj.form.color = col; mark() end)
@@ -9733,7 +9824,7 @@ S.alliance = { build = function(host, App)
 			local lc = UI.card(list, { sz = UDim2.new(1, 0, 0, 60), z = 8, order = 201 })
 			UI.icon(lc, "icon_sparkles", 28, C.xp, UDim2.fromOffset(16, 16), { z = 9 })
 			text(lc, "ALLIANCE LEVEL " .. (info.level or 1), { font = "display", size = 19, pos = UDim2.fromOffset(60, 6), sz = UDim2.new(1, -76, 0, 24), z = 9 })
-			text(lc, "+" .. pct(info.bonus) .. "% law cash, property income and convoy pay for every member (+1% a level, up to +10%)", { size = 13, color = C.muted, pos = UDim2.fromOffset(60, 32), sz = UDim2.new(1, -76, 0, 18), z = 9, truncate = true })
+			text(lc, "+" .. pct(info.bonus) .. "% law cash, property income and convoy pay for every member", { size = 13, color = C.muted, pos = UDim2.fromOffset(60, 32), sz = UDim2.new(1, -76, 0, 18), z = 9, truncate = true })
 		end
 		do
 			local byType = {}
@@ -9753,7 +9844,7 @@ S.alliance = { build = function(host, App)
 			local cc = UI.card(list, { sz = UDim2.new(1, 0, 0, 60), z = 8, order = 202 })
 			UI.icon(cc, "icon_flag", 28, C.manila, UDim2.fromOffset(16, 16), { z = 9 })
 			text(cc, "CITY PERKS", { font = "display", size = 19, pos = UDim2.fromOffset(60, 6), sz = UDim2.new(1, -76, 0, 24), z = 9 })
-			text(cc, #parts > 0 and table.concat(parts, " · ") or "None yet. Each city you hold gives a perk; the best 2 of each kind count.", { size = 13, color = C.muted, pos = UDim2.fromOffset(60, 32), sz = UDim2.new(1, -76, 0, 18), z = 9, truncate = true })
+			text(cc, #parts > 0 and table.concat(parts, " · ") or "None yet. Hold cities to earn perks.", { size = 13, color = C.muted, pos = UDim2.fromOffset(60, 32), sz = UDim2.new(1, -76, 0, 18), z = 9, truncate = true })
 		end
 		for k, u in ipairs(UPGRADES) do
 			local lvl = a.up and a.up[u.key] or 0
@@ -9790,7 +9881,7 @@ S.alliance = { build = function(host, App)
 		section(list, "MANAGE", 400)
 		local manage = UI.mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 48), ZIndex = 8, LayoutOrder = 401 }, list)
 		UI.button(manage, "red", "LEAVE ALLIANCE", function(btn)
-			App.confirm("LEAVE " .. a.name .. "?", "You will lose the alliance perks and stipend." .. (myRole == "leader" and " Leadership passes to your longest-serving officer." or ""), "LEAVE", "red", function()
+			App.confirm("LEAVE " .. a.name .. "?", "You will lose the alliance perks and stipend." .. (myRole == "leader" and " An officer will take over as leader." or ""), "LEAVE", "red", function()
 				App.req("allyLeave", {}, btn); obj.list = nil
 			end)
 		end, { sz = UDim2.fromOffset(200, 42), z = 9 })
@@ -9808,7 +9899,7 @@ S.alliance = { build = function(host, App)
 		UI.icon(top, "icon_flag", 30, Color3.fromHex(a.color or "546e7a"), UDim2.fromOffset(16, 20), { z = 9 })
 		text(top, "CITIES HELD", { font = "heavy", size = 13, color = C.muted, pos = UDim2.fromOffset(60, 10), sz = UDim2.fromOffset(160, 16), z = 9 })
 		text(top, #held .. " / " .. AC.MaxCities, { font = "display", size = 28, color = C.manila, pos = UDim2.fromOffset(60, 26), sz = UDim2.fromOffset(160, 34), z = 9 })
-		text(top, "Every convoy other players deliver into your cities pays its city tax into the treasury."
+		text(top, "Your cities earn tax from every convoy that arrives."
 			.. (#countries > 0 and (" Full control: " .. table.concat(countries, ", ") .. " (+10% cash).") or ""), { size = 13, color = C.muted, pos = UDim2.fromOffset(230, 0), sz = UDim2.new(1, -246, 1, 0), z = 9, wrap = true })
 		if #held == 0 then
 			local e = UI.card(list, { sz = UDim2.new(1, 0, 0, 96), z = 8, order = 2 })
@@ -9849,7 +9940,7 @@ S.alliance = { build = function(host, App)
 		end
 		if type(qs) ~= "table" or #qs == 0 or stale then
 			local e = UI.card(list, { sz = UDim2.new(1, 0, 0, 60), z = 8, order = 2 })
-			text(e, "This week's quests are being drawn up. They appear as soon as any member plays.", { size = 15, color = C.muted, pos = UDim2.fromOffset(16, 0), sz = UDim2.new(1, -32, 1, 0), z = 9, wrap = true })
+			text(e, "New quests are on the way!", { size = 15, color = C.muted, pos = UDim2.fromOffset(16, 0), sz = UDim2.new(1, -32, 1, 0), z = 9, wrap = true })
 		else
 			for k, q in ipairs(qs) do
 				local mineN = (q.by and q.by[me]) or 0
@@ -10152,7 +10243,7 @@ function O.show(App)
 		for ei, e in ipairs(emblems) do
 			local b = UI.img(em, "inset", { button = true, name = "Emblem", order = ei, sz = UDim2.fromOffset(34, 34), z = 64 })
 			if not e then text(b, "NONE", { font = "heavy", size = 10, color = C.muted, align = Enum.TextXAlignment.Center, sz = UDim2.fromScale(1, 1), z = 65 }) end
-			if (form.flag.e or false) == e then UI.mk("UIStroke", { Color = C.manila, Thickness = 2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, b) end
+			if (form.flag.e or false) == e then UI.outline(b, C.manila, 2) end
 			if e then UI.icon(b, e, 22, C.ink, UDim2.fromScale(0.5, 0.5), { z = 65, anchor = Vector2.new(0.5, 0.5) }) end
 			local locked = e and not owned
 			if locked then lockMark(b, 66) end
@@ -10194,7 +10285,7 @@ function O.show(App)
 	end
 	steps[4] = function()
 		text(area, "Pick your home capital", { font = "display", size = 24, pos = UDim2.fromOffset(4, 10), sz = UDim2.new(1, 0, 0, 30), z = 63 })
-		text(area, "Your first convoy starts here and every new convoy is built here. You can trade with every city either way.", { size = 15, color = C.muted, wrap = true, pos = UDim2.fromOffset(4, 42), sz = UDim2.new(1, 0, 0, 40), z = 63 })
+		text(area, "Your convoys start here. You can trade with every city!", { size = 15, color = C.muted, wrap = true, pos = UDim2.fromOffset(4, 42), sz = UDim2.new(1, 0, 0, 40), z = 63 })
 		local list = UI.list(area, { pos = UDim2.fromOffset(0, 86), sz = UDim2.new(1, 0, 1, -86), gap = 8, z = 63 })
 		local popular = (App.world and App.world.popular) or Config.PopularCapitals
 		local function cityCard(parent, i, order, hot)
@@ -10500,7 +10591,8 @@ local function fighterCard(App, parent, f, side, cx, top, maxHp, range, z)
 	f = f or {}
 	local o = { side = side, f = f, maxHp = math.max(1, maxHp or 1), range = range or { 0, 0 } }
 	local card = UI.card(parent, { name = side == "a" and "Attacker" or "Defender", anchor = Vector2.new(0.5, 0), pos = UDim2.fromOffset(cx, top), sz = UDim2.fromOffset(CARD_W, CARD_H), z = z })
-	o.stroke = mk("UIStroke", { Color = C.rule, Thickness = 1.5, Transparency = 0.2 }, card)
+	-- result highlight on the card's own border (hidden until the fight ends)
+	o.outline, o.stroke = UI.outline(card, C.rule, 2, { alpha = 1 })
 	o.card, o.home = card, card.Position
 
 	-- portrait (avatar headshot for players, the big flag for AI nations) with the weapon beside it, facing the enemy
@@ -10619,7 +10711,7 @@ local function playFight(App, res, opts)
 	-- the panel is built at DESIGN size and scaled to fit (phones), popping in from the centre
 	local fitS = math.min(1, (App.W() - 24) / DESIGN_W, (App.H() - 24) / DESIGN_H)
 	local panel = UI.img(stage, "panel_plain", { name = "FightPanel", sz = UDim2.fromOffset(DESIGN_W, DESIGN_H), pos = UDim2.fromScale(0.5, 0.5), anchor = Vector2.new(0.5, 0.5), z = 72 })
-	mk("UIStroke", { Color = C.gold, Thickness = 2, Transparency = 0.15 }, panel)
+	UI.outline(panel, C.gold, 2, { alpha = 0.15 })
 	local pscale = mk("UIScale", { Scale = fitS * 0.6 }, panel)
 	tw(pscale, 0.34, { Scale = fitS }, Enum.EasingStyle.Back)
 
@@ -10784,8 +10876,8 @@ local function playFight(App, res, opts)
 		hint.Visible = false
 		local win = res.win
 		local winner, loser = win and A or D, win and D or A
-		winner.stroke.Color, winner.stroke.Thickness, winner.stroke.Transparency = C.gold, 2.5, 0
-		loser.stroke.Color = C.bad
+		winner.stroke.Color, winner.stroke.Transparency = C.gold, 0
+		loser.stroke.Color, loser.stroke.Transparency = C.bad, 0.2
 		if loser.img then tw(loser.img, 0.5, { ImageColor3 = Color3.fromRGB(90, 90, 96) }) end
 		tw(loser.weapon, 0.5, { ImageTransparency = 0.5 })
 		sfx(App, win and "victory" or "defeat")
@@ -10857,7 +10949,7 @@ local function resultPopup(App, res, targetName)
 	local _, bd = popup(App, "RAID REPORT", 460, 420)
 	local win = res.win
 	local band = UI.card(bd, { name = "Banner", hot = win, sz = UDim2.new(1, -40, 0, 74), z = 74 })
-	mk("UIStroke", { Color = win and C.good or C.bad, Thickness = 2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, band)
+	UI.outline(band, win and C.good or C.bad, 2)
 	local big = text(band, win and "VICTORY" or "DEFEAT", { font = "display", size = 38, color = win and C.gold or C.bad, align = Enum.TextXAlignment.Center, pos = UDim2.fromOffset(0, 4), sz = UDim2.new(1, 0, 0, 42), z = 75, stroke = 1.5 })
 	FX.centre(big)
 	local bs = mk("UIScale", { Scale = 1.6 }, big)
@@ -10937,8 +11029,7 @@ local function raidedPopup(App, n)
 	-- the layout positions the cell (no input); the card inside slides in from the right
 	local cell = mk("Frame", { Name = "Raided", BackgroundTransparency = 1, Active = false, Size = UDim2.fromOffset(340, 96), ZIndex = 82, LayoutOrder = math.floor(os.clock() * 10) }, host)
 	local card = UI.img(cell, "panel_plain", { name = "Card", sz = UDim2.fromScale(1, 1), pos = UDim2.fromOffset(360, 0), z = 83 })
-	mk("UIStroke", { Color = accent, Thickness = 1.5, Transparency = 0.25 }, card)
-	mk("Frame", { Name = "Accent", Size = UDim2.new(0, 5, 1, -12), Position = UDim2.fromOffset(6, 6), BackgroundColor3 = accent, BorderSizePixel = 0, ZIndex = 84 }, card)
+	UI.outline(card, accent, 2, { alpha = 0.25 })
 	local em = mk("Frame", { BackgroundColor3 = Color3.fromHex("10141a"), BorderSizePixel = 0, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 18, 0, 30), Size = UDim2.fromOffset(38, 38), ZIndex = 84 }, card)
 	mk("UICorner", { CornerRadius = UDim.new(1, 0) }, em)
 	mk("UIStroke", { Color = accent, Thickness = 2 }, em)
@@ -11000,8 +11091,7 @@ local function spiedNote(App, n)
 	-- the layout positions the cell; the card inside is centre-anchored so it pops from its middle
 	local cell = mk("TextButton", { Name = "Spied", Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.fromOffset(330, 70), ZIndex = 82, LayoutOrder = math.floor(os.clock() * 10) }, spiedHost)
 	local card = UI.img(cell, "panel_plain", { name = "Card", sz = UDim2.fromScale(1, 1), pos = UDim2.fromScale(0.5, 0.5), anchor = Vector2.new(0.5, 0.5), z = 83 })
-	mk("UIStroke", { Color = C.blue, Thickness = 1.5, Transparency = 0.3 }, card)
-	mk("Frame", { Size = UDim2.new(0, 5, 1, -12), Position = UDim2.fromOffset(6, 6), BackgroundColor3 = C.blue, BorderSizePixel = 0, ZIndex = 84 }, card)
+	UI.outline(card, C.blue, 2, { alpha = 0.3 })
 	UI.icon(card, "icon_satellite", 30, C.blue, UDim2.new(0, 22, 0.5, 0), { z = 84, anchor = Vector2.new(0, 0.5) })
 	text(card, string.upper(tostring(n.by or "Someone")) .. " SPIED ON YOU", { font = "display", size = 17, color = C.blue, pos = UDim2.fromOffset(62, 8), sz = UDim2.new(1, -72, 0, 24), z = 84, truncate = true })
 	text(card, "LV " .. tostring(n.lv or "?") .. " · they can see your cash and army. Bank your cash!", { size = 13, color = C.ink, pos = UDim2.fromOffset(62, 34), sz = UDim2.new(1, -72, 0, 28), z = 84, wrap = true })
@@ -11049,10 +11139,10 @@ S.battle = { build = function(host, App)
 	mk("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Right, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }, chips)
 
 	infoButton(App, body, "HOW RAIDS WORK",
-		"You can raid the other nations in <b>this server</b> plus <b>3 rival nations</b> from around the world. The list is fixed: it cannot be refreshed.\n\n" ..
-		"Their defense and cash are <b>hidden</b>. <font color='#7fb0e6'><b>SPY</b></font> (" .. SPY_SUPPLY .. " Supply) to see them for 15 minutes. They are told you spied.\n\n" ..
-		"Win and you take <font color='#8fd07a'><b>10% of their cash on hand</b></font>, up to about 1 hour of their law income. Banked cash is safe.\n\n" ..
-		"The same nation can be raided again after <b>1 minute</b>. <font color='#e2695f'><b>Soldiers die on both sides</b></font>, cheapest first.",
+		"Raid the nations in <b>this server</b> plus <b>3 rival nations</b> from around the world.\n\n" ..
+		"<font color='#7fb0e6'><b>SPY</b></font> (" .. SPY_SUPPLY .. " Supply) to see their defense and cash.\n\n" ..
+		"Win to steal <font color='#8fd07a'><b>10% of their cash on hand</b></font>. Bank your own cash to keep it safe!\n\n" ..
+		"<font color='#e2695f'><b>Soldiers fall on both sides</b></font>, so keep your army strong.",
 		UDim2.fromOffset(0, 5), 8)
 	text(body, "Raid nations in your server and 3 rival nations. SPY first to see their defense and cash. Win to steal 10% of their cash on hand.",
 		{ size = 14, color = C.muted, wrap = true, pos = UDim2.fromOffset(34, 0), sz = UDim2.new(1, -34, 0, 36), z = 7, valign = Enum.TextYAlignment.Center })
@@ -11070,7 +11160,7 @@ S.battle = { build = function(host, App)
 		list.Size = UDim2.new(1, 0, 1, show and -120 or -44)
 		if not show then return end
 		local card = UI.card(revengeHost, { sz = UDim2.fromScale(1, 1), z = 7, hot = true })
-		mk("UIStroke", { Color = C.bad, Thickness = 2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, card)
+		UI.outline(card, C.bad, 2)
 		UI.icon(card, "icon_flame", 30, C.bad, UDim2.new(0, 14, 0.5, 0), { z = 8, anchor = Vector2.new(0, 0.5) })
 		text(card, "REVENGE", { font = "display", size = 20, color = C.bad, pos = UDim2.fromOffset(54, 6), sz = UDim2.new(1, -440, 0, 24), z = 8 })
 		text(card, "<b>" .. esc(rv.name) .. "</b> raided you " .. ago(App, rv.t) .. ". Hit back!", { size = 15, rich = true, pos = UDim2.fromOffset(54, 34), sz = UDim2.new(1, -440, 0, 22), z = 8, truncate = true })
@@ -11496,17 +11586,17 @@ local function dropColumns(kind, st)
 			table.insert(cols, { name = e.label, sub = pct(e.pct) .. " of drops", vals = vals, extra = extra, color = troops and C.gold or nil })
 		end
 		local pv = (st and st.pity and st.pity[kind]) or 0
-		table.insert(notes, "<font color='#e9b949'><b>PITY " .. pv .. " / " .. (O.Pity[kind] or 50) .. ":</b></font> the crate that fills the meter is guaranteed <b>Legendary or better</b>.")
+		table.insert(notes, "<font color='#e9b949'><b>PITY " .. pv .. " / " .. (O.Pity[kind] or 50) .. ":</b></font> fill the meter for a guaranteed <b>Legendary or better</b>.")
 		if kind == "limited" then
-			table.insert(notes, "<b>Elite troops</b> are your era's elite unit (pack size by rarity) and <font color='#f0c75a'><b>never die in raids</b></font>.")
-			table.insert(notes, "A <b>10-pack</b> guarantees Epic or better: if nothing Epic+ dropped, the last crate is upgraded to Epic.")
+			table.insert(notes, "<b>Elite troops</b> are your era's strongest unit and <font color='#f0c75a'><b>never die in raids</b></font>.")
+			table.insert(notes, "A <b>10-pack</b> always includes Epic or better.")
 		else
 			if st and freeSlots(st) == 0 then
-				table.insert(notes, "<font color='#e2695f'><b>Every slot is full right now: this crate gives gear only.</b></font>")
+				table.insert(notes, "<font color='#e2695f'><b>Your officer slots are full: this crate gives gear.</b></font>")
 			end
 		end
 	end
-	table.insert(notes, luck and "<font color='#f0c75a'><b>2x CRATE LUCK ACTIVE:</b></font> Legendary and up doubled (included above)."
+	table.insert(notes, luck and "<font color='#f0c75a'><b>2x CRATE LUCK ACTIVE:</b></font> Legendary and up doubled!"
 		or "The <b>2x Crate Luck</b> pass doubles Legendary and up.")
 	return cols, notes, luck
 end
@@ -11670,7 +11760,7 @@ local function openPicker(App, holderId, holderName, slot)
 	for i, g in ipairs(items) do
 		local rc = rcol(g.rarity)
 		local row = UI.card(lst, { sz = UDim2.new(1, 0, 0, 66), z = 75, order = i, hot = g.id == cur })
-		stroke(row, rc, g.id == cur and 2 or 1, g.id == cur and 0 or 0.4)
+		if g.id == cur then UI.outline(row, rc, 2) end
 		local well = mk("Frame", { BackgroundColor3 = DARK, BorderSizePixel = 0, Position = UDim2.fromOffset(8, 7), Size = UDim2.fromOffset(52, 52), ZIndex = 76 }, row)
 		corner(well, 6)
 		gearImage(well, g, UDim2.fromScale(0.9, 0.9), UDim2.fromScale(0.5, 0.5), 77, Vector2.new(0.5, 0.5))
@@ -11702,7 +11792,7 @@ local function resultCard(parent, r, w, h, z)
 	local item = r.item or {}
 	local rc = rcol(item.rarity)
 	local card = UI.card(parent, { name = "Result", sz = UDim2.fromScale(1, 1), z = z })
-	stroke(card, rc, 3)
+	UI.outline(card, rc, 3)
 	local band = mk("Frame", { BackgroundColor3 = rc, BackgroundTransparency = 0.5, BorderSizePixel = 0, Position = UDim2.fromOffset(4, 4), Size = UDim2.new(1, -8, 0.55, -4), ZIndex = z }, card)
 	corner(band, 8)
 	mk("UIGradient", { Rotation = 90, Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.1), NumberSequenceKeypoint.new(1, 1) }) }, band)
@@ -11848,7 +11938,7 @@ local function reveal(App, result, opts)
 				Size = UDim2.fromOffset(cw, ch), ZIndex = 77 }, grid)
 			local i = ridx(r.item and r.item.rarity)
 			local rc = rcol(r.item and r.item.rarity)
-			if App.sfx then App.sfx(i >= 5 and "reveal_legendary" or i >= 4 and "reveal_epic" or i >= 3 and "reveal_rare" or "reveal_common") end
+			if App.sfx then App.sfx(i >= 8 and "reveal_forbidden" or i >= 7 and "reveal_secret" or i >= 6 and "reveal_mythic" or i >= 5 and "reveal_legendary" or i >= 4 and "reveal_epic" or i >= 3 and "reveal_rare" or "reveal_common") end
 			if i >= 3 then
 				local a = aura(slot, rc, math.floor(math.max(cw, ch) * (1.15 + 0.1 * i)), UDim2.fromScale(0.5, 0.5), 77, math.min(1, 0.25 + 0.1 * i))
 				local as = mk("UIScale", { Scale = 0 }, a)
@@ -11923,12 +12013,11 @@ S.officers = { build = function(host, App)
 
 	-- header: [title or sub tabs] [i] [subtitle ......] [UNEQUIP ALL] [AUTO EQUIP BEST]
 	local hx = host:GetAttribute("TabsRight") or 158
-	infoBtn(App, panel, "OFFICERS", "Officers give your country % boosts. Every officer sits in a <b>slot</b>: you can only hire when a slot is open. "
-		.. "<font color='#ff9a2e'><b>LIMITED</b></font> officers (Mega VIP, Limited Bundle) get their own extra slot.\n\n"
-		.. "Every hire is unique: a rarity plus random traits. Weapons add attack, armor adds defense, on you and on each officer.",
+	infoBtn(App, panel, "OFFICERS", "Officers boost your whole country. Hire one into every open <b>slot</b>.\n\n"
+		.. "Every officer is unique, with their own rarity and traits. Give them weapons and armor to make them even stronger!",
 		UDim2.fromOffset(hx, 15), 8)
 	local subX = hx + 32
-	local subL = text(panel, "Hire officers with cash. Each one rolls a rarity and traits; their gear adds attack and defense.", { size = 13, color = C.muted, wrap = true, scaled = true,
+	local subL = text(panel, "Hire officers to boost your nation. Gear them up for more attack and defense!", { size = 13, color = C.muted, wrap = true, scaled = true,
 		pos = UDim2.fromOffset(subX, 8), sz = UDim2.new(1, -subX - 376, 0, 38), z = 7 })
 	-- too narrow (phones): the "i" popup already explains it, so hide the line instead of squashing it
 	local function fitSub() subL.Visible = subL.AbsoluteSize.X >= panel.AbsoluteSize.X * 0.2 end
@@ -12030,7 +12119,7 @@ S.officers = { build = function(host, App)
 		local box = UI.img(card, "inset", { button = true, name = slot, pos = UDim2.new(x, 0, 0, 8), sz = UDim2.new(0.19, -8, 1, -16), z = 8 })
 		if g then
 			local rc = rcol(g.rarity)
-			stroke(box, rc, 2)
+			UI.outline(box, rc, 2)
 			local well = mk("Frame", { BackgroundColor3 = DARK, BorderSizePixel = 0, Position = UDim2.new(0, 6, 0.5, 0), AnchorPoint = Vector2.new(0, 0.5), Size = UDim2.fromOffset(54, 54), ZIndex = 9 }, box)
 			corner(well, 5)
 			if ridx(g.rarity) >= 4 then glow(well, rc, 1.1, 9, 0.8) end
@@ -12039,7 +12128,6 @@ S.officers = { build = function(host, App)
 			text(box, rar(g.rarity).name .. " " .. string.upper(slot), { font = "bold", size = 11, color = rc, pos = UDim2.fromOffset(66, 28), sz = UDim2.new(1, -70, 0, 14), z = 9, truncate = true })
 			text(box, gearStat(g), { font = "bold", size = 12, color = C.good, pos = UDim2.fromOffset(66, 44), sz = UDim2.new(1, -70, 0, 16), z = 9, truncate = true })
 		else
-			stroke(box, C.rule, 1)
 			text(box, (slot == "weapon" and "Weapon" or "Armor") .. ": Empty", { font = "bold", size = 16, color = C.muted, pos = UDim2.fromOffset(12, -8), sz = UDim2.new(1, -20, 1, 0), z = 9, truncate = true })
 			text(box, "Tap to equip", { size = 12, color = C.dim, pos = UDim2.new(0, 12, 0.5, 6), sz = UDim2.new(1, -20, 0, 16), z = 9 })
 		end
@@ -12059,7 +12147,7 @@ S.officers = { build = function(host, App)
 
 	local function playerRow(st, order)
 		local card = UI.card(list, { sz = UDim2.new(1, 0, 0, 92), z = 7, order = order, hot = true })
-		stroke(card, C.gold, 2)
+		UI.outline(card, C.gold, 2)
 		playerPortrait(card, 76, UDim2.fromOffset(36, 8), 8)
 		text(card, "YOU", { font = "display", size = 22, color = C.gold, pos = UDim2.fromOffset(120, 8), sz = UDim2.new(0.3, -124, 0, 26), z = 8 })
 		text(card, "HEAD OF STATE", { font = "heavy", size = 13, color = C.manila, pos = UDim2.fromOffset(120, 36), sz = UDim2.new(0.3, -124, 0, 16), z = 8, truncate = true })
@@ -12084,7 +12172,7 @@ S.officers = { build = function(host, App)
 		local card = UI.card(list, { sz = UDim2.new(1, 0, 0, 92), z = 7, order = order, hot = limited })
 		if limited then
 			-- the special orange LIMITED frame: thick border, warm wash from the left, a LIMITED band under the portrait
-			stroke(card, LIMITED, 3)
+			UI.outline(card, LIMITED, 3)
 			local wash = mk("Frame", { Name = "LimitedWash", BackgroundColor3 = LIMITED, BackgroundTransparency = 0.55, BorderSizePixel = 0, Position = UDim2.fromOffset(3, 3),
 				Size = UDim2.new(0.45, 0, 1, -6), ZIndex = 7 }, card)
 			corner(wash, 8)
@@ -12120,9 +12208,8 @@ S.officers = { build = function(host, App)
 
 	local function hireRow(st, order, free)
 		local card = UI.card(list, { sz = UDim2.new(1, 0, 0, 100), z = 7, order = order })
-		stroke(card, free > 0 and C.rule or C.bad, 1, free > 0 and 0 or 0.4)
 		text(card, free > 0 and (free > 1 and (free .. " EMPTY SLOTS") or "EMPTY SLOT") or "NO FREE SLOT", { font = "display", size = 21, color = free > 0 and C.manila or C.bad, pos = UDim2.fromOffset(16, 8), sz = UDim2.new(0.42, -16, 0, 26), z = 8 })
-		text(card, free > 0 and "A random recruit joins your cabinet. Pricier hires roll rarer officers."
+		text(card, free > 0 and "A new officer joins your cabinet. Pricier hires find rarer officers."
 			or "Every slot is full. <b>Unlock a slot below</b> or fire an officer to hire again.",
 			{ size = 13, color = C.muted, pos = UDim2.fromOffset(16, 34), sz = UDim2.new(0.42, -16, 0, 30), z = 8, wrap = true, rich = true })
 		ratesBtn(App, card, "hire", { pos = UDim2.new(0, 16, 1, -34), sz = UDim2.fromOffset(150, 28) })
@@ -12141,14 +12228,13 @@ S.officers = { build = function(host, App)
 
 	local function lockedRow(st, order)
 		local card = UI.card(list, { sz = UDim2.new(1, 0, 0, 78), z = 7, order = order })
-		stroke(card, C.rule, 1)
 		local cost = st.nextSlotCost
 		local pass = Config.Passes and Config.Passes.BonusOfficer
 		local showPass = pass and not (st.gp and st.gp.BonusOfficer)
 		local rightW = (cost and 264 or 0) + (showPass and 196 or 0)
 		UI.icon(card, "icon_lock", 26, C.dim, UDim2.new(0, 16, 0.5, 0), { z = 8, anchor = Vector2.new(0, 0.5) })
 		text(card, cost and "LOCKED SLOT" or "ALL SLOTS UNLOCKED", { font = "display", size = 21, color = C.muted, pos = UDim2.fromOffset(54, 10), sz = UDim2.new(1, -64 - rightW, 0, 26), z = 8, truncate = true })
-		text(card, cost and "Buy this slot to hire another officer. Each slot costs more than the last." or "You own every officer slot you can buy.",
+		text(card, cost and "Buy this slot to hire another officer." or "You own every officer slot you can buy.",
 			{ size = 13, color = C.muted, pos = UDim2.fromOffset(54, 38), sz = UDim2.new(1, -64 - rightW, 0, 32), z = 8, wrap = true })
 		if cost then
 			local b = UI.button(card, "gold", "UNLOCK SLOT  " .. R.Money(cost), function(btn)
@@ -12173,14 +12259,14 @@ S.officers = { build = function(host, App)
 		if #ltd == 0 then return end
 		local hdr = mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 34), ZIndex = 7, LayoutOrder = order }, list)
 		text(hdr, "LIMITED SLOTS", { font = "display", size = 22, color = LIMITED, pos = UDim2.fromOffset(4, 4), sz = UDim2.fromOffset(190, 28), z = 8 })
-		infoBtn(App, hdr, "LIMITED SLOTS", "Limited officers from <b>Mega VIP</b> and the <b>Limited Bundle</b> sit in their own exclusive slots. "
-			.. "They never take a normal slot, always give their bonuses and can't be fired.", UDim2.fromOffset(200, 8), 8)
+		infoBtn(App, hdr, "LIMITED SLOTS", "Limited officers from <b>Mega VIP</b> and the <b>Limited Bundle</b> get their own bonus slot. "
+			.. "Their boosts are always on!", UDim2.fromOffset(200, 8), 8)
 		for k, o in ipairs(ltd) do officerRow(st, o, nil, order + k) end
 	end
 	-- no limited officer yet: a slim pointer to where they come from
 	local function limitedTeaser(order)
 		local card = UI.card(list, { sz = UDim2.new(1, 0, 0, 60), z = 7, order = order })
-		stroke(card, LIMITED, 1, 0.5)
+		UI.outline(card, LIMITED, 1, { alpha = 0.5 })
 		UI.icon(card, "icon_sparkles", 22, LIMITED, UDim2.new(0, 16, 0.5, 0), { z = 8, anchor = Vector2.new(0, 0.5) })
 		text(card, "<font color='#ff9a2e'><b>LIMITED SLOT</b></font>  Mega VIP and the Limited Bundle add an exclusive officer in their own extra slot.",
 			{ size = 14, color = C.muted, rich = true, wrap = true, pos = UDim2.fromOffset(50, 0), sz = UDim2.new(1, -200, 1, 0), z = 8 })
@@ -12262,7 +12348,7 @@ S.inventory = { build = function(host, App)
 	local obj = { tab = 1, rar = nil, sig = nil }
 	local sub = text(panel, "", { font = "bold", size = 14, color = C.muted, pos = UDim2.fromOffset(250, 16), sz = UDim2.new(1, -300, 0, 22), z = 7, align = Enum.TextXAlignment.Right, rich = true, truncate = true })
 	infoBtn(App, panel, "INVENTORY", "Everything you own. <b>Weapons</b> add attack and <b>armor</b> adds defense when worn by you or one of your officers. "
-		.. "Legendary and better gear rolls a bonus perk.\n\nOpen <b>crates</b> here. Tap a card for details, equip or discard.", UDim2.new(1, -36, 0, 18), 8)
+		.. "Legendary and better gear comes with a bonus perk.\n\nOpen <b>crates</b> here. Tap a card for details, equip or discard.", UDim2.new(1, -36, 0, 18), 8)
 
 	local FILTERS = { "ALL", "WEAPONS", "ARMOR", "OFFICERS", "CRATES" }
 	local tabs = UI.tabs(body, FILTERS, function(i) obj.tab = i; obj.sig = nil; obj:Refresh(App.state) end, { w = 106, textSize = 14, z = 7 })
@@ -12300,11 +12386,11 @@ S.inventory = { build = function(host, App)
 	-- ELITE TROOPS strip (Founder's Crate / Starter Pack): one chip per era you own elite troops of
 	local STRIP_H = 44
 	local strip = UI.img(body, "inset", { name = "EliteStrip", pos = UDim2.fromOffset(0, 44), sz = UDim2.new(1, -12, 0, STRIP_H - 6), z = 7, visible = false })
-	stroke(strip, C.gold, 1.5, 0.3)
+	UI.outline(strip, C.gold, 1.5, { alpha = 0.3 })
 	UI.icon(strip, "icon_crown", 18, C.gold, UDim2.new(0, 10, 0.5, 0), { z = 8, anchor = Vector2.new(0, 0.5) })
 	text(strip, "ELITE TROOPS", { font = "heavy", size = 14, color = C.gold, pos = UDim2.fromOffset(34, 0), sz = UDim2.new(0, 104, 1, 0), z = 8 })
-	infoBtn(App, strip, "ELITE TROOPS", "Elite troops come from the <b>Founder's Crate</b> and the <b>Starter Pack</b>. Each era has one elite unit, much stronger than its regular troops.\n\n"
-		.. "<font color='#f0c75a'><b>Elite troops never die in raids</b></font> and do not use army capacity. They always add their ATK and DEF to your power.", UDim2.new(0, 138, 0.5, -11), 9)
+	infoBtn(App, strip, "ELITE TROOPS", "Find Elite troops in the <b>Founder's Crate</b> and the <b>Starter Pack</b>. They are much stronger than regular troops.\n\n"
+		.. "<font color='#f0c75a'><b>Elite troops never die in raids</b></font> and don't take up army space.", UDim2.new(0, 138, 0.5, -11), 9)
 	local chips = UI.list(strip, { horizontal = true, pos = UDim2.fromOffset(166, 4), sz = UDim2.new(1, -172, 1, -4), gap = 8, z = 8 })
 	chips.ScrollBarThickness = 3
 	local function eliteOf(st)
@@ -12425,7 +12511,7 @@ S.inventory = { build = function(host, App)
 	---------------------------------------------- cards
 	local function card(order, rc, tag)
 		local c = UI.img(grid, "card", { button = true, z = 7, order = order })
-		stroke(c, rc, 2)
+		UI.outline(c, rc, 2)
 		hoverScale(c, 0.05)
 		text(c, tag, { font = "heavy", size = 11, color = C.muted, pos = UDim2.fromOffset(10, 6), sz = UDim2.new(1, -20, 0, 14), z = 9 })
 		local well = mk("Frame", { BackgroundColor3 = DARK, BorderSizePixel = 0, Position = UDim2.fromOffset(8, 22), Size = UDim2.new(1, -16, 0, 98), ZIndex = 8, ClipsDescendants = true }, c)
@@ -12531,8 +12617,8 @@ S.inventory = { build = function(host, App)
 		end
 		rarityBar(c, isBasic and "SUPPLY" or "LIMITED", rc)
 		c.Activated:Connect(function()
-			local body2 = isBasic and ("Gear and officers. Bought with cash: about " .. Config.Crates.Basic.lawMinutes .. " minutes of law income at your level.")
-				or "Gear or <b>ELITE TROOPS</b>. Elite troops never die in raids. A 10-pack guarantees Epic or better. Buy with gold or Robux. Limited time!"
+			local body2 = isBasic and ("Gear and officers. Buy it with cash!")
+				or "Gear or <b>ELITE TROOPS</b> that never die in raids. 10-packs always include Epic or better. Limited time!"
 			local _, bd, close = popup(App, def.name, 460, 250)
 			text(bd, body2, { size = 16, wrap = true, rich = true, sz = UDim2.new(1, 0, 1, -54), valign = Enum.TextYAlignment.Top, z = 74 })
 			UI.button(bd, "slate", "CLOSE", close, { sz = UDim2.fromOffset(150, 42), pos = UDim2.new(0, 0, 1, -4), anchor = Vector2.new(0, 1), z = 74 })
@@ -12731,7 +12817,7 @@ local function countTo(label, value, fmt)
 end
 -- outline that lights up on hover
 local function hoverStroke(UI, gui, color)
-	local st = UI.mk("UIStroke", { Color = color or UI.C.manila, Thickness = 2, Transparency = 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, gui)
+	local _, st = UI.outline(gui, color or UI.C.manila, 2, { alpha = 1 })
 	gui.MouseEnter:Connect(function() tween(st, 0.15, { Transparency = 0.15 }) end)
 	gui.MouseLeave:Connect(function() tween(st, 0.2, { Transparency = 1 }) end)
 	return st
@@ -12844,7 +12930,7 @@ local function buildLoginCards(App, parent, st, onClaimed)
 		end
 		dayL.ZIndex = z
 		if r.big and not claimed then
-			UI.mk("UIStroke", { Color = C.gold, Thickness = 2, Transparency = 0.25 }, card)
+			UI.outline(card, C.gold, 2, { alpha = 0.25 })
 		end
 		local _ = cell
 	end
@@ -12877,7 +12963,7 @@ local function showLogin(App)
 	local _ = x
 	local login = st.login or { idx = 1 }
 	local idx = math.clamp(login.idx or 1, 1, #TK.Login)
-	UI.text(body, "Come back every day for a reward. Day " .. idx .. " of 7 is next. Missed a day? Your sheet pauses, it never resets.",
+	UI.text(body, "Come back every day for a reward.",
 		{ size = 15, color = C.muted, sz = UDim2.new(1, -40, 0, 22), z = 73, truncate = true })
 	local row = UI.mk("Frame", { Name = "Days", BackgroundTransparency = 1, Position = UDim2.fromOffset(0, 34), Size = UDim2.new(1, 0, 0, cardH), ZIndex = 72 }, body)
 	UI.mk("UIGridLayout", { CellSize = UDim2.new(1 / 7, -7, 1, 0), CellPadding = UDim2.fromOffset(8, 0), SortOrder = Enum.SortOrder.LayoutOrder }, row)
@@ -13003,10 +13089,11 @@ local function showFlagEditor(App)
 	-- a pickable cell with a selection ring and an optional lock badge
 	local function pickCell(parent, ord, selected, locked, onPick)
 		local b = UI.img(parent, "inset", { button = true, name = "Pick", order = ord, z = 74 })
-		local ring = UI.mk("UIStroke", { Color = selected and C.gold or C.rule, Thickness = selected and 3 or 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, b)
+		-- selection ring on the plate's own border: gold when picked, manila while hovered, hidden otherwise
+		local _, ring = UI.outline(b, selected and C.gold or C.manila, selected and 3 or 2, { alpha = selected and 0 or 1 })
 		local s = UI.mk("UIScale", {}, b)
-		b.MouseEnter:Connect(function() tween(s, 0.12, { Scale = 1.06 }, Enum.EasingStyle.Back); if not selected then tween(ring, 0.12, { Color = C.manila }) end end)
-		b.MouseLeave:Connect(function() tween(s, 0.15, { Scale = 1 }); if not selected then tween(ring, 0.15, { Color = C.rule }) end end)
+		b.MouseEnter:Connect(function() tween(s, 0.12, { Scale = 1.06 }, Enum.EasingStyle.Back); if not selected then tween(ring, 0.12, { Transparency = 0 }) end end)
+		b.MouseLeave:Connect(function() tween(s, 0.15, { Scale = 1 }); if not selected then tween(ring, 0.15, { Transparency = 1 }) end end)
 		b.Activated:Connect(onPick)
 		if locked then
 			local lb = UI.img(b, "circle", { sz = UDim2.fromOffset(18, 18), pos = UDim2.new(1, -2, 0, 2), anchor = Vector2.new(1, 0), color = C.black, z = 78, slice = false })
@@ -13094,7 +13181,7 @@ local function showFlagEditor(App)
 		end)
 		UI.button(row, "slate", "CLEAR", function() f.img = nil; box.Text = ""; drawPreview() end, { pos = UDim2.new(1, -6, 0.5, 0), anchor = Vector2.new(1, 0.5), sz = UDim2.fromOffset(80, 34), z = 75, textSize = 13 })
 		order += 1
-		text(list, "Covers the whole flag. Roblox moderates every uploaded image.", { size = 12, color = C.dim, sz = UDim2.new(1, 0, 0, 16), z = 73, order = order })
+		text(list, "Your image covers the whole flag.", { size = 12, color = C.dim, sz = UDim2.new(1, 0, 0, 16), z = 73, order = order })
 
 		drawPreview()
 	end
@@ -13128,7 +13215,7 @@ local function buildUpgrades(App, parent, opts)
 	local freeN = text(freeCard, "0", { font = "display", size = 36, color = C.gold, pos = UDim2.fromOffset(14, 0), sz = UDim2.fromOffset(80, 58), z = z + 1, align = Enum.TextXAlignment.Center, scaled = true })
 	text(freeCard, "SKILL POINTS FREE", { font = "heavy", size = 17, color = C.gold, pos = UDim2.fromOffset(100, 8), sz = UDim2.new(1, -110, 0, 22), z = z + 1, truncate = true })
 	local freeSub = text(freeCard, "", { size = 13, color = C.muted, pos = UDim2.fromOffset(100, 30), sz = UDim2.new(1, -110, 0, 18), z = z + 1, truncate = true })
-	local freeStroke = UI.mk("UIStroke", { Color = C.gold, Thickness = 2, Transparency = 1 }, freeCard)
+	local _, freeStroke = UI.outline(freeCard, C.gold, 2, { alpha = 1 })
 	task.spawn(function()
 		while freeCard.Parent do
 			if (App.state and App.state.skillFree or 0) > 0 then
@@ -13179,7 +13266,7 @@ local function buildUpgrades(App, parent, opts)
 	function obj:Refresh(st)
 		if not st then return end
 		countTo(freeN, st.skillFree or 0, function(v) return tostring(math.floor(v + 0.5)) end)
-		freeSub.Text = "+3 every level · +1 per Gold law (" .. (st.goldLaws or 0) .. " so far)"
+		freeSub.Text = "Level up and master laws to earn more"
 		drawUpgrades(st)
 	end
 	return obj
@@ -13208,7 +13295,7 @@ local function showUpgrades(App)
 		tw.Completed:Connect(function() if panel.Parent then host.Visible = false; UI.clear(host) end end)
 	end
 	UI.button(panel, "slate", "", function() close() end, { pos = UDim2.new(1, -14, 0, 12), anchor = Vector2.new(1, 0), sz = UDim2.fromOffset(38, 36), z = 75, icon = "icon_x", iconSize = 18 })
-	infoButton(UI, App, panel, UDim2.new(1, -84, 0, 30), "SKILL POINTS", "You get +3 skill points every level and +1 for every law you take to Gold mastery. Spend them here on permanent upgrades.", 75)
+	infoButton(UI, App, panel, UDim2.new(1, -84, 0, 30), "SKILL POINTS", "Earn skill points by leveling up and mastering laws. Spend them here on permanent upgrades!", 75)
 	local obj = buildUpgrades(App, body, { z = 73, scroll = true })
 	obj:Refresh(st)
 	upgradesPopup = { panel = panel, obj = obj }
@@ -13271,7 +13358,7 @@ S.country = { build = function(host, App)
 	local loginHead = UI.mk("Frame", { Name = "LoginHead", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 34), ZIndex = 7, LayoutOrder = 2 }, list)
 	text(loginHead, "DAILY LOGIN", { font = "display", size = 26, color = C.gold, sz = UDim2.new(0, 220, 1, 0), z = 8 })
 	infoButton(UI, App, loginHead, UDim2.new(0, 200, 0.5, 0), "DAILY LOGIN SHEET",
-		"Claim one reward each day you play. Missed a day? The sheet PAUSES: you keep your place. Day 7 is the big one: 30 gold + a Founder's Crate.", 9)
+		"Come back every day for a reward. Day 7 is the big one: 30 gold + a Founder's Crate!", 9)
 	local loginRight = text(loginHead, "", { font = "heavy", size = 18, color = C.ink, align = Enum.TextXAlignment.Right, sz = UDim2.new(1, -240, 1, 0), pos = UDim2.fromOffset(240, 0), z = 8, rich = true })
 	local loginRowH = contentW < 760 and 150 or 168
 	local loginRow = UI.mk("Frame", { Name = "LoginRow", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, loginRowH), ZIndex = 7, LayoutOrder = 3 }, list)
@@ -13285,7 +13372,7 @@ S.country = { build = function(host, App)
 	local statsP, statsB = UI.panel(two, "YOUR STATS", { plain = true, sz = UDim2.new(0.5, -6, 1, 0), z = 7, titleSize = 24 })
 	local upP, upB = UI.panel(two, "YOUR UPGRADES", { plain = true, sz = UDim2.new(0.5, -6, 1, 0), pos = UDim2.new(0.5, 6, 0, 0), z = 7, titleSize = 24 })
 	local _ = statsP
-	infoButton(UI, App, upP, UDim2.new(1, -34, 0, 28), "SKILL POINTS", "You get +3 skill points every level and +1 for every law you take to Gold mastery. Spend them here on permanent upgrades.", 10)
+	infoButton(UI, App, upP, UDim2.new(1, -34, 0, 28), "SKILL POINTS", "Earn skill points by leveling up and mastering laws. Spend them here on permanent upgrades!", 10)
 
 	-- stats: identity header
 	local idRow = UI.mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 44), ZIndex = 9 }, statsB)
@@ -13303,7 +13390,7 @@ S.country = { build = function(host, App)
 		local st = App.state
 		local prod = Config.Products and Config.Products.ChangeGovernment
 		local free = (st.govCredit or 0) > 0
-		text(b, free and "You have a free change. Pick your new government." or ("Each change costs R$ " .. (prod and prod.robux or 99) .. ". Your current government is lit."), { size = 15, color = C.muted, sz = UDim2.new(1, 0, 0, 22), z = 87 })
+		text(b, free and "You have a free change. Pick your new government." or ("Each change costs R$ " .. (prod and prod.robux or 99) .. "."), { size = 15, color = C.muted, sz = UDim2.new(1, 0, 0, 22), z = 87 })
 		local grid = UI.mk("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(0, 30), Size = UDim2.new(1, 0, 1, -30), ZIndex = 87 }, b)
 		UI.mk("UIGridLayout", { CellSize = UDim2.new(1 / 3, -8, 0, 170), CellPadding = UDim2.fromOffset(12, 12), SortOrder = Enum.SortOrder.LayoutOrder }, grid)
 		local icons = { republic = "icon_landmark", monarchy = "icon_crown", federation = "icon_globe", junta = "icon_military", theocracy = "icon_sparkles", technocracy = "icon_rocket" }
@@ -13538,12 +13625,12 @@ end
 local WEEKLY_COLOR = Color3.fromHex("a77bff")
 -- short subtitles under each order, by task key
 local SUB = {
-	laws = "Pass laws on the Laws tab.", trips = "Convoys that arrive at a city.", raids = "Win raids against other players.",
+	laws = "Pass laws on the Laws tab.", trips = "Deliver convoys to any city.", raids = "Win raids against other players.",
 	build = "Build on your lots in Properties.", hits = "Siege a city or hit the boss.", units = "Recruit soldiers in Military.",
 	boss = "Bring the era boss down.", deposit = "Put any amount in the bank.", donate = "Give cash to your alliance treasury.",
-	hire = "Hire from the Officers tab.", crate = "Open any crate.", influence = "Influence spent on laws.",
-	supply = "Supply spent on attacks.", level = "Level up your country.", earn = "Counted in minutes of law income.",
-	moves = "Different destination cities.", online = "Minutes played.", siege = "Alliance siege hits on cities.",
+	hire = "Hire from the Officers tab.", crate = "Open any crate.", influence = "Spend Influence on laws.",
+	supply = "Spend Supply on attacks.", level = "Level up your country.", earn = "Pass laws to earn cash.",
+	moves = "Send convoys to different cities.", online = "Just keep playing!", siege = "Hit cities with your alliance.",
 }
 
 local function hms(sec)
@@ -13556,7 +13643,7 @@ local function tween(o, t, props, style)
 	return tw
 end
 local function hoverStroke(UI, gui, color, base)
-	local st = UI.mk("UIStroke", { Color = color, Thickness = 2, Transparency = base or 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, gui)
+	local _, st = UI.outline(gui, color, 2, { alpha = base or 1 })
 	gui.MouseEnter:Connect(function() tween(st, 0.15, { Transparency = 0.1 }) end)
 	gui.MouseLeave:Connect(function() tween(st, 0.2, { Transparency = base or 1 }) end)
 	return st
@@ -13631,7 +13718,7 @@ S.tasks = { build = function(host, App)
 
 	local function rowFrame(order, gold)
 		local card = UI.card(list, { sz = UDim2.new(1, 0, 0, 76), z = 7, order = order, hot = gold })
-		if gold then UI.mk("UIStroke", { Color = C.gold, Thickness = 2, Transparency = 0.15 }, card)
+		if gold then UI.outline(card, C.gold, 2, { alpha = 0.15 })
 		else hoverStroke(UI, card, C.manila) end
 		return card
 	end
@@ -13768,7 +13855,7 @@ S.tasks = { build = function(host, App)
 		obj.timers = {}
 		local seals = st.seals or 0
 		local head = UI.mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 30), ZIndex = 7, LayoutOrder = 0 }, list)
-		text(head, "Merits come only from orders. They cannot be traded or bought.", { size = 15, color = C.muted, sz = UDim2.new(1, -180, 1, 0), z = 8, truncate = true })
+		text(head, "Finish orders to earn Merits.", { size = 15, color = C.muted, sz = UDim2.new(1, -180, 1, 0), z = 8, truncate = true })
 		local contentW = App.W() - App.NAVW - 20 - 28
 		local cols = contentW >= 980 and 4 or 3
 		local grid = UI.mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, ZIndex = 7, LayoutOrder = 1 }, list)
@@ -13779,7 +13866,7 @@ S.tasks = { build = function(host, App)
 			local cell = UI.mk("Frame", { Name = "Cell", BackgroundTransparency = 1, LayoutOrder = k, ZIndex = 7 }, grid)
 			local isCrate = it.icon == "crate_basic" or it.icon == "crate_limited"
 			local card = UI.card(cell, { sz = UDim2.fromScale(1, 1), z = 8, hot = it.key == "limited" })
-			local stroke = UI.mk("UIStroke", { Color = it.key == "limited" and C.gold or C.manila, Thickness = 2, Transparency = it.key == "limited" and 0.3 or 1 }, card)
+			local _, stroke = UI.outline(card, it.key == "limited" and C.gold or C.manila, 2, { alpha = it.key == "limited" and 0.3 or 1 })
 			cell.MouseEnter:Connect(function()
 				tween(card, 0.15, { Position = UDim2.fromOffset(0, -5) }, Enum.EasingStyle.Back)
 				tween(stroke, 0.15, { Transparency = 0.05 })
@@ -14166,11 +14253,11 @@ M._settings = { init = function(App)
 	local function hoverCard(card, stroke, img)
 		local scale = img and mk("UIScale", {}, img)
 		card.MouseEnter:Connect(function()
-			if stroke then tween(stroke, 0.15, { Thickness = 3, Transparency = 0 }) end
+			if stroke then tween(stroke, 0.15, { Transparency = 0 }) end
 			if scale then tween(scale, 0.2, { Scale = 1.07 }, Enum.EasingStyle.Back) end
 		end)
 		card.MouseLeave:Connect(function()
-			if stroke then tween(stroke, 0.15, { Thickness = 1.5, Transparency = 0.35 }) end
+			if stroke then tween(stroke, 0.15, { Transparency = 0.35 }) end
 			if scale then tween(scale, 0.2, { Scale = 1 }) end
 		end)
 	end
@@ -14244,7 +14331,7 @@ M._settings = { init = function(App)
 			card.MouseLeave:Connect(function() tween(glow, 0.15, { BackgroundTransparency = 1 }) end)
 		end
 		local foot = mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 30), ZIndex = 73, LayoutOrder = 100 }, list)
-		text(foot, "Settings are saved to your country and follow you to every server.", { size = 13, color = C.dim, sz = UDim2.fromScale(1, 1), z = 74, align = Enum.TextXAlignment.Center })
+		text(foot, "Your settings are saved to your country.", { size = 13, color = C.dim, sz = UDim2.fromScale(1, 1), z = 74, align = Enum.TextXAlignment.Center })
 	end
 
 	-- GAME GUIDE
@@ -14267,52 +14354,52 @@ M._settings = { init = function(App)
 		return {
 			{ title = "YOUR COUNTRY", img = "country_era3", crop = true, color = "e2cfa3", lines = {
 				"Pass " .. kw("LAWS", M2) .. " with " .. kw("Influence", "e0a650") .. " to earn " .. kw("cash", G) .. " and " .. kw("XP", "b19cff") .. ".",
-				"Each level unlocks at most " .. kw("one new law", M2) .. ". New " .. kw("eras", B) .. " change how your country looks.",
-				"Level-ups give " .. kw("skill points", "b19cff") .. " for permanent stat upgrades.",
+				"Level up to unlock " .. kw("new laws", M2) .. ". New " .. kw("eras", B) .. " change how your country looks.",
+				"Level-ups give " .. kw("skill points", "b19cff") .. " for permanent upgrades.",
 			} },
 			{ title = "PROPERTIES", img = "prop_e3_t2", color = G, lines = {
 				"Build on your " .. kw("lots", G) .. " for steady " .. kw("cash per hour", G) .. ".",
-				"They keep earning while you are " .. kw("offline", B) .. " (up to 12 hours).",
-				"Better buildings unlock as you level up. Buy more lots to build more.",
+				"They keep earning even while you are " .. kw("offline", B) .. "!",
+				"Level up for better buildings. Buy more lots to build more.",
 			} },
 			{ title = "OFFICERS & GEAR", img = "gear_saber", color = P, lines = {
 				"Hire in 3 tiers: " .. table.concat(hireText, " · ") .. ". Better tiers, rarer officers.",
-				(#rarities > 0 and (#rarities .. " rarities: " .. table.concat(rarities, ", ")) or "8 rarities from Common to Forbidden") .. ". Rarer = more and bigger traits.",
+				(#rarities > 0 and (#rarities .. " rarities: " .. table.concat(rarities, ", ")) or "8 rarities from Common to Forbidden") .. ". Rarer officers have bigger traits.",
 				"Officers " .. kw("never die", G) .. " in battle. Equip " .. kw("weapons", Rd) .. " and " .. kw("armor", B) .. " on them and on " .. kw("YOU", M2) .. ".",
-				"Every officer is unique. Every new slot costs more than the last.",
+				"Every officer is unique. Collect the best!",
 			} },
 			{ title = "CRATES", img = "crate_limited", color = O2, lines = {
-				kw("Supply Crate", B) .. ": bought with cash (about " .. basic.lawMinutes .. " min of law income).",
-				kw("Founder's Crate", O2) .. ": " .. kw(limited.gold .. " gold", M2) .. " or Robux. Same crate, so everyone chases the same items.",
-				"Mostly " .. kw("cool gear", P) .. ", sometimes an " .. kw("officer", T) .. ". The limited crate rotates.",
+				kw("Supply Crate", B) .. ": buy it with cash.",
+				kw("Founder's Crate", O2) .. ": " .. kw(limited.gold .. " gold", M2) .. " or Robux, packed with the best loot.",
+				"Win " .. kw("cool gear", P) .. " and rare " .. kw("officers", T) .. ".",
 			} },
 			{ title = "ORDERS & MERITS", img = "icon_seal", color = M2, lines = {
 				kw("Daily orders", G) .. " (easy, medium, hard) pay " .. kw("Merits", M2) .. " and cash. Finish all for a bonus.",
-				kw("Weekly challenges", P) .. " reset Monday. Clear all 5 for a chest with Rare+ gear.",
-				"One " .. kw("free replace", B) .. " per day for an order you do not like.",
+				kw("Weekly challenges", P) .. ": clear all 5 for a chest of Rare+ gear.",
+				"Don't like an order? " .. kw("Replace it free", B) .. " once a day.",
 				"Spend Merits in the " .. kw("Merits Shop", M2) .. ": refills, shields, crates.",
 			} },
 			{ title = "CONVOYS", img = "convoy_ship", color = B, lines = {
-				"Send goods between world capitals. Pay is " .. kw("locked", M2) .. " when you send.",
-				"Distance alone does not pay: trade between " .. kw("different regions", B) .. " (Europe to Asia) pays most.",
-				"City " .. kw("wants change", O2) .. " as players deliver, so watch for new demand.",
-				"Alliances that hold a city " .. kw("tax", Rd) .. " the trade passing through it.",
+				"Send goods between world capitals for " .. kw("big pay", M2) .. ".",
+				"Trade between " .. kw("different regions", B) .. " (Europe to Asia) pays the most.",
+				"Watch for cities with " .. kw("new demand", O2) .. ".",
+				"Hold a city with your alliance to " .. kw("tax", Rd) .. " its trade.",
 			} },
 			{ title = "RAIDS", img = "enemy_soldier", color = Rd, lines = {
 				"Raid players in your server and " .. kw(raid.AICount .. " AI nations", Rd) .. " that raid back.",
-				"Win to take " .. kw(math.floor(raid.StealPct * 100 + 0.5) .. "% of their cash on hand", G) .. ", capped at about " .. kw(math.floor(raid.CapLawMinutes / 60 + 0.5) .. "h of their law income", M2) .. ".",
-				kw("Banked cash is safe", B) .. ". Soldiers die on both sides; officers never do.",
+				"Win to take " .. kw(math.floor(raid.StealPct * 100 + 0.5) .. "% of their cash on hand", G) .. ".",
+				kw("Banked cash is safe", B) .. ". Officers never fall in battle.",
 				"Raided? Hit " .. kw("REVENGE", Rd) .. " to strike back in one tap.",
 			} },
 			{ title = "THE BANK", img = "icon_bank", icon = true, color = G, lines = {
 				"Deposits cost a " .. kw(math.floor(bank.DepositFee * 100 + 0.5) .. "% fee", Rd) .. ". Withdrawals are " .. kw("free", G) .. ".",
-				"Earn " .. kw((bank.InterestPerHour * 100) .. "% interest per hour", G) .. " (" .. kw("half rate offline", B) .. ", up to 12 h).",
+				"Earn " .. kw((bank.InterestPerHour * 100) .. "% interest every hour", G) .. ".",
 				"Banked cash " .. kw("cannot be stolen", B) .. " in raids. Withdraw before you buy.",
 			} },
 			{ title = "LAW MASTERY", img = "medal_gold", color = M2, lines = {
-				"Every pass of a law counts toward its medals.",
-				kw("Bronze", "cd7f32") .. " " .. at[1] .. " passes: +" .. pct[2] .. "% cash and XP.  " .. kw("Silver", "c0c6cc") .. " " .. at[2] .. ": +" .. pct[3] .. "% and 5% less Influence.",
-				kw("Gold", M2) .. " " .. at[3] .. " passes: +" .. pct[4] .. "% and " .. kw("+1 skill point", "b19cff") .. ". A reason to master every law.",
+				"Pass the same law again and again to earn medals.",
+				kw("Bronze", "cd7f32") .. ", " .. kw("Silver", "c0c6cc") .. " and " .. kw("Gold", M2) .. " medals boost that law's cash and XP.",
+				"Gold also gives " .. kw("+1 skill point", "b19cff") .. ". Master every law!",
 			} },
 		}
 	end
@@ -14320,7 +14407,7 @@ M._settings = { init = function(App)
 	pages[2] = function(page, mw)
 		local list = UI.list(page, { gap = 10, z = 73 })
 		local intro = mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 30), ZIndex = 73, LayoutOrder = 0 }, list)
-		text(intro, "HOW " .. kw("IDLE COUNTRY", "e2cfa3") .. " WORKS: the 10 systems that grow your nation", { font = "heavy", size = 15, color = C.muted, rich = true, sz = UDim2.fromScale(1, 1), z = 74, pos = UDim2.fromOffset(4, 0) })
+		text(intro, "HOW TO PLAY " .. kw("IDLE COUNTRY", "e2cfa3"), { font = "heavy", size = 15, color = C.muted, rich = true, sz = UDim2.fromScale(1, 1), z = 74, pos = UDim2.fromOffset(4, 0) })
 		local cardW = mw - 28 - 14
 		local imgW = cardW < 640 and 150 or 200
 		local imgH = math.floor(imgW * 0.66)
@@ -14333,7 +14420,7 @@ M._settings = { init = function(App)
 			for k, line in ipairs(g.lines) do hs[k] = textH("•  " .. line, 15, textW - 4); total += hs[k] + 4 end
 			local h = math.max(imgH + 28, 16 + titleH + 6 + total + 12)
 			local card = UI.card(list, { button = true, sz = UDim2.new(1, 0, 0, h), z = 73, order = i })
-			local stroke = mk("UIStroke", { Color = acc, Thickness = 1.5, Transparency = 0.35, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, card)
+			local _, stroke = UI.outline(card, acc, 2, { alpha = 0.35 })
 			local tint = mk("Frame", { BackgroundColor3 = acc, BackgroundTransparency = 0.88, BorderSizePixel = 0, Position = UDim2.fromOffset(4, 4), Size = UDim2.new(1, -8, 1, -8), ZIndex = 73 }, card)
 			mk("UICorner", { CornerRadius = UDim.new(0, 6) }, tint)
 			mk("UIGradient", { Transparency = NumberSequence.new(0, 0.85) }, tint)
@@ -14388,7 +14475,6 @@ M._settings = { init = function(App)
 			local latest = i == 1
 			local acc = latest and C.gold or C.blue
 			local card = UI.card(list, { hot = latest, sz = UDim2.new(1, 0, 0, h), z = 73, order = i })
-			mk("Frame", { BackgroundColor3 = acc, BorderSizePixel = 0, Position = UDim2.fromOffset(6, 10), Size = UDim2.new(0, 4, 1, -20), ZIndex = 74 }, card)
 			local top = mk("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(22, 14), Size = UDim2.new(1, -40, 0, 32), ZIndex = 74 }, card)
 			mk("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder, VerticalAlignment = Enum.VerticalAlignment.Center }, top)
 			local badge = chip(top, string.upper(e.version or "?"), acc, C.black, { h = 30, size = 16, z = 75, order = 1 })
@@ -14459,7 +14545,7 @@ M._settings = { init = function(App)
 			UI.clear(modalHost)
 			modalHost.Visible = true
 			local panel = UI.img(modalHost, "panel", { name = "GroupPopup", sz = UDim2.fromOffset(440, 330), pos = UDim2.fromScale(0.5, 0.5), anchor = Vector2.new(0.5, 0.5), z = 71 })
-			mk("UIStroke", { Color = C.gold, Thickness = 2, Transparency = 0.3 }, panel)
+			UI.outline(panel, C.gold, 2, { alpha = 0.3 })
 			-- emblem with the classic rotating gold beams behind it (Kash 18:41: no pulsing circle)
 			if calm() then
 				UI.img(panel, "glow_soft", { slice = false, z = 72, sz = UDim2.fromOffset(150, 150), pos = UDim2.new(0.5, 0, 0, 72), anchor = Vector2.new(0.5, 0.5), color = C.gold, alpha = 0.4 })
@@ -14683,11 +14769,9 @@ local function shine(card, period, delay)
 	return clip
 end
 
--- animated gradient border (rotating colours) on a card
+-- animated gradient border (rotating colours) on a card, sitting exactly on the card plate's own border
 local function gradBorder(card, colors, th)
-	local ring = mk("Frame", { Name = "GradBorder", BackgroundTransparency = 1, Size = UDim2.new(1, -2, 1, -2), Position = UDim2.fromOffset(1, 1), ZIndex = 24 }, card)
-	corner(ring, 10)
-	local st = stroke(ring, C.white, th or 3)
+	local ring, st = UI.outline(card, C.white, th or 3, { name = "GradBorder", z = 24 })
 	local seq = {}
 	for i, c in ipairs(colors) do table.insert(seq, ColorSequenceKeypoint.new((i - 1) / (#colors - 1), c)) end
 	local g = mk("UIGradient", { Color = ColorSequence.new(seq) }, st)
@@ -14724,10 +14808,8 @@ local function liftCard(parent, p)
 		LayoutOrder = p.order or 0, ZIndex = 7 }, parent)
 	if p.halo then halo(cell, p.halo[1], p.halo[2], 7, p.haloPad) end
 	local card = UI.card(cell, { hot = p.hot, sz = UDim2.fromScale(1, 1), pos = UDim2.fromScale(0.5, 0.5), anchor = Vector2.new(0.5, 0.5), z = 8 })
-	local ring = mk("Frame", { Name = "HoverGlow", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 23 }, card)
-	corner(ring, 10)
 	local base = p.baseGlow or 1
-	local gs = stroke(ring, p.glow or C.manila, 2, base)
+	local _, gs = UI.outline(card, p.glow or C.manila, 2, { name = "HoverGlow", alpha = base, z = 23 })
 	local sc = mk("UIScale", {}, card)
 	card.MouseEnter:Connect(function()
 		tw(card, 0.16, { Position = UDim2.new(0.5, 0, 0.5, -4) }, Enum.EasingStyle.Back)
@@ -14753,6 +14835,28 @@ local function ownButton(parent, kind, label, fn, p)
 		own.Inst.Visible = owned and true or false
 		if ownedLabel then own:Set(nil, ownedLabel) end
 		if buyKind or buyLabel then b:Set(buyKind, buyLabel) end
+	end
+	return obj
+end
+
+-- OWNED cover for a one-time purchase: a grey kit plate over the whole card (same 9-slice corners and border as the
+-- card, so it lines up exactly) with OWNED and a thank you. It swallows clicks, so nothing under it can be pressed.
+-- obj:Set(owned, ownBtn) shows / hides it; ownBtn (an ownButton) is hidden entirely while covered.
+local function ownedCover(card, z)
+	z = z or 40
+	local cover = UI.img(card, "inset", { button = true, name = "OwnedCover", alpha = 0.1, z = z, visible = false })
+	cover.Selectable = false
+	text(cover, "OWNED", { name = "Owned", font = "display", size = 64, scaled = true, color = C.ink, stroke = 1.5, align = Enum.TextXAlignment.Center,
+		anchor = Vector2.new(0.5, 1), pos = UDim2.new(0.5, 0, 0.5, 8), sz = UDim2.new(1, -24, 0.34, 0), z = z + 1 })
+	text(cover, "THANK YOU FOR YOUR SUPPORT!", { name = "Thanks", font = "heavy", size = 18, scaled = true, color = C.manila, stroke = 1, align = Enum.TextXAlignment.Center,
+		anchor = Vector2.new(0.5, 0), pos = UDim2.new(0.5, 0, 0.5, 12), sz = UDim2.new(1, -24, 0, 24), z = z + 1 })
+	local obj = { Inst = cover }
+	function obj:Set(owned, ownBtn)
+		cover.Visible = owned and true or false
+		if ownBtn and owned then
+			ownBtn.buy.Inst.Visible = false
+			ownBtn.own.Inst.Visible = false
+		end
 	end
 	return obj
 end
@@ -15005,11 +15109,15 @@ S.shop = { build = function(host, App)
 			if st and st.starter then return end
 			buyProduct("StarterPack", btn)
 		end, { sz = UDim2.fromOffset(rightW - 14, 54), pos = UDim2.new(1, -14, 1, -14), anchor = Vector2.new(1, 1), z = 14, textSize = 22 })
+		local cover = ownedCover(card)
 		up(function(st)
-			local show = (not st.starter) and (tonumber(st.lv) or 1) <= SP.maxLevel
+			-- owners keep seeing the card under the OWNED cover; everyone else sees it only while it is on offer
+			local owned = st.starter and true or false
+			local show = (tonumber(st.lv) or 1) <= SP.maxLevel -- owners see the OWNED cover until they outgrow the offer
 			head.Visible = show
 			wrap.Visible = show
-			buy:Set(st.starter and true or false, "OWNED")
+			buy:Set(owned, "OWNED")
+			cover:Set(owned, buy)
 			local era = math.clamp(tonumber(st.era) or R.EraOf(tonumber(st.lv) or 1) or 1, 1, 8)
 			prop.Image = UI.asset("prop_e" .. era .. "_t3")
 			local unit = M.Elite[era]
@@ -15020,7 +15128,7 @@ S.shop = { build = function(host, App)
 	------------------------------------------------------------ 1. LIMITED hero row
 	local function hero()
 		local L = Config.Crates.Limited
-		section("limited", "LIMITED TIME", "Founder's offers leave the shop when the timer runs out", "icon_sparkles", C.gold)
+		section("limited", "LIMITED TIME", "Grab these before they're gone!", "icon_sparkles", C.gold)
 		local W = innerW()
 		local pad = 10
 		local gap = 16
@@ -15060,17 +15168,12 @@ S.shop = { build = function(host, App)
 			if App.state and App.state.bundle then return end
 			buyProduct("LimitedBundle", btn)
 		end, { sz = UDim2.fromOffset(math.min(230, bw - 130), 48), pos = UDim2.new(1, -16, 1, -14), anchor = Vector2.new(1, 1), z = 27, textSize = 19 })
-		-- big OWNED stamp
-		local stamp = mk("Frame", { Name = "Stamp", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.42), Size = UDim2.fromOffset(220, 64),
-			Rotation = -12, ZIndex = 28, Visible = false }, bc)
-		corner(stamp, 8)
-		stroke(stamp, C.gold, 4)
-		text(stamp, "OWNED", { font = "display", size = 44, color = C.gold, align = Enum.TextXAlignment.Center, sz = UDim2.fromScale(1, 1), z = 29, stroke = 1.5 })
+		local bcover = ownedCover(bc)
 		up(function(st)
 			local owned = st.bundle and true or false
 			local over = crateOver()
 			bbtn:Set(owned, "OWNED", over and "locked" or "green", over and "SOLD OUT" or nil)
-			stamp.Visible = owned
+			bcover:Set(owned, bbtn)
 			bart.ImageTransparency = owned and 0.3 or 0
 			onceL.Text = owned and "IN YOUR ROSTER" or "ONE PER PLAYER"
 		end)
@@ -15082,8 +15185,8 @@ S.shop = { build = function(host, App)
 		-------------------------------------------------- FOUNDER'S CRATE
 		local _, cc = liftCard(row, { name = "Crate", sz = UDim2.fromOffset(cw, H), pos = stack and UDim2.fromOffset(0, H + gap) or UDim2.fromOffset(bw + gap, 0), glow = LIMITED, baseGlow = 0.7 })
 		text(cc, L.name, { font = "display", size = 22, color = C.manila, pos = UDim2.fromOffset(16, 10), sz = UDim2.new(1, -60, 0, 28), z = 10, truncate = true })
-		infoBtn(App, cc, L.name, "One crate, two prices: open one now for <b>" .. L.gold .. " gold</b>, or buy Robux packs that go to your <b>Inventory</b> to open any time.\n\n"
-			.. "Gear or <b>ELITE TROOPS</b> that never die in raids. The <b>10-pack</b> guarantees at least one <b>Epic or better</b>. Tap <b>DROP RATES</b> for every % chance.",
+		infoBtn(App, cc, L.name, "Open one now for <b>" .. L.gold .. " gold</b>, or grab a Robux pack and open them any time from your <b>Inventory</b>.\n\n"
+			.. "Win gear or <b>ELITE TROOPS</b> that never die in raids. The <b>10-pack</b> always has an <b>Epic or better</b>. Tap <b>DROP RATES</b> to see the odds.",
 			UDim2.new(1, -34, 0, 14), 30)
 		local cTimer = text(cc, "", { font = "heavy", size = 13, color = LIMITED, pos = UDim2.fromOffset(16, 38), sz = UDim2.new(1, -32, 0, 18), z = 10 })
 		-- left column (DROP RATES, PITY, owned crates), the crate centred in the space to its right so they never overlap
@@ -15130,7 +15233,7 @@ S.shop = { build = function(host, App)
 			end, { sz = UDim2.fromOffset(pw, 44), pos = UDim2.fromOffset(x, 272), z = 12, textSize = 16 })
 			packBtns[i] = b
 			if pk.n == 10 then
-				stroke(b.Inst, C.gold, 2, 0.1)
+				UI.outline(b.Inst, C.gold, 2, { alpha = 0.1 })
 				local t = tag(cc, "BEST VALUE", C.gold, C.manilaInk, { pos = UDim2.fromOffset(x + pw / 2, 264), anchor = Vector2.new(0.5, 0.5), z = 16, h = 18, size = 11, rot = -4 })
 				local ts = mk("UIScale", {}, t)
 				tw(ts, 0.8, { Scale = 1.08 }, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
@@ -15163,7 +15266,7 @@ S.shop = { build = function(host, App)
 	------------------------------------------------------------ 2. SUPPLY CRATE (free path)
 	local function supply()
 		local B = Config.Crates.Basic
-		section("supply", "SUPPLY CRATE", "Free to play: bought with cash. Price = " .. B.lawMinutes .. " min of law income at your level", "icon_package", C.manila)
+		section("supply", "SUPPLY CRATE", "Gear and officers, bought with cash", "icon_package", C.manila)
 		local W = innerW()
 		local wrap = mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 132), LayoutOrder = nextOrder(), ZIndex = 7 }, list)
 		mk("UIPadding", { PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 8), PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8) }, wrap)
@@ -15199,7 +15302,7 @@ S.shop = { build = function(host, App)
 
 	------------------------------------------------------------ 3. VIP
 	local function vip()
-		section("vip", "VIP", "Forever perks and a chat tag everyone sees · Mega VIP replaces VIP (they do not stack)", "icon_crown", VIPGOLD)
+		section("vip", "VIP", "Forever perks and a chat tag everyone sees", "icon_crown", VIPGOLD)
 		local H = 236
 		local g, cw = grid(330, H, 18, 2, 12)
 		local function vipCard(key, order, color, perks, premium, slides)
@@ -15225,11 +15328,11 @@ S.shop = { build = function(host, App)
 				shine(card, 2.8, 1.2)
 				ribbon(card, "BEST", PINK, C.white)
 			end
-			return btn, img
+			return btn, img, ownedCover(card)
 		end
 		local V, MV = Config.VIP.VIP, Config.VIP.MegaVIP
 		local function pctOf(x) return math.floor(x * 100 + 0.5) end
-		local vb, vimg = vipCard("VIP", 1, VIPGOLD, {
+		local vb, vimg, vcover = vipCard("VIP", 1, VIPGOLD, {
 			"+" .. pctOf(V.cash) .. "% cash from everything",
 			"+" .. pctOf(V.regen) .. "% faster Influence regen",
 			"<font color='#f0c75a'>[VIP]</font> chat tag",
@@ -15240,7 +15343,7 @@ S.shop = { build = function(host, App)
 			{ icon = "icon_crown", tile = VIPGOLD, label = "[VIP] CHAT TAG" },
 		})
 		local vipOfficer = O.VIPOfficer()
-		local mb, mimg = vipCard("MegaVIP", 2, PINK, {
+		local mb, mimg, mcover = vipCard("MegaVIP", 2, PINK, {
 			"+" .. pctOf(MV.cash) .. "% cash from everything",
 			"+" .. pctOf(MV.regen) .. "% faster Influence regen",
 			"LIMITED officer <b><font color='#ff9a2e'>" .. vipOfficer.name .. "</font></b>",
@@ -15258,6 +15361,8 @@ S.shop = { build = function(host, App)
 			if gp.MegaVIP and not gp.VIP then vb:Set(true, "MEGA VIP ACTIVE") else vb:Set(gp.VIP and true or false, "OWNED") end
 			vimg:Dim((gp.VIP or gp.MegaVIP) and true or false)
 			mimg:Dim(gp.MegaVIP and true or false)
+			vcover:Set(gp.VIP and true or false, vb)
+			mcover:Set(gp.MegaVIP and true or false, mb)
 		end)
 	end
 
@@ -15286,10 +15391,12 @@ S.shop = { build = function(host, App)
 				k += 1
 				local t = tallCard(g, { order = k, art = PASS_ART[key] or "icon_sparkles", slides = MULTI[key], name = string.upper(pass.name), desc = pass.desc, glow = C.manila })
 				local btn = ownButton(t.card, "green", "R$ " .. pass.price, function(b) buyPass(key, b) end, { sz = t.btnSz, pos = t.btnPos, anchor = Vector2.new(0.5, 1), z = 12, textSize = 17 })
+				local cover = ownedCover(t.card)
 				up(function(st)
-					local owned = st.gp and st.gp[key]
-					btn:Set(owned and true or false)
+					local owned = (st.gp and st.gp[key]) and true or false
+					btn:Set(owned)
 					markOwned(t, owned)
+					cover:Set(owned, btn)
 				end)
 			end
 		end
@@ -15419,7 +15526,7 @@ S.shop = { build = function(host, App)
 				{ size = 13, color = C.dim, sz = UDim2.fromScale(1, 1), z = 8, wrap = true })
 		end
 		local foot = mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 30), ZIndex = 7, LayoutOrder = nextOrder() }, list)
-		text(foot, "Robux purchases are granted after Roblox confirms them. Crates bought with Robux wait in your Inventory.", { size = 12, color = C.dim, sz = UDim2.fromScale(1, 1), z = 8, wrap = true })
+		text(foot, "Crates bought with Robux wait in your Inventory.", { size = 12, color = C.dim, sz = UDim2.fromScale(1, 1), z = 8, wrap = true })
 	end
 
 	local function setSub(st)
@@ -15514,7 +15621,7 @@ S.gearshop = { build = function(host, App)
 	local panel, body = UI.panel(host, "GEAR SHOP", { sz = UDim2.new(1, -20, 1, -20), pos = UDim2.fromOffset(10, 10), z = 5, titleSize = 26 })
 	local _ = panel
 	local timer = text(body, "", { font = "heavy", size = 16, color = C.gold, rich = true, pos = UDim2.fromOffset(0, 2), sz = UDim2.new(1, 0, 0, 22), z = 7, align = Enum.TextXAlignment.Right })
-	text(body, "New gear every 5 minutes. One of each item per restock. Rarer gear unlocks as you level up.", { size = 15, color = C.muted, pos = UDim2.fromOffset(0, 2), sz = UDim2.new(1, -260, 0, 22), z = 7, truncate = true })
+	text(body, "Fresh gear every 5 minutes. Level up for rarer gear!", { size = 15, color = C.muted, pos = UDim2.fromOffset(0, 2), sz = UDim2.new(1, -260, 0, 22), z = 7, truncate = true })
 	local list = UI.list(body, { pos = UDim2.fromOffset(0, 34), sz = UDim2.new(1, 0, 1, -34), gap = 8, z = 6 })
 
 	local function stat(g)
@@ -15561,7 +15668,7 @@ S.gearshop = { build = function(host, App)
 			for k, e in ipairs(byR[r] or {}) do
 				local g = e.gear
 				local card = UI.card(row, { z = 8, order = k })
-				mk("UIStroke", { Color = col, Thickness = 2, Transparency = locked and 0.6 or 0, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, card)
+				UI.outline(card, col, 2, { alpha = locked and 0.6 or 0 })
 				local well = mk("Frame", { BackgroundColor3 = C.black, BackgroundTransparency = 0.2, BorderSizePixel = 0, Position = UDim2.fromOffset(10, 10), Size = UDim2.fromOffset(84, 84), ZIndex = 9 }, card)
 				mk("UICorner", { CornerRadius = UDim.new(0, 8) }, well)
 				local glow = mk("UIGradient", { Color = ColorSequence.new(col:Lerp(C.black, 0.55), C.black), Rotation = 90 }, well)
@@ -15614,7 +15721,142 @@ S.gearshop = { build = function(host, App)
 end }
 
 return S
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX37"><Properties><string name="Name">ReplicatedStorage.Client|Tester|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- TESTER PANEL (Kash 2 Oct): owner only. A TEST button (and F2) opens a panel of quick buttons plus a command line.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX37"><Properties><string name="Name">ReplicatedStorage.Client|Afk|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- AFK CHAMBER (Kash 3 Oct): after 15 minutes with no input the whole screen becomes the chamber: the world map,
+-- what your properties are earning, and a slim chance every minute to find gear. RETURN brings you back.
+-- While it is up, Roblox's 20 minute idle kick is prevented.
+local Players = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local RS = game:GetService("ReplicatedStorage")
+local Shared = RS:WaitForChild("Shared")
+local R = require(Shared.Rules)
+local O = require(Shared.Officers)
+local Config = require(Shared.Config)
+
+local S = {}
+
+S._afk = { init = function(App)
+	local UI = App.UI
+	local C = UI.C
+	local mk, text = UI.mk, UI.text
+	local plr = Players.LocalPlayer
+	local lastInput = os.clock()
+	local open, gui, startCash, startT, findList, earnedL, timeL, incL
+	local finds = {}
+
+	local function touch() lastInput = os.clock() end
+	UIS.InputBegan:Connect(touch)
+	UIS.InputChanged:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch then touch() end end)
+
+	-- keep Roblox from kicking an idle player while the chamber is up
+	plr.Idled:Connect(function()
+		if not open then return end
+		pcall(function()
+			local VU = game:GetService("VirtualUser")
+			VU:CaptureController()
+			VU:ClickButton2(Vector2.new())
+		end)
+	end)
+
+	local function drawFinds()
+		if not findList then return end
+		UI.clear(findList)
+		if #finds == 0 then
+			text(findList, "Nothing found yet. Keep your nation running!", { size = 15, color = C.muted, sz = UDim2.new(1, 0, 0, 24), z = 214, align = Enum.TextXAlignment.Center })
+			return
+		end
+		for k = #finds, math.max(1, #finds - 5), -1 do
+			local g = finds[k]
+			local rar = O.RarityByKey[g.rarity] or O.Rarities[1]
+			local row = UI.card(findList, { sz = UDim2.new(1, -6, 0, 44), z = 213, order = #finds - k })
+			UI.img(row, g.icon or "gear_sword", { sz = UDim2.fromOffset(34, 34), pos = UDim2.fromOffset(8, 5), z = 214, slice = false, fit = true })
+			text(row, g.name or "Gear", { font = "heavy", size = 15, pos = UDim2.fromOffset(50, 0), sz = UDim2.new(1, -170, 1, 0), z = 214, truncate = true })
+			UI.tag(row, rar.name, Color3.fromHex(rar.color), { pos = UDim2.new(1, -10, 0.5, 0), anchor = Vector2.new(1, 0.5), z = 214 })
+		end
+	end
+
+	local function close()
+		if not open then return end
+		open = false
+		lastInput = os.clock()
+		local n = #finds
+		if gui then
+			local g = gui
+			gui = nil
+			TweenService:Create(g, TweenInfo.new(0.25), { BackgroundTransparency = 1 }):Play()
+			task.delay(0.25, function() g:Destroy() end)
+		end
+		task.spawn(function()
+			local res = App.req("afk", { on = false })
+			local earned = (App.state and App.state.cash or 0) - (startCash or 0)
+			App.toast("WELCOME BACK!", (earned > 0 and ("+" .. R.Money(earned) .. " while you were away") or "Your nation kept working") .. (n > 0 and (" · " .. n .. " item" .. (n > 1 and "s" or "") .. " found") or ""), "gold")
+			local _ = res
+		end)
+	end
+
+	local function openChamber()
+		if open or not (App.state and App.state.onboarded) then return end
+		open = true
+		finds = {}
+		startCash = App.state.cash or 0
+		startT = os.clock()
+		if App.closeModal then pcall(App.closeModal) end
+		task.spawn(function() App.req("afk", { on = true }) end)
+		gui = mk("Frame", { Name = "AfkChamber", BackgroundColor3 = C.black, BackgroundTransparency = 0, Size = UDim2.fromScale(1, 1), ZIndex = 200, Active = true }, App.sg)
+		local map = UI.img(gui, "map_world", { slice = false, pixel = true, sz = UDim2.fromScale(1, 1), z = 201 })
+		map.ScaleType = Enum.ScaleType.Crop
+		map.ImageTransparency = 0.25
+		mk("Frame", { BackgroundColor3 = C.black, BackgroundTransparency = 0.45, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ZIndex = 202 }, gui)
+		local p, body = UI.panel(gui, "AFK CHAMBER", { sz = UDim2.fromOffset(560, 520), pos = UDim2.fromScale(0.5, 0.5), anchor = Vector2.new(0.5, 0.5), z = 210, titleSize = 30 })
+		mk("UISizeConstraint", { MaxSize = Vector2.new(560, 520) }, p)
+		p.Size = UDim2.new(1, -40, 1, -40)
+		text(body, "You're away, but your nation keeps working!", { size = 16, color = C.muted, sz = UDim2.new(1, 0, 0, 22), z = 212, align = Enum.TextXAlignment.Center })
+		local stats = mk("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(0, 30), Size = UDim2.new(1, 0, 0, 86), ZIndex = 212 }, body)
+		mk("UIGridLayout", { CellSize = UDim2.new(1 / 3, -8, 1, 0), CellPadding = UDim2.fromOffset(12, 0), SortOrder = Enum.SortOrder.LayoutOrder }, stats)
+		local function stat(order, label, color)
+			local c = UI.card(stats, { z = 213, order = order })
+			text(c, label, { font = "heavy", size = 13, color = C.muted, pos = UDim2.fromOffset(0, 10), sz = UDim2.new(1, 0, 0, 18), z = 214, align = Enum.TextXAlignment.Center })
+			return text(c, "", { font = "display", size = 26, color = color, pos = UDim2.fromOffset(6, 34), sz = UDim2.new(1, -12, 0, 34), z = 214, align = Enum.TextXAlignment.Center, scaled = true })
+		end
+		incL = stat(1, "INCOME", C.good)
+		earnedL = stat(2, "EARNED HERE", C.gold)
+		timeL = stat(3, "TIME AWAY", C.ink)
+		text(body, "ITEMS FOUND", { font = "heavy", size = 15, color = C.manila, pos = UDim2.fromOffset(0, 128), sz = UDim2.new(1, 0, 0, 20), z = 212 })
+		text(body, "Every minute there's a chance to find gear. Rare finds are VERY rare!", { size = 13, color = C.muted, pos = UDim2.fromOffset(0, 148), sz = UDim2.new(1, 0, 0, 18), z = 212 })
+		findList = UI.list(body, { pos = UDim2.fromOffset(0, 172), sz = UDim2.new(1, 0, 1, -172 - 70), gap = 6, z = 212 })
+		drawFinds()
+		UI.button(body, "green", "RETURN", function() close() end, { pos = UDim2.new(0.5, 0, 1, -4), anchor = Vector2.new(0.5, 1), sz = UDim2.fromOffset(260, 58), z = 214, textSize = 24 })
+		gui.BackgroundTransparency = 1
+		TweenService:Create(gui, TweenInfo.new(0.4), { BackgroundTransparency = 0 }):Play()
+	end
+	App.openAfk = openChamber
+
+	function App.afkFind(n)
+		local g = n.gear or {}
+		table.insert(finds, g)
+		drawFinds()
+		local rar = O.RarityByKey[g.rarity]
+		if rar and rar.index >= 5 and App.sfx then pcall(App.sfx, rar.index >= 8 and "reveal_forbidden" or rar.index >= 7 and "reveal_secret" or rar.index >= 6 and "reveal_mythic" or "reveal_legendary") end
+	end
+
+	task.spawn(function()
+		while true do
+			task.wait(1)
+			if open and gui then
+				local st = App.state or {}
+				incL.Text = R.Money(st.incHr or 0) .. "/hr"
+				earnedL.Text = R.Money(math.max(0, (st.cash or 0) - (startCash or 0)))
+				local s = math.floor(os.clock() - startT)
+				timeL.Text = string.format("%d:%02d", s // 60, s % 60)
+			elseif not open and os.clock() - lastInput >= ((Config.Afk and Config.Afk.IdleSeconds) or 900) then
+				openChamber()
+			end
+		end
+	end)
+end }
+
+return S
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX38"><Properties><string name="Name">ReplicatedStorage.Client|Tester|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- TESTER PANEL (Kash 2 Oct): owner only. A TEST button (and F2) opens a panel of quick buttons plus a command line.
 -- Every button just sends the same text you could type, e.g. "/cash 1m". The server checks the owner again.
 local UIS = game:GetService("UserInputService")
 
@@ -15641,6 +15883,9 @@ local GROUPS = {
 		{ "FINISH CONVOYS", "/finish", "green" }, { "BOSS READY", "/boss" }, { "CLEAR RAID CD", "/raidcd" }, { "SHIELD 1H", "/shield 60" },
 		{ "REMOVE SHIELD", "/shield 0" }, { "LOGIN REWARD", "/login" }, { "NEW ORDERS", "/tasks" }, { "OPEN WORLD EVENT", "/event", "gold" },
 		{ "NORMAL EVENTS", "/noevent" },
+	} },
+	{ "SOUNDS", {
+		{ "SOUND BOARD", "#sounds", "blue" }, { "AFK CHAMBER", "#afk", "blue" },
 	} },
 	{ "SHOP AND ALLIANCE", {
 		{ "STARTER PACK AGAIN", "/starter" }, { "BUNDLE AGAIN", "/bundle" }, { "PASSES OFF", "/passes off" }, { "PASSES ON", "/passes on" },
@@ -15693,7 +15938,9 @@ S._tester = { init = function(App)
 			mk("UIGridLayout", { CellSize = UDim2.new(0.25, -5, 0, 34), CellPadding = UDim2.fromOffset(5, 5), SortOrder = Enum.SortOrder.LayoutOrder }, grid)
 			for i, b in ipairs(g[2]) do
 				UI.button(grid, b[3] or "slate", b[1], function()
-					if b[2] == "/reset" then
+					if b[2] == "#sounds" then if App.soundBoard then App.soundBoard() end
+					elseif b[2] == "#afk" then open = false; if panel then panel.Visible = false end; if App.openAfk then App.openAfk() end
+					elseif b[2] == "/reset" then
 						App.confirm("RESET PROGRESS?", "This wipes your save and starts you again as a brand new player. Purchases you own stay.", "RESET", "red", function() run("/reset") end)
 					else run(b[2]) end
 				end, { z = 93, order = i, textSize = 12 })
@@ -15723,6 +15970,40 @@ S._tester = { init = function(App)
 	end
 	App.toggleTester = toggle
 
+	-- SOUND BOARD (Kash 23:48: preview sounds before they go in). Current sounds by key, plus candidates to pick from.
+	local CANDIDATES = {
+		{ "DEFEAT (raid lost)", { { "A", 125909120236588, "Mounting Consequences sting (in use)" }, { "B", 116298781032555, "Sad trombone" }, { "C", 1837950656, "Brute Force sting" }, { "D", 97861773515321, "Lose arcade" }, { "E", 115055593775910, "Old defeat sound" } } },
+		{ "MYTHIC / SECRET / FORBIDDEN REVEAL", { { "A", 9047100306, "Hustler sting (mythic)" }, { "B", 9047103106, "All It Takes sting (secret)" }, { "C", 1836860398, "Winning Spirit (forbidden)" }, { "D", 73774648241042, "Rating excellent" }, { "E", 135385970610304, "Twinkle" }, { "F", 134527763388412, "Current legendary" } } },
+	}
+	local board
+	function App.soundBoard()
+		if board then board:Destroy(); board = nil; return end
+		local p, body = UI.panel(App.sg or App.root, "SOUND BOARD", { sz = UDim2.fromOffset(640, 560), pos = UDim2.fromScale(0.5, 0.5), anchor = Vector2.new(0.5, 0.5), z = 95, name = "SoundBoard" })
+		board = p
+		UI.button(p, "slate", "X", function() p:Destroy(); board = nil end, { pos = UDim2.new(1, -54, 0, 10), sz = UDim2.fromOffset(40, 36), z = 99, textSize = 16 })
+		local list = UI.list(body, { z = 96, gap = 6 })
+		local order = 0
+		local function head(t) order += 1; text(list, t, { font = "heavy", size = 15, color = C.manila, sz = UDim2.new(1, 0, 0, 22), z = 97, order = order }) end
+		head("CANDIDATES: tell Claude the letter you like")
+		for _, g in ipairs(CANDIDATES) do
+			order += 1
+			text(list, g[1], { font = "bold", size = 14, color = C.muted, sz = UDim2.new(1, 0, 0, 18), z = 97, order = order })
+			for _, c in ipairs(g[2]) do
+				order += 1
+				local row = mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, -8, 0, 34), ZIndex = 97, LayoutOrder = order }, list)
+				UI.button(row, "green", "PLAY " .. c[1], function() App.sfxPreview(c[2]) end, { sz = UDim2.fromOffset(110, 32), z = 98, textSize = 13 })
+				text(row, c[3], { size = 14, pos = UDim2.fromOffset(122, 0), sz = UDim2.new(1, -122, 1, 0), z = 98, truncate = true })
+			end
+		end
+		head("EVERY SOUND IN THE GAME")
+		for _, k in ipairs(App.sfxKeys and App.sfxKeys() or {}) do
+			order += 1
+			local row = mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, -8, 0, 34), ZIndex = 97, LayoutOrder = order }, list)
+			UI.button(row, "slate", "PLAY", function() App.sfx(k) end, { sz = UDim2.fromOffset(90, 32), z = 98, textSize = 13 })
+			text(row, k, { size = 14, pos = UDim2.fromOffset(102, 0), sz = UDim2.new(1, -102, 1, 0), z = 98 })
+		end
+	end
+
 	local function ensureButton()
 		if btn or not (App.state and App.state.admin) then return end
 		btn = UI.button(App.root, "red", "TEST", toggle, { pos = UDim2.new(1, -86, 1, -48), sz = UDim2.fromOffset(72, 38), z = 89, textSize = 15, name = "TesterButton" })
@@ -15742,7 +16023,7 @@ S._tester = { init = function(App)
 end }
 
 return S
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX38"><Properties><string name="Name">ReplicatedStorage.Client|Tutorial|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- TUTORIAL (Kash 2 Oct): offered at the end of onboarding. A small guide card at the bottom of the screen and a
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX39"><Properties><string name="Name">ReplicatedStorage.Client|Tutorial|ModuleScript</string><ProtectedString name="Source"><![CDATA[-- TUTORIAL (Kash 2 Oct): offered at the end of onboarding. A small guide card at the bottom of the screen and a
 -- pulsing frame on the tab to open. It never blocks the game and can be skipped any time.
 -- Progress is saved on the server (App.state.tut: step number, -1 = skipped or finished, nil = never offered).
 local TweenService = game:GetService("TweenService")
@@ -15864,7 +16145,7 @@ S._tutorial = { init = function(App)
 
 	local function build()
 		card = UI.img(App.sg or App.root, "panel", { name = "Tutorial", sz = UDim2.fromOffset(520, 118), pos = UDim2.new(0.5, (App.NAVW or 176) / 2, 1, -18), anchor = Vector2.new(0.5, 1), z = 70 })
-		mk("UIStroke", { Color = C.gold, Thickness = 2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, card)
+		UI.outline(card, C.gold, 2)
 		UI.icon(card, "icon_sparkles", 26, C.gold, UDim2.fromOffset(16, 16), { z = 71 })
 		titleL = text(card, "", { font = "display", size = 20, color = C.manila, pos = UDim2.fromOffset(50, 12), sz = UDim2.new(1, -170, 0, 26), z = 71 })
 		stepL = text(card, "", { font = "heavy", size = 12, color = C.muted, pos = UDim2.new(1, -116, 0, 16), sz = UDim2.fromOffset(100, 18), z = 71, align = Enum.TextXAlignment.Right })
@@ -15925,7 +16206,7 @@ S._tutorial = { init = function(App)
 end }
 
 return S
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX39"><Properties><string name="Name">StarterPlayer.StarterPlayerScripts|ClientMain|LocalScript</string><ProtectedString name="Source"><![CDATA[-- ClientMain: the shell. Top bar, the left nav (flush with the screen's left edge, Kash 26 Sep), the screen host,
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX40"><Properties><string name="Name">StarterPlayer.StarterPlayerScripts|ClientMain|LocalScript</string><ProtectedString name="Source"><![CDATA[-- ClientMain: the shell. Top bar, the left nav (flush with the screen's left edge, Kash 26 Sep), the screen host,
 -- toasts and level-up banners. The Capitol world map is the home screen (Kash, 1 Oct 2026, Q12).
 -- Everything is laid out in design pixels on a top-left anchored root scaled by ONE UIScale
 -- (LESSONS: a UIScale scales about the AnchorPoint; read TopbarInset lazily).
@@ -16001,9 +16282,8 @@ function App.toast(title, body, tone)
 	local t = UI.img(toastHost, "panel_plain", { name = "Toast", sz = UDim2.fromOffset(520, body and 66 or 42), z = 80, order = toastN })
 	local entry = { card = t, until_ = os.clock() + (body and 4 or 3) }
 	liveToasts[key] = entry
-	mk("Frame", { Size = UDim2.new(0, 5, 1, -12), Position = UDim2.fromOffset(6, 6), BackgroundColor3 = color, BorderSizePixel = 0, ZIndex = 81 }, t)
-	text(t, title, { font = "display", size = 19, pos = UDim2.fromOffset(20, body and 6 or 8), sz = UDim2.new(1, -30, 0, 26), z = 81, color = color, truncate = true })
-	if body then text(t, body, { size = 15, pos = UDim2.fromOffset(20, 34), sz = UDim2.new(1, -30, 0, 24), z = 81, truncate = true, color = C.ink }) end
+	text(t, title, { font = "display", size = 19, pos = UDim2.fromOffset(16, body and 6 or 8), sz = UDim2.new(1, -32, 0, 26), z = 81, color = color, truncate = true })
+	if body then text(t, body, { size = 15, pos = UDim2.fromOffset(16, 34), sz = UDim2.new(1, -32, 0, 24), z = 81, truncate = true, color = C.ink }) end
 	task.spawn(function()
 		while os.clock() < entry.until_ do task.wait(0.2) end
 		if t.Parent then t:Destroy() end
@@ -16250,7 +16530,7 @@ App.content = content
 local defs = {}
 local inits = {} -- modules can return entries without a build field: { init = function(App) end }
 -- later modules override earlier ones (Warfare's raids replace War's battle, Contracts replaces Economy's tasks)
-for _, modName in ipairs({ "Sound", "Map", "Economy", "War", "Social", "Warfare", "Cabinet", "Country", "Contracts", "Settings", "Shop", "GearShop", "Tester", "Tutorial" }) do
+for _, modName in ipairs({ "Sound", "Map", "Economy", "War", "Social", "Warfare", "Cabinet", "Country", "Contracts", "Settings", "Shop", "GearShop", "Afk", "Tester", "Tutorial" }) do
 	local okReq, mod = pcall(require, ClientMods:WaitForChild(modName, 5))
 	if okReq and type(mod) == "table" then
 		for k, def in pairs(mod) do
@@ -16516,6 +16796,7 @@ handleNote = function(n)
 			App.emit("raidResult", n.res)
 			local r = n.res or {}
 			if r.ok and not r.fight then App.toast(r.win and "REVENGE STRIKE · VICTORY" or "REVENGE STRIKE", r.win and ("+" .. R.Money(r.cash or 0)) or nil, r.win and "gold" or "bad") end
+		elseif n.kind == "afkFind" then if App.afkFind then App.afkFind(n) end
 		elseif n.kind == "crates" then App.toast("+" .. n.n .. " FOUNDER'S CRATE" .. (n.n > 1 and "S" or ""), "Open them in your Inventory", "gold"); App.navBadge("inventory", "!")
 		elseif n.kind == "bundle" then App.toast("LIMITED BUNDLE UNLOCKED", "Empress Valeria Thorne and the Founder's Saber joined you", "gold"); App.big("bundle")
 		elseif n.kind == "toast" then App.toast(n.text, nil, n.tone)
@@ -16618,12 +16899,14 @@ if game:GetService("RunService"):IsStudio() then
 			elseif k == "login" and App.showLogin then App.showLogin()
 			elseif k == "settings" and App.openSettings then App.openSettings(arg ~= "" and arg or nil)
 			elseif k == "tester" and App.toggleTester then App.toggleTester()
+			elseif k == "afk" and App.openAfk then App.openAfk()
+			elseif k == "sounds" and App.soundBoard then App.soundBoard()
 			elseif k == "profile" and App.showProfile then App.showProfile(tonumber(arg) or plr.UserId)
 			elseif k == "emit" then App.emit(arg) end
 		end)
 	end)
 end
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX40"><Properties><string name="Name">ReplicatedFirst|IC_Loading|LocalScript</string><ProtectedString name="Source"><![CDATA[-- Loading screen (ReplicatedFirst): war-room art, the IDLE COUNTRY logo, a shimmering bar, version and disclaimer.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX41"><Properties><string name="Name">ReplicatedFirst|IC_Loading|LocalScript</string><ProtectedString name="Source"><![CDATA[-- Loading screen (ReplicatedFirst): war-room art, the IDLE COUNTRY logo, a shimmering bar, version and disclaimer.
 -- Modelled on the reference game's loading screen (Kash 1 Oct 16:45). Hides once the HUD exists and the save is in.
 local Players = game:GetService("Players")
 local ReplicatedFirst = game:GetService("ReplicatedFirst")
