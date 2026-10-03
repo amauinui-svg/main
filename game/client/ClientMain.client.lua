@@ -244,6 +244,7 @@ local function layoutTop()
 	top.mid.Size = UDim2.fromOffset(300, TOP / k)
 	top.upg.Size = UDim2.fromOffset(122, TOP / k)
 	top.upg.Position = UDim2.new(1, -62, 0, 0)
+	top.upgBtn.Label.TextWrapped = false
 	top.right.Position = UDim2.new(1, -62 - math.floor(upgW * k), 0, 0)
 	local midX = x0 + idW * k
 	local room = w - 62 - (470 + upgW) * k - midX
@@ -282,6 +283,7 @@ local function layoutNav()
 end
 -- compact identity (phones): flag, name and level bar as the first item of the nav column
 local idSlot = mk("Frame", { Name = "IdentitySlot", BackgroundTransparency = 1, Size = UDim2.fromOffset(NAVW, 64), LayoutOrder = -1, Visible = false, ZIndex = 16 }, nav)
+local nameFit = mk("UITextSizeConstraint", { MaxTextSize = 15, MinTextSize = 9 })
 local function setCompact(on)
 	if top.compact == on then return end
 	top.compact = on
@@ -298,12 +300,16 @@ local function setCompact(on)
 		scaleOf(top.id).Scale = 1
 		top.id.Position = UDim2.fromOffset(0, 0); top.id.Size = UDim2.fromOffset(NAVW, 64)
 		top.flagHost.Position = UDim2.fromOffset(6, 6); fs.Scale = 0.62
-		top.name.Position = UDim2.fromOffset(46, 4); top.name.Size = UDim2.fromOffset(NAVW - 50, 26); top.name.TextSize = 15
+		top.name.Position = UDim2.fromOffset(46, 2); top.name.Size = UDim2.fromOffset(NAVW - 50, 32); top.name.TextSize = 15
+		top.name.TextWrapped = true; top.name.TextScaled = true; top.name.TextTruncate = Enum.TextTruncate.None
+		nameFit.Parent = top.name
 		top.xp.Inst.Position = UDim2.fromOffset(4, 36); top.xp.Inst.Size = UDim2.fromOffset(NAVW - 8, 22)
 	else
 		top.id.Parent = topBar
 		top.flagHost.Position = UDim2.fromOffset(0, 12); fs.Scale = 1
 		top.name.Position = UDim2.fromOffset(68, 6); top.name.Size = UDim2.fromOffset(250, 24); top.name.TextSize = 19
+		top.name.TextWrapped = false; top.name.TextScaled = false; top.name.TextTruncate = Enum.TextTruncate.AtEnd
+		nameFit.Parent = nil
 		top.xp.Inst.Position = UDim2.fromOffset(68, 34); top.xp.Inst.Size = UDim2.fromOffset(250, 22)
 	end
 	layoutTop()

@@ -374,3 +374,6 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 
 ## 3 Oct 00:43 (Kash, iPhone 16 Pro emulator)
 - Right side was cut off, Studio background showing left/right/bottom, top bar crowded. Fixes: a full-screen backdrop behind the safe-area HUD (no more 3D world around the edges); on phones the flag/name/level block moves to the top of the nav column so the top bar only holds money, energy, upgrades and settings at a readable size; law era tabs rebuild on resize so they never run under FREE GIFT. Smaller phone model next, after this push.
+
+## 3 Oct 00:47 (Kash, smaller phone 666x374)
+- Ran the overlap audit on every tab and screenshots of Country, Raids, Inventory, Alliance. Fixed: UPGRADES label wrapping to "UPGRADE S", nation names in the nav and the Raids list now shrink to fit instead of cutting to "Empire of...".
