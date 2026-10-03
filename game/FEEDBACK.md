@@ -292,3 +292,6 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 ## 2 Oct 22:32 (Kash)
 - Rules Kash gives (like "Founder's Crate never gives officers") are design notes for the code, NOT text for players. Never copy them into descriptions. Fixed the crate/shop texts.
 - Visible pity system for crates. Done: meter fills with every crate that is not Legendary+; full meter = guaranteed Legendary+ (Founder 30, Supply 50). Shown on crate cards, shop and the drop rates popup.
+
+## 2 Oct 22:39 (Kash)
+- Onboarding capital step: recommend the 6 capitals where most players live at the top, so new players get busier trade. Done: live counts per home capital (OrderedDataStore IC_HomePop, refreshed every 10 min), starting list New York, London, Sao Paulo, Los Angeles, Mexico City, Jakarta until 30+ players have picked. Default pick is the top one.

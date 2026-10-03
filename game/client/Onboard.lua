@@ -3,6 +3,7 @@ local RS = game:GetService("ReplicatedStorage")
 local Shared = RS:WaitForChild("Shared")
 local R = require(Shared.Rules)
 local W = require(Shared.World)
+local Config = require(Shared.Config)
 
 local O = {}
 local PERK_TEXT = { law = "law cash", props = "property income", convoy = "convoy pay", regen = "Influence regen", attack = "attack", defense = "defense" }
@@ -12,7 +13,7 @@ function O.show(App)
 	local UI = App.UI
 	local C = UI.C
 	local text = UI.text
-	local form = { name = "", flag = { l = "h3", c = { "1f3a93", "ecf0f1", "c0392b" } }, ideo = "republic", home = 12 }
+	local form = { name = "", flag = { l = "h3", c = { "1f3a93", "ecf0f1", "c0392b" } }, ideo = "republic", home = ((App.world and App.world.popular) or Config.PopularCapitals)[1] or 12 }
 	local cover = UI.mk("TextButton", { Name = "Onboard", Text = "", AutoButtonColor = false, BackgroundColor3 = Color3.fromHex("101317"), BackgroundTransparency = 0.05, Size = UDim2.fromScale(1, 1), ZIndex = 60 }, App.root)
 	local panel, body = UI.panel(cover, "FOUND YOUR COUNTRY", { sz = UDim2.fromOffset(760, 560), pos = UDim2.fromScale(0.5, 0.5), anchor = Vector2.new(0.5, 0.5), z = 61, titleSize = 28 })
 	local fit = UI.mk("UISizeConstraint", { MaxSize = Vector2.new(760, 560) }, panel)
@@ -101,17 +102,30 @@ function O.show(App)
 	steps[4] = function()
 		text(area, "Pick your home capital", { font = "display", size = 24, pos = UDim2.fromOffset(4, 10), sz = UDim2.new(1, 0, 0, 30), z = 63 })
 		text(area, "Your first convoy starts here and every new convoy is built here. You can trade with every city either way.", { size = 15, color = C.muted, wrap = true, pos = UDim2.fromOffset(4, 42), sz = UDim2.new(1, 0, 0, 40), z = 63 })
-		local grid = UI.list(area, { pos = UDim2.fromOffset(0, 86), sz = UDim2.new(1, 0, 1, -86), grid = UDim2.new(1 / 3, -8, 0, 54), gap = 8, z = 63 })
-		local order = {}
-		for i in ipairs(W.Cities) do table.insert(order, i) end
-		table.sort(order, function(a, b) return W.Cities[a].name < W.Cities[b].name end)
-		for k, i in ipairs(order) do
+		local list = UI.list(area, { pos = UDim2.fromOffset(0, 86), sz = UDim2.new(1, 0, 1, -86), gap = 8, z = 63 })
+		local popular = (App.world and App.world.popular) or Config.PopularCapitals
+		local function cityCard(parent, i, order, hot)
 			local c = W.Cities[i]
-			local card = UI.card(grid, { button = true, z = 64, order = k, hot = form.home == i })
+			local card = UI.card(parent, { button = true, z = 64, order = order, hot = form.home == i })
 			text(card, c.name, { font = "heavy", size = 16, pos = UDim2.fromOffset(10, 4), sz = UDim2.new(1, -16, 0, 22), z = 65, truncate = true })
-			text(card, c.country .. " · " .. ({ "City", "Capital", "Major capital", "Global city" })[c.tier], { size = 12, color = C.muted, pos = UDim2.fromOffset(10, 27), sz = UDim2.new(1, -16, 0, 18), z = 65, truncate = true })
+			text(card, hot and "<font color='#f0c75a'><b>POPULAR</b></font> · busy trade routes" or (c.country .. " · " .. ({ "City", "Capital", "Major capital", "Global city" })[c.tier]),
+				{ size = 12, color = C.muted, rich = hot, pos = UDim2.fromOffset(10, 27), sz = UDim2.new(1, -16, 0, 18), z = 65, truncate = true })
+			if hot then UI.icon(card, "icon_sparkles", 16, C.gold, UDim2.new(1, -10, 0, 8), { z = 66, anchor = Vector2.new(1, 0) }) end
 			card.Activated:Connect(function() form.home = i; draw() end)
 		end
+		local function section(title, order)
+			text(list, title, { font = "heavy", size = 14, color = C.manila, sz = UDim2.new(1, 0, 0, 20), z = 64, order = order })
+			local g = UI.mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, -4, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, ZIndex = 63, LayoutOrder = order + 1 }, list)
+			UI.mk("UIGridLayout", { CellSize = UDim2.new(1 / 3, -8, 0, 54), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder }, g)
+			return g
+		end
+		local pg = section("RECOMMENDED: WHERE MOST PLAYERS LIVE", 1)
+		for k, i in ipairs(popular) do if W.Cities[i] then cityCard(pg, i, k, true) end end
+		local ag = section("ALL CAPITALS", 3)
+		local order = {}
+		for i in ipairs(W.Cities) do if not table.find(popular, i) then table.insert(order, i) end end
+		table.sort(order, function(a, b) return W.Cities[a].name < W.Cities[b].name end)
+		for k, i in ipairs(order) do cityCard(ag, i, k, false) end
 		return function() return true end
 	end
 

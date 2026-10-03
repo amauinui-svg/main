@@ -626,6 +626,34 @@ function WS.TickWant(i, good)
 	WS.Changed:Fire("w", i)
 end
 
+---------------------------------------------------------------- popular capitals (Kash 2 Oct)
+-- counts of players per home capital in an OrderedDataStore; the top 6 are recommended in onboarding
+local Config = require(RS.Shared.Config)
+WS.Popular = table.clone(Config.PopularCapitals)
+local function popStore() return Store.ODS("IC_HomePop" .. SUFFIX) end
+function WS.HomeMoved(old, new)
+	if not Store.Online then return end
+	task.spawn(function()
+		local ods = popStore()
+		if new and World.Cities[new] then pcall(ods.IncrementAsync, ods, tostring(new), 1) end
+		if old and old ~= new and World.Cities[old] then pcall(ods.IncrementAsync, ods, tostring(old), -1) end
+	end)
+end
+function WS.RefreshPopular()
+	if not Store.Online then return end
+	local ods = popStore()
+	local ok, pages = pcall(function() return ods:GetSortedAsync(false, 6) end)
+	if not ok then return end
+	local list, total = {}, 0
+	for _, e in ipairs(pages:GetCurrentPage()) do
+		local i = tonumber(e.key)
+		if i and World.Cities[i] and e.value > 0 then table.insert(list, i); total += e.value end
+	end
+	if total < (Config.PopularMinPlayers or 30) then return end -- too few players yet: keep the starting list
+	for _, i in ipairs(Config.PopularCapitals) do if #list >= 6 then break end; if not table.find(list, i) then table.insert(list, i) end end
+	WS.Popular = list
+end
+
 ---------------------------------------------------------------- snapshot for clients
 function WS.PublicState()
 	local cities = {}
@@ -636,13 +664,14 @@ function WS.PublicState()
 	end
 	local index = {}
 	for id, s in pairs(WS.Index) do index[id] = s end
-	return { cities = cities, alliances = index, t = now() }
+	return { cities = cities, alliances = index, t = now(), popular = WS.Popular }
 end
 
 ---------------------------------------------------------------- start
 function WS.Start()
 	for i = 1, #World.Cities do WS.Cities[i] = defaultCity(i) end
 	initWants()
+	task.spawn(function() while true do pcall(WS.RefreshPopular); task.wait(600) end end)
 	task.spawn(function()
 		restoreCities()
 		WS.RefreshAllCities()

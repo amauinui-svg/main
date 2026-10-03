@@ -18,6 +18,11 @@ C.Passes = {
 }
 C.PassOrder = { "FastConvoys", "AutoDispatch", "ExtraConvoys", "ExtraLots", "BonusOfficer", "VIP", "MegaVIP", "CrateLuck", "CustomFlag" }
 
+-- Popular capitals (Kash 2 Oct): shown first in onboarding. Live list comes from where players actually live;
+-- this is the starting list until enough players have picked (New York, London, Sao Paulo, Los Angeles, Mexico City, Jakarta).
+C.PopularCapitals = { 1, 12, 9, 2, 6, 33 }
+C.PopularMinPlayers = 30
+
 C.Products = {
 	-- Founder's Crate: 49 R$ each (Kash 2 Oct), bulk cheaper per crate
 	Crate1 = { id = 3715911170, robux = 49, crates = 1 },

@@ -51,6 +51,7 @@ function act.onboard(plr, p, a)
 	local ideo = R.IdeologyByKey[a.ideo] and a.ideo or "republic"
 	local home = int(a.home, 1, #World.Cities)
 	if not home then return no("Pick a home capital") end
+	WS.HomeMoved(nil, home)
 	d.name, d.flag, d.ideo, d.home, d.onboarded = name, { l = layout, c = cols }, ideo, home, true
 	for _, c in ipairs(d.convoys) do if not c.to then c.at = home end end
 	PS.EnsureConvoys(p)
@@ -605,6 +606,7 @@ function act.moveCapital(plr, p, a)
 	if b == p.data.home then return no("That is already your capital") end
 	if (p.data.capitalCredit or 0) > 0 then
 		p.data.capitalCredit -= 1
+		WS.HomeMoved(p.data.home, b)
 		p.data.home = b
 		return ok({ moved = true })
 	end

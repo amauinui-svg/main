@@ -96,6 +96,8 @@ grant.FinishConvoy3 = finishConvoy
 grant.FinishConvoy4 = finishConvoy
 function grant.MoveCapital(p, city)
 	if type(city) ~= "number" or not require(RS.Shared.World).Cities[city] then return false end
+	local WS = require(script.Parent.WorldService)
+	WS.HomeMoved(p.data.home, city)
 	p.data.home = city
 	PS.Note(p, { kind = "toast", text = "Your capital has moved.", tone = "good" })
 	return true
