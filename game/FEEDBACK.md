@@ -300,3 +300,8 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 - Onboarding asks if the player wants a tutorial. Done: after FOUND MY COUNTRY a WELCOME popup (YES, SHOW ME / NO THANKS). The tutorial is a small guide card with a pulsing frame on the tab to open: open Laws, pass a law, reach level 2, open Properties, build, open World, send a convoy. Skippable, resumes after rejoin. Tester: /tutorial restarts it.
 - Tabs unlock by level so players are not overwhelmed; at first only LAWS and WORLD. Done (Config.NavUnlock): Properties 2, Shop 3, Country 4, Orders 5, Military 6, Inventory 7, Bank 8, Raids 10, Bosses 12, Rankings 12, Alliance 15. A dim "LV x" row teases the next tab; unlocking shows a toast and a badge.
 - Also fixed: brand new players never ran the screen inits until they rejoined.
+
+## 2 Oct 22:43 (Kash)
+- Like the game / join the group popup, disguised as a FREE GIFT button in a tab players visit a lot; stays until they join. Done: pulsing gold FREE GIFT button on the LAWS screen; popup with LIKE THE GAME, JOIN GROUP, CLAIM GIFT (100 gold, 1 Founder's Crate, +10% cash). The server checks the group fresh; the button disappears once claimed.
+- Robux purchases show in chat with stars and what was bought for how much. Done: products and passes, server-wide, e.g. "⭐ Testland bought 10 Founder's Crates for R$399! ⭐". Ad rewards are not announced.
+- Watch an ad to refill Influence. Done: WATCH AD · FREE on the out-of-Influence popup (only when Roblox has an ad for the player), 5 min cooldown. Uses the 9 R$ refill product as the reward (Roblox rule: 3-10 R$ value). Needs the game public with rewarded ads enabled (2,000+ monthly visitors, verified ID).

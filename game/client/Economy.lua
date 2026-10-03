@@ -94,7 +94,19 @@ local function showRefill(App)
 		local rs = UI.mk("UIScale", {}, rib)
 		TweenService:Create(rs, TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Scale = 1.08 }):Play()
 	end
-	UI.button(body, "slate", "WAIT", function() close() end, { pos = UDim2.new(0.5, 0, 1, -2), anchor = Vector2.new(0.5, 1), sz = UDim2.fromOffset(170, 42), z = 74 })
+	local waitB = UI.button(body, "slate", "WAIT", function() close() end, { pos = UDim2.new(0.5, 0, 1, -2), anchor = Vector2.new(0.5, 1), sz = UDim2.fromOffset(170, 42), z = 74 })
+	-- WATCH AD (Kash 2 Oct): rewarded video ad refills Influence for free. Only shown when Roblox has an ad for this player.
+	task.spawn(function()
+		local okA, res = pcall(function() return game:GetService("AdService"):GetAdAvailabilityNowAsync(Enum.AdFormat.RewardedVideo) end)
+		local available = okA and res and res.AdAvailabilityResult == Enum.AdAvailabilityResult.IsAvailable
+		if not available or closed or not panel.Parent then return end
+		waitB.Inst.Position = UDim2.new(1, 0, 1, -2); waitB.Inst.AnchorPoint = Vector2.new(1, 1)
+		waitB.Inst.Size = UDim2.new(0.5, -6, 0, 42)
+		UI.button(body, "blue", "WATCH AD · FREE", function(btn)
+			local r = App.req("adRefill", {}, btn)
+			if r.ok then close() end
+		end, { pos = UDim2.new(0, 0, 1, -2), anchor = Vector2.new(0, 1), sz = UDim2.new(0.5, -6, 0, 42), z = 74, icon = "icon_tv", textSize = 15 })
+	end)
 
 	-- live timer; closes itself when Influence is full again (a Robux refill lands through a full sync)
 	local startInf = st.inf or 0
@@ -121,6 +133,18 @@ S.laws = { build = function(host, App)
 	local obj = { era = nil, cards = {} }
 	local tabs
 	local grid = UI.list(body, { pos = UDim2.fromOffset(0, 44), sz = UDim2.new(1, 0, 1, -44), grid = UDim2.new(1 / 3, -8, 0, 138), gap = 10, z = 6 })
+
+	-- FREE GIFT (Kash 2 Oct): like the game + join the group. Lives on Laws (the most visited tab) until claimed.
+	local giftBtn = UI.button(body, "gold", "FREE GIFT", function() if App.showGroupGift then App.showGroupGift() end end,
+		{ pos = UDim2.new(1, -4, 0, 2), anchor = Vector2.new(1, 0), sz = UDim2.fromOffset(170, 38), z = 9, icon = "icon_gift", textSize = 17 })
+	giftBtn.Inst.Visible = false
+	do
+		local gs = UI.mk("UIScale", {}, giftBtn.Inst)
+		game:GetService("TweenService"):Create(gs, TweenInfo.new(0.7, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Scale = 1.07 }):Play()
+	end
+	local function giftVis(st) giftBtn.Inst.Visible = st and st.onboarded and not st.groupGift and (st.groupId or 0) ~= 0 or false end
+	App.on("full", giftVis)
+	giftVis(App.state)
 
 	local function holdRepeat(btn, fn)
 		local holding = false

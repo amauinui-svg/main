@@ -1067,6 +1067,49 @@ function act.rankings(plr, p, a)
 end
 
 -- requests that return data the client shows, without needing a full resync
+-- FREE GIFT (Kash 2 Oct): join the group, claim once. Checked fresh with GroupService (IsInGroup caches per session).
+function act.groupGift(plr, p)
+	local d = p.data
+	if d.groupGift then return no("You already claimed your gift") end
+	local cd = allyCd(p, "gift", 3); if cd then return no(cd) end
+	local gid = Config.Group.Id
+	local inGroup = false
+	local okG, groups = pcall(function() return game:GetService("GroupService"):GetGroupsAsync(plr.UserId) end)
+	if okG and type(groups) == "table" then for _, g in ipairs(groups) do if g.Id == gid then inGroup = true end end end
+	if not inGroup then local okI, r = pcall(plr.IsInGroup, plr, gid); inGroup = okI and r or false end
+	if not inGroup then return no("Join the group first, then claim") end
+	p.inGroup = true
+	d.groupGift = true
+	d.gold += Config.GroupGift.gold
+	d.crates.limited += Config.GroupGift.limitedCrates
+	return ok({ gold = Config.GroupGift.gold, crates = Config.GroupGift.limitedCrates })
+end
+
+-- watch an ad to refill Influence. The reward arrives through ProcessReceipt (rewarded video ads).
+function act.adRefill(plr, p)
+	local d = p.data
+	if d.inf >= R.MaxInfluence(d.lv, d.sk) then return no("Influence is already full") end
+	if (p.adNext or 0) > os.clock() then return no("Next ad in " .. math.ceil(p.adNext - os.clock()) .. "s") end
+	local prod = Config.Products[Config.AdRefill.product]
+	if not prod or prod.id == 0 then return no("Ads are not available") end
+	p.adNext = os.clock() + Config.AdRefill.cooldown
+	p.adAt = os.clock()
+	task.spawn(function()
+		local AdService = game:GetService("AdService")
+		local okA, err = pcall(function()
+			local reward = AdService:CreateAdRewardFromDevProductId(prod.id)
+			return AdService:ShowRewardedVideoAdAsync(plr, reward)
+		end)
+		if not okA then
+			p.adNext = 0
+			warn("[Idle Country] rewarded ad failed: " .. tostring(err))
+			PS.Note(p, { kind = "toast", text = "No ad available right now. Try again later.", tone = "bad" })
+			PS.Sync(plr)
+		end
+	end)
+	return ok()
+end
+
 -- tutorial progress (Kash 2 Oct): step number, or -1 when skipped or finished
 function act.tutorial(plr, p, a)
 	local step = tonumber(a and a.step)
@@ -1101,7 +1144,7 @@ function act.adminList(plr, p)
 	return ok({ list = AD.List() })
 end
 
-A.NoSync = { tutorial = true, allyList = true, rankings = true, profile = true, adminList = true }
+A.NoSync = { tutorial = true, adRefill = true, allyList = true, rankings = true, profile = true, adminList = true }
 -- requests allowed before onboarding finishes
 A.PreOnboard = { sync = true, onboard = true, rankings = true, admin = true, adminList = true }
 return A

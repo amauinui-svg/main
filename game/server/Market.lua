@@ -138,7 +138,9 @@ function grant.InfluenceRefill(p)
 	return true
 end
 function grant.InfluenceRefillFirst(p)
-	p.data.firstRefill = true
+	-- the same product is the rewarded-ad prize; watching an ad must not use up the cheap first refill
+	if not (p.adAt and os.clock() - p.adAt < 600) then p.data.firstRefill = true end
+	p.adAt = nil
 	return grant.InfluenceRefill(p)
 end
 function grant.SupplyRefill(p)
@@ -251,6 +253,15 @@ function MK.ProcessReceipt(info)
 	if not okR then warn("[Idle Country] receipt " .. tostring(info.PurchaseId) .. " failed: " .. tostring(res)); return Enum.ProductPurchaseDecision.NotProcessedYet end
 	return res
 end
+-- purchase shout-out to everyone in the server (Kash 2 Oct): shown in chat with stars
+function MK.Announce(plr, what, robux)
+	local Sync = game:GetService("ReplicatedStorage"):FindFirstChild("Remotes") and game:GetService("ReplicatedStorage").Remotes:FindFirstChild("Sync")
+	if not Sync then return end
+	local p = PS.Profiles[plr]
+	local who = (p and p.data and p.data.name ~= "" and p.data.name) or plr.DisplayName
+	Sync:FireAllClients("chat", { who = who, user = plr.Name, what = what, robux = robux })
+end
+
 function MK._receipt(plr, p, info)
 	local d = p.data
 	d.receipts = d.receipts or {}
@@ -268,6 +279,7 @@ function MK._receipt(plr, p, info)
 		end
 		d.pending[key] = nil
 		table.insert(d.receipts, info.PurchaseId)
+		if (info.CurrencySpent or 0) > 0 then MK.Announce(plr, Config.ProductNames[key] or key, info.CurrencySpent) end
 		while #d.receipts > 50 do table.remove(d.receipts, 1) end
 	end
 	-- only tell Roblox it is granted once the profile (with the receipt id) is safely saved
@@ -309,6 +321,7 @@ function MK.Start()
 				p.data.ownedPasses = type(p.data.ownedPasses) == "table" and p.data.ownedPasses or {}
 				p.data.ownedPasses[key] = true
 				PS.Note(p, { kind = "toast", text = pass.name .. " unlocked!", tone = "good" })
+				MK.Announce(plr, pass.name, pass.price)
 			end
 		end
 		PS.EnsureConvoys(p)

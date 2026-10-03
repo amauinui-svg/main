@@ -62,6 +62,17 @@ C.StudioGrantsPasses = true
 -- Roblox Premium members: +5% cash. Group members: +10% cash (GroupId 0 = no group yet; Kash to provide).
 C.PremiumBonus = 0.05
 C.Group = { Id = 3735672, Bonus = 0.10 }
+-- FREE GIFT button (Kash 2 Oct): stays on the Laws screen until the player is in the group. One time gift on claim.
+C.GroupGift = { gold = 100, limitedCrates = 1 }
+-- Watch an ad to refill Influence (rewarded video ads; the reward is the 9 R$ refill product, within Roblox's 3-10 R$ rule)
+C.AdRefill = { product = "InfluenceRefillFirst", cooldown = 300 }
+-- purchase shout-outs in chat (Kash 2 Oct)
+C.ProductNames = { Crate1 = "a Founder's Crate", Crate3 = "3 Founder's Crates", Crate10 = "10 Founder's Crates", StarterPack = "the Starter Pack",
+	GoldSmall = "50 Gold", GoldBig = "250 Gold", GoldHuge = "1,000 Gold", TreasuryGrant = "a Treasury Grant", InfluenceRefill = "an Influence Refill",
+	InfluenceRefillFirst = "an Influence Refill", SupplyRefill = "a Supply Refill", RaidShield = "a Raid Shield", InstantArmy = "an Instant Army",
+	RevengeStrike = "a Revenge Strike", FinishConvoy1 = "an instant convoy", FinishConvoy2 = "an instant convoy", FinishConvoy3 = "an instant convoy",
+	FinishConvoy4 = "an instant convoy", ChallengeRefresh = "a Challenge Refresh", MoveCapital = "a Capital Move", LimitedBundle = "the Limited Bundle",
+	ChangeGovernment = "a new Government" }
 
 -- Rent (Kash 18:49): the alliance holding a capital may charge its residents this % of their property income.
 -- Max by city tier (city, capital, major capital, global city). New players pay nothing for 48 hours. Silent.

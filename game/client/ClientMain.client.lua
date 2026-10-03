@@ -134,6 +134,37 @@ function App.confirm(title, body, okLabel, kind, fn)
 	return panel
 end
 function App.closeModal() modalHost.Visible = false end
+
+-- FREE GIFT popup (Kash 2 Oct): like the game + join the group, then claim once
+function App.showGroupGift()
+	local st = App.state
+	if not st then return end
+	local gift = Config.GroupGift or { gold = 100, limitedCrates = 1 }
+	local bonus = math.floor(((Config.Group and Config.Group.Bonus) or 0.1) * 100 + 0.5)
+	UI.clear(modalHost)
+	modalHost.Visible = true
+	local _, b = UI.panel(modalHost, "FREE GIFT", { sz = UDim2.fromOffset(520, 360), pos = UDim2.fromScale(0.5, 0.5), anchor = Vector2.new(0.5, 0.5), z = 71 })
+	UI.button(b, "slate", "X", function() modalHost.Visible = false end, { pos = UDim2.new(1, 0, 0, -40), anchor = Vector2.new(1, 0), sz = UDim2.fromOffset(40, 36), z = 75, textSize = 16 })
+	UI.icon(b, "icon_gift", 64, C.gold, UDim2.fromOffset(0, 4), { z = 73 })
+	text(b, "Like the game and join our group!", { font = "heavy", size = 20, pos = UDim2.fromOffset(80, 6), sz = UDim2.new(1, -80, 0, 26), z = 73 })
+	text(b, "<font color='#f0c75a'><b>+" .. gift.gold .. " GOLD</b></font>  ·  <font color='#f0c75a'><b>" .. gift.limitedCrates .. " FOUNDER'S CRATE</b></font>  ·  <font color='#8fd07a'><b>+" .. bonus .. "% CASH FOREVER</b></font>",
+		{ size = 16, rich = true, wrap = true, pos = UDim2.fromOffset(80, 38), sz = UDim2.new(1, -80, 0, 44), z = 73 })
+	local gid = st.groupId or (Config.Group and Config.Group.Id) or 0
+	UI.button(b, "blue", "1. LIKE THE GAME", function()
+		pcall(function() game:GetService("AvatarEditorService"):PromptSetFavorite(game.PlaceId, Enum.AvatarItemType.Asset, true) end)
+	end, { pos = UDim2.fromOffset(0, 104), sz = UDim2.new(0.5, -6, 0, 50), z = 73, icon = "icon_sparkles", textSize = 15 })
+	UI.button(b, "green", "2. JOIN GROUP", function()
+		pcall(function() game:GetService("GroupService"):PromptJoinAsync(gid) end)
+	end, { pos = UDim2.new(0.5, 6, 0, 104), sz = UDim2.new(0.5, -6, 0, 50), z = 73, icon = "icon_alliance", textSize = 15 })
+	UI.button(b, "gold", "3. CLAIM GIFT", function(btn)
+		local res = App.req("groupGift", {}, btn)
+		if res.ok then
+			modalHost.Visible = false
+			App.toast("FREE GIFT CLAIMED!", "+" .. (res.gold or gift.gold) .. " gold · " .. (res.crates or gift.limitedCrates) .. " Founder's Crate · +" .. bonus .. "% cash", "gold")
+			App.play("purchase", { volume = 0.5 })
+		end
+	end, { pos = UDim2.new(0.5, 0, 1, -4), anchor = Vector2.new(0.5, 1), sz = UDim2.new(1, 0, 0, 56), z = 73, textSize = 20 })
+end
 App.modalHost = modalHost
 
 ---------------------------------------------------------------- top bar
@@ -550,6 +581,17 @@ Remotes.Sync.OnClientEvent:Connect(function(kind, data)
 		App.emit("tick", st)
 	elseif kind == "notes" then
 		handleNotes(data)
+	elseif kind == "chat" then
+		-- purchase shout-out (Kash 2 Oct): a starred system message in chat
+		pcall(function()
+			local d = data or {}
+			local TCS = game:GetService("TextChatService")
+			local ch = TCS:FindFirstChild("TextChannels") and TCS.TextChannels:FindFirstChild("RBXGeneral")
+			local function esc(x) return (tostring(x or ""):gsub("&", "&amp;"):gsub("<", "&lt;"):gsub(">", "&gt;")) end
+			local star = utf8.char(0x2B50)
+			local msg = "<font color='#f0c75a'><b>" .. star .. " " .. esc(d.who) .. " bought " .. esc(d.what) .. " for R$" .. esc(d.robux) .. "! " .. star .. "</b></font>"
+			if ch then ch:DisplaySystemMessage(msg) end
+		end)
 	elseif kind == "world" then
 		App.world = data
 		App.emit("world", data)
