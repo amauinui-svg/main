@@ -431,3 +431,6 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 
 ## 3 Oct 09:07 (Kash)
 - Purchase shout-out showed the country name: now the Roblox name (Display (@user)). Purchases now rain confetti: a full burst for the buyer, a small one for everyone else in the server.
+
+## 3 Oct 09:17 (Kash)
+- More thumbnail concepts with the title overlaid on the art (no split background), many variations, showing game mechanics. Made 14 concepts x2 (art/ads/v4): pass laws, get rich, trade the world, world event x2.5, raid players, spy first, legendary drop, hire officers, defeat bosses, hut to empire, capture cities, earn while AFK, build wonders, bank your cash.
