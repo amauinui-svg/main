@@ -10,6 +10,22 @@ pcall(function() ReplicatedFirst:RemoveDefaultLoadingScreen() end)
 local BG = "rbxassetid://78862615309260"
 local LOGO = "rbxassetid://92029969593916"
 local VERSION = "ALPHA 0.3"
+-- the UI kit's plates (Shared.Assets bar_track / bar_fill, same 9-slice centres as client/UI.lua). Inlined because this
+-- runs from ReplicatedFirst before ReplicatedStorage has replicated.
+local KIT = {
+	bar_track = { "rbxassetid://134110984464626", Rect.new(8, 8, 56, 20), 0.75 },
+	bar_fill = { "rbxassetid://125319890576593", Rect.new(6, 6, 34, 18), 0.75 },
+}
+local function plate(key, color)
+	local k = KIT[key]
+	local o = Instance.new("ImageLabel")
+	o.BackgroundTransparency = 1; o.BorderSizePixel = 0; o.Image = k[1]
+	o.ScaleType = Enum.ScaleType.Slice; o.SliceCenter = k[2]; o.SliceScale = k[3]
+	if color then o.ImageColor3 = color end
+	return o
+end
+local HEAVY = Font.new("rbxasset://fonts/families/RobotoCondensed.json", Enum.FontWeight.ExtraBold)
+local BOLD = Font.new("rbxasset://fonts/families/RobotoCondensed.json", Enum.FontWeight.Bold)
 
 local gui = Instance.new("ScreenGui")
 gui.Name = "IC_Loading"; gui.IgnoreGuiInset = true; gui.DisplayOrder = 100; gui.ResetOnSpawn = false
@@ -32,27 +48,30 @@ logo.ImageTransparency = 1; logo.Parent = root
 local logoScale = Instance.new("UIScale"); logoScale.Scale = 0.85; logoScale.Parent = logo
 local ar = Instance.new("UISizeConstraint"); ar.MaxSize = Vector2.new(760, 480); ar.Parent = logo
 
-local chip = Instance.new("TextLabel")
-chip.Text = "ALPHA"; chip.Font = Enum.Font.GothamBold; chip.TextSize = 18; chip.TextColor3 = Color3.new(1, 1, 1)
-chip.BackgroundColor3 = Color3.fromHex("8f2a24"); chip.BorderSizePixel = 0; chip.Size = UDim2.fromOffset(96, 34)
-chip.AnchorPoint = Vector2.new(0, 0.5); chip.Position = UDim2.new(0.5, 150, 0.2, 0); chip.TextTransparency = 1; chip.BackgroundTransparency = 1; chip.Parent = root
-local cs = Instance.new("UIStroke"); cs.Color = Color3.fromHex("c9473e"); cs.Thickness = 1.5; cs.Transparency = 1; cs.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; cs.Parent = chip
+-- ALPHA tag: the kit's tag plate (bar fill art tinted red)
+local chip = plate("bar_fill", Color3.fromHex("c9473e"))
+chip.Size = UDim2.fromOffset(96, 34); chip.AnchorPoint = Vector2.new(0, 0.5); chip.Position = UDim2.new(0.5, 150, 0.2, 0); chip.ImageTransparency = 1; chip.Parent = root
+local chipL = Instance.new("TextLabel")
+chipL.Text = "ALPHA"; chipL.FontFace = HEAVY; chipL.TextSize = 18; chipL.TextColor3 = Color3.new(1, 1, 1); chipL.BackgroundTransparency = 1
+chipL.Size = UDim2.fromScale(1, 1); chipL.TextTransparency = 1; chipL.ZIndex = 2; chipL.Parent = chip
 
 local status = Instance.new("TextLabel")
-status.Text = "LOADING YOUR NATION"; status.Font = Enum.Font.GothamMedium; status.TextSize = 20; status.TextColor3 = Color3.fromHex("ece8dc")
+status.Text = "LOADING YOUR NATION"; status.FontFace = BOLD; status.TextSize = 20; status.TextColor3 = Color3.fromHex("ece8dc")
 status.TextXAlignment = Enum.TextXAlignment.Left; status.BackgroundTransparency = 1; status.AnchorPoint = Vector2.new(0.5, 0)
 status.Position = UDim2.fromScale(0.5, 0.66); status.Size = UDim2.new(0.42, 0, 0, 26); status.TextTransparency = 1; status.Parent = root
-local track = Instance.new("Frame")
-track.AnchorPoint = Vector2.new(0.5, 0); track.Position = UDim2.new(0.5, 0, 0.66, 34); track.Size = UDim2.new(0.42, 0, 0, 14)
-track.BackgroundColor3 = Color3.fromHex("1c1a16"); track.BorderSizePixel = 0; track.BackgroundTransparency = 1; track.ClipsDescendants = true; track.Parent = root
-local ts = Instance.new("UIStroke"); ts.Color = Color3.fromHex("6e5a2c"); ts.Transparency = 1; ts.Parent = track
-local shine = Instance.new("Frame")
-shine.Size = UDim2.fromScale(0.3, 1); shine.BackgroundColor3 = Color3.fromHex("f0c75a"); shine.BorderSizePixel = 0; shine.Parent = track
+-- the progress bar: the kit's bar track with a gold bar-fill shimmer sweeping through it
+local track = plate("bar_track")
+track.AnchorPoint = Vector2.new(0.5, 0); track.Position = UDim2.new(0.5, 0, 0.66, 34); track.Size = UDim2.new(0.42, 0, 0, 18)
+track.ImageTransparency = 1; track.Parent = root
+local inner = Instance.new("Frame")
+inner.BackgroundTransparency = 1; inner.Position = UDim2.fromOffset(3, 3); inner.Size = UDim2.new(1, -6, 1, -6); inner.ClipsDescendants = true; inner.ZIndex = 2; inner.Parent = track
+local shine = plate("bar_fill", Color3.fromHex("f0c75a"))
+shine.Size = UDim2.fromScale(0.3, 1); shine.ZIndex = 2; shine.Parent = inner
 local sg = Instance.new("UIGradient")
 sg.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.5, 0), NumberSequenceKeypoint.new(1, 1) }); sg.Parent = shine
 
 local foot = Instance.new("TextLabel")
-foot.Text = "This game is a work of fiction. Nations, leaders and events are invented."; foot.Font = Enum.Font.Gotham; foot.TextSize = 14
+foot.Text = "This game is a work of fiction. Nations, leaders and events are invented."; foot.FontFace = BOLD; foot.TextSize = 14
 foot.TextColor3 = Color3.fromHex("b8b2a6"); foot.TextXAlignment = Enum.TextXAlignment.Left; foot.BackgroundTransparency = 1
 foot.Position = UDim2.new(0, 40, 1, -46); foot.Size = UDim2.new(0.6, 0, 0, 20); foot.TextTransparency = 1; foot.Parent = root
 local ver = foot:Clone(); ver.Text = "VERSION " .. VERSION; ver.TextXAlignment = Enum.TextXAlignment.Right
@@ -65,8 +84,8 @@ local function tw(o, t, p, style) TweenService:Create(o, TweenInfo.new(t, style 
 tw(bg, 0.8, { ImageTransparency = 0 })
 tw(logo, 0.7, { ImageTransparency = 0 }); tw(logoScale, 0.9, { Scale = 1 }, Enum.EasingStyle.Back)
 task.delay(0.35, function()
-	tw(chip, 0.4, { TextTransparency = 0, BackgroundTransparency = 0 }); tw(cs, 0.4, { Transparency = 0 })
-	tw(status, 0.4, { TextTransparency = 0 }); tw(track, 0.4, { BackgroundTransparency = 0 }); tw(ts, 0.4, { Transparency = 0 })
+	tw(chip, 0.4, { ImageTransparency = 0 }); tw(chipL, 0.4, { TextTransparency = 0 })
+	tw(status, 0.4, { TextTransparency = 0 }); tw(track, 0.4, { ImageTransparency = 0 })
 	tw(foot, 0.4, { TextTransparency = 0.2 }); tw(ver, 0.4, { TextTransparency = 0.2 })
 end)
 -- slow camera drift on the art + the shimmering bar

@@ -29,7 +29,9 @@ local QUEST_GOLD, QUEST_SEALS = 15, 3
 local function frame(host, App, title)
 	local UI = App.UI
 	local panel, body = UI.panel(host, title, { sz = UDim2.new(1, -20, 1, -20), pos = UDim2.fromOffset(10, 10), z = 5, titleSize = 26 })
-	local sub = UI.text(panel, "", { font = "bold", size = 15, color = UI.C.muted, pos = UDim2.new(0, 18, 0, 16), sz = UDim2.new(1, -36, 0, 22), z = 7, align = Enum.TextXAlignment.Right, rich = true })
+	-- the header line starts after the title (about 16 px per typewriter letter) so a long line can never run under it
+	local x0 = host:GetAttribute("TabsRight") or (18 + #title * 16 + 16)
+	local sub = UI.text(panel, "", { font = "bold", size = 15, color = UI.C.muted, pos = UDim2.new(0, x0, 0, 16), sz = UDim2.new(1, -x0 - 18, 0, 22), z = 7, align = Enum.TextXAlignment.Right, rich = true, truncate = true })
 	return panel, body, sub
 end
 
@@ -278,10 +280,14 @@ S.alliance = { build = function(host, App)
 		local sw = UI.mk("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(16, 192), Size = UDim2.new(1, -32, 0, 70), ZIndex = 8 }, right)
 		UI.mk("UIGridLayout", { CellSize = UDim2.fromOffset(30, 30), CellPadding = UDim2.fromOffset(6, 6), SortOrder = Enum.SortOrder.LayoutOrder }, sw)
 		local swatches = {}
-		local function mark() for col, s in pairs(swatches) do s.BorderSizePixel = col == obj.form.color and 3 or 0 end end
+		local function mark() for col, s in pairs(swatches) do s.ring.Enabled = col == obj.form.color end end
 		for k, col in ipairs(AC.Colors) do
-			local s = UI.mk("TextButton", { LayoutOrder = k, Text = "", AutoButtonColor = false, BackgroundColor3 = Color3.fromHex(col), BorderColor3 = C.manila, BorderMode = Enum.BorderMode.Inset, ZIndex = 9 }, sw)
-			swatches[col] = s
+			-- colour swatch on an inset plate, with a manila ring on the picked one
+			local cell = UI.img(sw, "inset", { button = true, name = "Swatch", order = k, z = 9 })
+			UI.mk("Frame", { BackgroundColor3 = Color3.fromHex(col), BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(1, -8, 1, -8), ZIndex = 10 }, cell)
+			local ring = UI.mk("UIStroke", { Color = C.manila, Thickness = 2, Enabled = false, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, cell)
+			local s = cell
+			swatches[col] = { ring = ring }
 			s.Activated:Connect(function() obj.form.color = col; mark() end)
 		end
 		mark()
@@ -651,11 +657,12 @@ S.rankings = { build = function(host, App)
 			else
 				if e.flag then UI.flag(card, e.flag, 36, { pos = UDim2.fromOffset(70, 10), z = 8 }) end
 				local isMe = e.uid == myUid
-				text(card, (e.tag and ("[" .. e.tag .. "] ") or "") .. (e.name or "?") .. (isMe and "  <font color='#9a9fa6'>(you)</font>" or ""), { font = "heavy", size = 17, rich = true, pos = UDim2.fromOffset(116, 0), sz = UDim2.new(0.6, -116, 1, 0), z = 8, truncate = true })
 				-- Kash 2 Oct: anyone on the board can be spied on or attacked, whatever server they are in (or offline)
 				local canHit = e.uid and not isMe
 				local right = canHit and 196 or 16
-				text(card, obj.kind == "level" and ("Level " .. e.value) or R.Money(e.value), { font = "heavy", size = 17, color = obj.kind == "level" and C.xp or C.good, pos = UDim2.new(0.6, -right + 16, 0, 0), sz = UDim2.new(0.4, -16, 1, 0), z = 8, align = Enum.TextXAlignment.Right })
+				-- columns: [#] [flag] [name ... truncated] [value, 140 px] [SPY] [ATTACK]
+				text(card, (e.tag and ("[" .. e.tag .. "] ") or "") .. (e.name or "?") .. (isMe and "  <font color='#9a9fa6'>(you)</font>" or ""), { font = "heavy", size = 17, rich = true, pos = UDim2.fromOffset(116, 0), sz = UDim2.new(1, -116 - right - 150, 1, 0), z = 8, truncate = true })
+				text(card, obj.kind == "level" and ("Level " .. e.value) or R.Money(e.value), { font = "heavy", size = 17, color = obj.kind == "level" and C.xp or C.good, pos = UDim2.new(1, -right - 140, 0, 0), sz = UDim2.new(0, 140, 1, 0), z = 8, align = Enum.TextXAlignment.Right, truncate = true })
 				if canHit then
 					local id, nm = "u" .. e.uid, e.name or "?"
 					UI.button(card, "slate", "SPY", function(btn)

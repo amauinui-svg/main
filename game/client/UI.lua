@@ -92,6 +92,7 @@ end
 ---------------------------------------------------------------- buttons
 local INK = { manila = UI.C.manilaInk, gold = UI.C.manilaInk, red = UI.C.white, green = UI.C.white, blue = UI.C.white, slate = UI.C.ink, locked = hex("b9bdc3") }
 -- button(parent, kind, label, onClick, p) -> obj { Inst, Label, Set(kind,label), Busy(bool) }
+-- p.static = true: a non-interactive plate in the button art (status labels like OWNED / LIMITED), no press animation
 function UI.button(parent, kind, label, onClick, p)
 	p = p or {}
 	local b = UI.img(parent, "btn_" .. kind, { button = true, name = p.name or "Button", pos = p.pos, sz = p.sz or UDim2.fromOffset(120, 40), anchor = p.anchor, z = p.z or 4, order = p.order })
@@ -124,6 +125,7 @@ function UI.button(parent, kind, label, onClick, p)
 		face.Position = UDim2.fromOffset(0, on and 2 or 0)
 		TweenService:Create(scale, TweenInfo.new(on and 0.05 or 0.12, on and Enum.EasingStyle.Quad or Enum.EasingStyle.Back), { Scale = on and 0.97 or 1 }):Play()
 	end
+	if p.static then b.Active = false; b.Selectable = false; return obj end
 	b.MouseButton1Down:Connect(function() press(true) end)
 	b.MouseButton1Up:Connect(function() press(false) end)
 	b.MouseLeave:Connect(function() press(false) end)
@@ -170,16 +172,66 @@ function UI.card(parent, p)
 	return UI.img(parent, p.hot and "card_hot" or "card", { name = p.name or "Card", pos = p.pos, sz = p.sz, z = p.z or 6, order = p.order, anchor = p.anchor, button = p.button })
 end
 
+-- chip(parent, text, p) -> chipImage, label. p.w = fixed width (content centred) instead of sizing to the text;
+-- p.button = true makes it an ImageButton (use UI.chipBtn for a clickable chip with press / hover feedback)
 function UI.chip(parent, s, p)
 	p = p or {}
-	local c = UI.img(parent, p.manila and "chip_manila" or "chip", { name = p.name or "Chip", pos = p.pos, sz = UDim2.fromOffset(0, p.h or 24), z = p.z or 7, order = p.order, anchor = p.anchor })
-	c.AutomaticSize = Enum.AutomaticSize.X
+	local c = UI.img(parent, p.manila and "chip_manila" or "chip", { name = p.name or "Chip", pos = p.pos, sz = UDim2.fromOffset(p.w or 0, p.h or 24), z = p.z or 7, order = p.order, anchor = p.anchor, button = p.button, visible = p.visible })
+	if not p.w then c.AutomaticSize = Enum.AutomaticSize.X end
 	mk("UIPadding", { PaddingLeft = UDim.new(0, p.icon and 4 or 8), PaddingRight = UDim.new(0, 8) }, c)
-	mk("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder }, c)
+	mk("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder,
+		HorizontalAlignment = p.w and Enum.HorizontalAlignment.Center or Enum.HorizontalAlignment.Left }, c)
 	if p.icon then UI.icon(c, p.icon, (p.h or 24) - 8, p.iconColor or p.color or (p.manila and UI.C.manilaInk or UI.C.ink), nil, { z = c.ZIndex + 1, order = 0 }) end
 	local l = UI.text(c, s, { size = p.size or 14, font = "bold", color = p.color or (p.manila and UI.C.manilaInk or UI.C.ink), sz = UDim2.new(0, 0, 1, 0), z = c.ZIndex + 1, order = 1, rich = p.rich })
 	l.AutomaticSize = Enum.AutomaticSize.X
 	return c, l
+end
+
+-- chipBtn(parent, text, onClick, p) -> chipButton, label: a compact clickable chip for small inline actions
+-- (DROP RATES on crate cards, "x3 OPEN" shortcuts). Same options as UI.chip.
+function UI.chipBtn(parent, s, onClick, p)
+	p = p or {}
+	local o = {}
+	for k, v in pairs(p) do o[k] = v end
+	o.button = true
+	local c, l = UI.chip(parent, s, o)
+	local sc = mk("UIScale", {}, c)
+	local function to(v, t) TweenService:Create(sc, TweenInfo.new(t or 0.12, Enum.EasingStyle.Back), { Scale = v }):Play() end
+	c.MouseEnter:Connect(function() to(1.06) end)
+	c.MouseLeave:Connect(function() to(1) end)
+	c.MouseButton1Down:Connect(function() to(0.94, 0.05) end)
+	c.MouseButton1Up:Connect(function() to(1.06) end)
+	if onClick then c.Activated:Connect(function() onClick(c, l) end) end
+	return c, l
+end
+
+-- tag(parent, text, color, p) -> plate, label: a solid label plate in the bar-fill art tinted with color (rarity bands,
+-- status tags like EQUIPPED / BEST VALUE). color = nil gives the dark chip plate instead. Sizes to its text unless p.sz.
+function UI.tag(parent, s, color, p)
+	p = p or {}
+	local h = p.h or 18
+	local key = color and "bar_fill" or "chip"
+	local t = UI.img(parent, key, { name = p.name or "Tag", pos = p.pos, sz = p.sz or UDim2.fromOffset(0, h), anchor = p.anchor, z = p.z or 9, order = p.order, color = color, visible = p.visible })
+	if p.rot then t.Rotation = p.rot end
+	local ink = p.textColor or (color and UI.C.manilaInk or UI.C.ink)
+	local l
+	if p.sz then
+		l = UI.text(t, s, { font = "heavy", size = p.size or math.max(10, h - 6), color = ink, align = Enum.TextXAlignment.Center, pos = UDim2.fromOffset(4, 0), sz = UDim2.new(1, -8, 1, 0),
+			z = t.ZIndex + 1, rich = p.rich, scaled = true })
+	else
+		t.AutomaticSize = Enum.AutomaticSize.X
+		mk("UIPadding", { PaddingLeft = UDim.new(0, p.pad or 7), PaddingRight = UDim.new(0, p.pad or 7) }, t)
+		l = UI.text(t, s, { font = "heavy", size = p.size or math.max(10, h - 6), color = ink, sz = UDim2.new(0, 0, 1, 0), z = t.ZIndex + 1, rich = p.rich })
+		l.AutomaticSize = Enum.AutomaticSize.X
+	end
+	return t, l
+end
+
+-- infoBtn(parent, pos, onClick, p) -> button obj: the small square "i" button on the slate button plate
+function UI.infoBtn(parent, pos, onClick, p)
+	p = p or {}
+	local s = p.size or 24
+	return UI.button(parent, p.kind or "slate", "i", onClick, { name = "Info", pos = pos, anchor = p.anchor, sz = UDim2.fromOffset(s, s), z = p.z or 8, order = p.order, textSize = 15, scaledText = false })
 end
 
 function UI.badge(parent, n, pos, z)

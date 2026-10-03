@@ -14,6 +14,8 @@ local R = require(RS.Shared.Rules)
 local M = require(RS.Shared.Military)
 local Config = require(RS.Shared.Config)
 local RC = Config.Raid
+-- nobody (bots or players) can raid a country before it has the RAIDS tab itself (Kash 2 Oct 23:38)
+local function protectedLv() return math.max(RC.AIMinTargetLevel or 1, (Config.NavUnlock and Config.NavUnlock.battle) or 1) end
 
 local O = require(RS.Shared.Officers)
 local RA = {}
@@ -168,7 +170,7 @@ function RA.Targets(p)
 	local list = {}
 	local t = now()
 	for plr, q in pairs(PS.Profiles) do
-		if q ~= p and q.data.onboarded and not q.loading and not q.leaving then
+		if q ~= p and q.data.onboarded and not q.loading and not q.leaving and q.data.lv >= protectedLv() then
 			local _, def = PS.Power(q)
 			local id = "u" .. plr.UserId
 			table.insert(list, {
@@ -390,6 +392,7 @@ local function remoteAttack(plr, p, id, uid, guaranteed)
 	if not card or not card.def then return { ok = false, msg = "No war records for that nation yet" } end
 	local t = now()
 	if (card.sh or 0) > t then return { ok = false, msg = "They are under a raid shield" } end
+	if (card.lv or 0) < protectedLv() then return { ok = false, msg = "That nation is too new to be raided" } end
 	p.raidCd = p.raidCd or {}
 	if not guaranteed and (p.raidCd[id] or 0) + RC.Cooldown > t then return { ok = false, msg = "You just attacked them. Try again in " .. ((p.raidCd[id] or 0) + RC.Cooldown - t) .. "s" } end
 	if not guaranteed and d.sup < RC.Supply then return { ok = false, msg = "Not enough Supply (" .. RC.Supply .. " needed)" } end
@@ -518,6 +521,7 @@ function RA.Attack(plr, p, id, guaranteed)
 		return { ok = false, msg = "That nation is no longer in this server" }
 	end
 	if q == p then return { ok = false, msg = "You cannot raid yourself" } end
+	if q and q.data.lv < protectedLv() then return { ok = false, msg = "That nation is too new to be raided" } end
 	local t = now()
 	if (lastHit[id] or 0) + RC.Cooldown > t then return { ok = false, msg = "They were just raided. Try again in " .. ((lastHit[id] or 0) + RC.Cooldown - t) .. "s" } end
 	-- you can't hammer the same target: one attack per target per cooldown, win or lose (review #7)
@@ -592,7 +596,7 @@ local function aiRaid()
 	local t = now()
 	for plr, q in pairs(PS.Profiles) do
 		local d = q.data
-		if d.onboarded and not q.loading and not q.leaving and d.lv >= RC.AIMinTargetLevel and (d.shield or 0) <= t and (lastHit["u" .. plr.UserId] or 0) + RC.Cooldown <= t
+		if d.onboarded and not q.loading and not q.leaving and d.lv >= protectedLv() and (d.shield or 0) <= t and (lastHit["u" .. plr.UserId] or 0) + RC.Cooldown <= t
 			and d.cash > R.MinuteValue(d.lv) * 10 then
 			table.insert(candidates, { plr, q })
 		end

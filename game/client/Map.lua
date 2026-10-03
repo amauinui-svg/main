@@ -355,7 +355,7 @@ function Map.build(host, App)
 		if auto then
 			local b = UI.button(dock, st.autoOff and "slate" or "green", st.autoOff and "AUTO: OFF" or "AUTO: ON", function(btn)
 				App.req("toggleAuto", {}, btn)
-			end, { sz = UDim2.fromOffset(110, 80), z = 21, order = 0, icon = "icon_bot", textSize = 14 })
+			end, { sz = UDim2.fromOffset(110, 80), z = 21, order = 0, icon = "icon_bot", iconSize = 22, textSize = 14 })
 		end
 		for i, c in ipairs(st.convoys) do
 			local card = UI.card(dock, { button = true, sz = UDim2.fromOffset(214, 80), z = 21, order = i, hot = (selConvoy == i) })
@@ -391,7 +391,7 @@ function Map.build(host, App)
 			UI.button(dock, (st.cash or 0) >= cost and "green" or "slate", "NEW CONVOY\n" .. R.Money(cost), function(btn)
 				local res = App.req("buyConvoy", {}, btn)
 				if res.ok then App.toast("NEW CONVOY!", "Send it from your capital", "gold"); App.play("purchase", { volume = 0.45 }) end
-			end, { sz = UDim2.fromOffset(150, 80), z = 21, order = 50, icon = "icon_plus", textSize = 14 })
+			end, { sz = UDim2.fromOffset(150, 80), z = 21, order = 50, icon = "icon_plus", iconSize = 22, textSize = 14 })
 		elseif nextGate then
 			local card = UI.card(dock, { sz = UDim2.fromOffset(150, 80), z = 21, order = 50 })
 			UI.icon(card, "icon_lock", 22, C.dim, UDim2.fromOffset(10, 10), { z = 22 })
@@ -399,7 +399,7 @@ function Map.build(host, App)
 			text(card, "Buy it at level " .. nextGate, { size = 14, pos = UDim2.fromOffset(10, 40), sz = UDim2.new(1, -20, 0, 30), z = 22, wrap = true })
 		end
 		if not (st.gp and st.gp.ExtraConvoys) then
-			local b = UI.button(dock, "gold", "+2 CONVOYS", function(btn) App.req("buyPass", { key = "ExtraConvoys" }, btn) end, { sz = UDim2.fromOffset(140, 80), z = 21, order = 60, icon = "icon_plus", textSize = 14 })
+			local b = UI.button(dock, "gold", "+2 CONVOYS", function(btn) App.req("buyPass", { key = "ExtraConvoys" }, btn) end, { sz = UDim2.fromOffset(140, 80), z = 21, order = 60, icon = "icon_plus", iconSize = 22, textSize = 14 })
 		end
 	end
 	local function tickDock()
@@ -699,6 +699,7 @@ function Map.build(host, App)
 	-- keep the chip clear of the city dossier panel (right side) when it is open
 	local function layoutEventChip()
 		evChip.Position = panel.Visible and UDim2.new(0.5, -190, 0, 44) or UDim2.new(0.5, 0, 0, 44)
+		eraChip.Position = panel.Visible and UDim2.new(0.5, -190, 0, 10) or UDim2.new(0.5, 0, 0, 10)
 	end
 	panel:GetPropertyChangedSignal("Visible"):Connect(layoutEventChip)
 	local evShown, lastEvKey -- evShown = the event the marker and chip describe

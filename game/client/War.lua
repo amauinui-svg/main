@@ -9,7 +9,9 @@ local S = {}
 local function frame(host, App, title)
 	local UI = App.UI
 	local panel, body = UI.panel(host, title, { sz = UDim2.new(1, -20, 1, -20), pos = UDim2.fromOffset(10, 10), z = 5, titleSize = 26 })
-	local sub = UI.text(panel, "", { font = "bold", size = 15, color = UI.C.muted, pos = UDim2.new(0, 18, 0, 16), sz = UDim2.new(1, -36, 0, 22), z = 7, align = Enum.TextXAlignment.Right, rich = true })
+	-- the header line sits right of the title (or right of the MILITARY / OFFICERS sub tabs when this screen is one of them)
+	local x0 = host:GetAttribute("TabsRight") or (18 + #title * 16 + 16)
+	local sub = UI.text(panel, "", { font = "bold", size = 15, color = UI.C.muted, pos = UDim2.new(0, x0, 0, 16), sz = UDim2.new(1, -x0 - 18, 0, 22), z = 7, align = Enum.TextXAlignment.Right, rich = true, truncate = true })
 	return panel, body, sub
 end
 
@@ -58,7 +60,7 @@ S.military = { build = function(host, App)
 			text(card, u.name .. (owned > 0 and ("  <font color='#9a9fa6'>x" .. owned .. "</font>") or ""), { font = "heavy", size = 18, rich = true, pos = UDim2.fromOffset(58, 8), sz = UDim2.new(0.38, -58, 0, 24), z = 8, truncate = true })
 			text(card, D.Eras[u.era].name .. (locked and (u.lvl > st.lv and (" · unlocks at level " .. u.lvl) or " · advance era in Laws") or ""), { size = 13, color = C.muted, pos = UDim2.fromOffset(58, 36), sz = UDim2.new(0.38, -58, 0, 18), z = 8 })
 			text(card, "<font color='#e2695f'>ATK " .. R.Short(u.atk) .. "</font>   <font color='#7fb0e6'>DEF " .. R.Short(u.def) .. "</font>", { font = "heavy", size = 16, rich = true, pos = UDim2.new(0.38, 0, 0, 10), sz = UDim2.new(0.22, 0, 0, 22), z = 8 })
-			text(card, "Each costs 6% more than the last", { size = 12, color = C.muted, pos = UDim2.new(0.38, 0, 0, 36), sz = UDim2.new(0.25, 0, 0, 18), z = 8 })
+			text(card, "Each costs 6% more than the last", { size = 12, color = C.muted, pos = UDim2.new(0.38, 0, 0, 36), sz = UDim2.new(0.22, 0, 0, 18), z = 8, truncate = true })
 			if locked then
 				UI.button(card, "locked", u.lvl > st.lv and ("LEVEL " .. u.lvl) or "ERA LOCKED", nil, { pos = UDim2.new(1, -170, 0, 14), sz = UDim2.fromOffset(160, 42), z = 9 })
 			else

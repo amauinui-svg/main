@@ -102,9 +102,9 @@ function O.show(App)
 		local emblems = { false }
 		for _, e in ipairs(R.FlagEmblems or {}) do table.insert(emblems, e) end
 		for ei, e in ipairs(emblems) do
-			local b = UI.mk("TextButton", { LayoutOrder = ei, Text = e and "" or "NONE", FontFace = UI.Font.heavy, TextSize = 10, TextColor3 = C.muted, AutoButtonColor = false, BackgroundColor3 = C.slate, BorderSizePixel = 0, Size = UDim2.fromOffset(34, 34), ZIndex = 64 }, em)
-			UI.mk("UICorner", { CornerRadius = UDim.new(0, 6) }, b)
-			if (form.flag.e or false) == e then UI.mk("UIStroke", { Color = C.manila, Thickness = 2 }, b) end
+			local b = UI.img(em, "inset", { button = true, name = "Emblem", order = ei, sz = UDim2.fromOffset(34, 34), z = 64 })
+			if not e then text(b, "NONE", { font = "heavy", size = 10, color = C.muted, align = Enum.TextXAlignment.Center, sz = UDim2.fromScale(1, 1), z = 65 }) end
+			if (form.flag.e or false) == e then UI.mk("UIStroke", { Color = C.manila, Thickness = 2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, b) end
 			if e then UI.icon(b, e, 22, C.ink, UDim2.fromScale(0.5, 0.5), { z = 65, anchor = Vector2.new(0.5, 0.5) }) end
 			local locked = e and not owned
 			if locked then lockMark(b, 66) end

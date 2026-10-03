@@ -154,14 +154,10 @@ end
 -- an "i" button that explains a system in a small popup
 local function infoButton(App, parent, title, body, pos, z)
 	local UI = App.UI
-	local b = UI.img(parent, "chip", { button = true, name = "Info", sz = UDim2.fromOffset(26, 26), pos = pos, z = z or 8 })
-	UI.text(b, "i", { font = "heavy", size = 16, color = UI.C.manila, align = Enum.TextXAlignment.Center, sz = UDim2.fromScale(1, 1), z = (z or 8) + 1 })
-	hover(b, 0.1)
-	b.Activated:Connect(function()
+	return UI.infoBtn(parent, pos, function()
 		local _, bd = popup(App, title, 460, 260)
 		UI.text(bd, body, { size = 16, wrap = true, rich = true, sz = UDim2.fromScale(1, 1), valign = Enum.TextYAlignment.Top, z = 74 })
-	end)
-	return b
+	end, { z = z or 8, size = 26 }).Inst
 end
 
 -- HP bar that tweens (UI.bar sets size instantly)
@@ -216,16 +212,10 @@ local function closeModal(App)
 	mh.BackgroundTransparency = OVERLAY
 	App.UI.clear(mh)
 end
--- a dark rounded reward pill: icon + text, sizes to its text
+-- a reward chip (the kit's chip plate): icon + big text, sizes to its text
 local function rewardPill(UI, parent, icon, color, s, order, z)
-	local f = UI.mk("Frame", { Name = "Reward", BackgroundColor3 = Color3.fromHex("1a1f28"), BorderSizePixel = 0, Size = UDim2.fromOffset(0, 40), AutomaticSize = Enum.AutomaticSize.X, ZIndex = z, LayoutOrder = order }, parent)
-	UI.mk("UICorner", { CornerRadius = UDim.new(0, 6) }, f)
-	UI.mk("UIStroke", { Color = color, Thickness = 1, Transparency = 0.6 }, f)
-	UI.mk("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 14) }, f)
-	UI.mk("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, f)
-	UI.icon(f, icon, 26, color, nil, { z = z + 1, order = 1 })
-	local l = UI.text(f, s, { font = "heavy", size = 24, color = color, sz = UDim2.new(0, 0, 1, 0), z = z + 1, order = 2, rich = true })
-	l.AutomaticSize = Enum.AutomaticSize.X
+	local f, l = UI.chip(parent, s, { name = "Reward", icon = icon, color = color, h = 40, size = 24, order = order, z = z, rich = true })
+	l.FontFace = UI.Font.heavy
 	return f, l
 end
 
@@ -249,9 +239,7 @@ local function fighterCard(App, parent, f, side, cx, top, maxHp, range, z)
 	local mk, text = UI.mk, UI.text
 	f = f or {}
 	local o = { side = side, f = f, maxHp = math.max(1, maxHp or 1), range = range or { 0, 0 } }
-	local card = mk("Frame", { Name = side == "a" and "Attacker" or "Defender", BackgroundColor3 = Color3.fromHex("1c2230"), BorderSizePixel = 0,
-		AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(cx, top), Size = UDim2.fromOffset(CARD_W, CARD_H), ZIndex = z }, parent)
-	mk("UICorner", { CornerRadius = UDim.new(0, 8) }, card)
+	local card = UI.card(parent, { name = side == "a" and "Attacker" or "Defender", anchor = Vector2.new(0.5, 0), pos = UDim2.fromOffset(cx, top), sz = UDim2.fromOffset(CARD_W, CARD_H), z = z })
 	o.stroke = mk("UIStroke", { Color = C.rule, Thickness = 1.5, Transparency = 0.2 }, card)
 	o.card, o.home = card, card.Position
 
@@ -282,10 +270,8 @@ local function fighterCard(App, parent, f, side, cx, top, maxHp, range, z)
 	-- hit flash overlay
 	o.flash = mk("Frame", { Name = "Flash", BackgroundColor3 = Color3.fromRGB(255, 50, 40), BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ZIndex = z + 5 }, portrait)
 	-- gold level badge (outside the clipped portrait, on the card)
-	local badge = mk("Frame", { Name = "Level", BackgroundColor3 = C.gold, BorderSizePixel = 0, AnchorPoint = Vector2.new(1, 1),
-		Position = UDim2.fromOffset(pcx + PORT / 2 + 10, 14 + PORT + 6), Size = UDim2.fromOffset(44, 28), ZIndex = z + 6 }, card)
-	mk("UICorner", { CornerRadius = UDim.new(0, 4) }, badge)
-	text(badge, tostring(f.lv or 1), { font = "heavy", size = 18, color = C.manilaInk, align = Enum.TextXAlignment.Center, sz = UDim2.fromScale(1, 1), z = z + 7 })
+	UI.tag(card, tostring(f.lv or 1), C.gold, { name = "Level", anchor = Vector2.new(1, 1), pos = UDim2.fromOffset(pcx + PORT / 2 + 10, 14 + PORT + 6), sz = UDim2.fromOffset(44, 28),
+		z = z + 6, size = 18, textColor = C.manilaInk })
 	-- weapon (fists when nothing is equipped), on a soft rarity glow
 	local w = f.weapon or { icon = "gear_fists", name = "Fists", rarity = "common" }
 	local wkey = (w.icon and UI.asset(w.icon) ~= "") and w.icon or "gear_fists"
@@ -309,15 +295,14 @@ local function fighterCard(App, parent, f, side, cx, top, maxHp, range, z)
 	local tagLine = f.tag and ("[" .. tostring(f.tag) .. "]") or (side == "a" and "ATTACKER" or "DEFENDER")
 	text(card, tagLine, { font = "bold", size = 14, color = C.gold, align = Enum.TextXAlignment.Center, pos = UDim2.fromOffset(10, 14 + PORT + 32), sz = UDim2.new(1, -20, 0, 16), z = z + 1, truncate = true })
 	-- power box: attack for the attacker, defense for the defender
-	local box = mk("Frame", { Name = "Power", BackgroundColor3 = Color3.fromHex("10141a"), BorderSizePixel = 0, Position = UDim2.fromOffset(20, 182), Size = UDim2.fromOffset(CARD_W - 40, 38), ZIndex = z + 1 }, card)
-	mk("UICorner", { CornerRadius = UDim.new(0, 5) }, box)
+	local box = UI.img(card, "inset", { name = "Power", pos = UDim2.fromOffset(20, 182), sz = UDim2.fromOffset(CARD_W - 40, 38), z = z + 1 })
 	UI.icon(box, side == "a" and "icon_attack" or "icon_defense", 24, side == "a" and C.bad or C.blue, UDim2.new(0, 12, 0.5, 0), { z = z + 2, anchor = Vector2.new(0, 0.5) })
 	text(box, bigNum(f.pow), { font = "heavy", size = 24, color = side == "a" and C.gold or C.ink, pos = UDim2.fromOffset(48, 0), sz = UDim2.new(1, -56, 1, 0), z = z + 2, scaled = true })
 	-- HP bar (tweens)
 	o.hp = hpBar(UI, card, { pos = UDim2.fromOffset(20, 228), sz = UDim2.fromOffset(CARD_W - 40, 22), z = z + 1, color = C.good, textSize = 13 })
 	o.hpNow = o.maxHp
 	o.hp:Set(1, bigNum(o.maxHp) .. " / " .. bigNum(o.maxHp), false)
-	-- damage range: "min ——|—— max" with a marker on each roll
+	-- damage range: "min --|-- max" with a marker on each roll
 	text(card, bigNum(o.range[1]), { size = 17, color = C.muted, align = Enum.TextXAlignment.Right, pos = UDim2.fromOffset(8, 256), sz = UDim2.fromOffset(62, 24), z = z + 1, scaled = true })
 	text(card, bigNum(o.range[2]), { size = 17, color = C.muted, pos = UDim2.fromOffset(CARD_W - 70, 256), sz = UDim2.fromOffset(62, 24), z = z + 1, scaled = true })
 	local track = mk("Frame", { Name = "Range", BackgroundColor3 = C.rule, BorderSizePixel = 0, Position = UDim2.fromOffset(80, 267), Size = UDim2.fromOffset(CARD_W - 160, 2), ZIndex = z + 1 }, card)
@@ -611,9 +596,8 @@ local function resultPopup(App, res, targetName)
 	local mk, text = UI.mk, UI.text
 	local _, bd = popup(App, "RAID REPORT", 460, 420)
 	local win = res.win
-	local band = mk("Frame", { Name = "Banner", BackgroundColor3 = win and Color3.fromHex("2f4a26") or Color3.fromHex("4a1f1f"), BorderSizePixel = 0, Size = UDim2.new(1, -40, 0, 74), ZIndex = 74 }, bd)
-	mk("UIStroke", { Color = win and C.good or C.bad, Thickness = 2 }, band)
-	mk("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(170, 170, 170)) }, band)
+	local band = UI.card(bd, { name = "Banner", hot = win, sz = UDim2.new(1, -40, 0, 74), z = 74 })
+	mk("UIStroke", { Color = win and C.good or C.bad, Thickness = 2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, band)
 	local big = text(band, win and "VICTORY" or "DEFEAT", { font = "display", size = 38, color = win and C.gold or C.bad, align = Enum.TextXAlignment.Center, pos = UDim2.fromOffset(0, 4), sz = UDim2.new(1, 0, 0, 42), z = 75, stroke = 1.5 })
 	FX.centre(big)
 	local bs = mk("UIScale", { Scale = 1.6 }, big)
@@ -711,8 +695,10 @@ local function raidedPopup(App, n)
 		line.Text = "<font color='#8fd07a'><b>Defended!</b> Cash safe</font>  ·  " .. soldiersTxt
 	end
 	-- auto-hide timer bar along the bottom edge
-	local track = mk("Frame", { Name = "Timer", BackgroundColor3 = C.black, BackgroundTransparency = 0.4, BorderSizePixel = 0, Position = UDim2.new(0, 14, 1, -6), Size = UDim2.new(1, -24, 0, 3), ZIndex = 84 }, card)
-	local fill = mk("Frame", { BackgroundColor3 = accent, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ZIndex = 85 }, track)
+	-- (a slim kit bar under the hint line, left of RAID BACK)
+	local timer = UI.bar(card, accent, { name = "Timer", pos = UDim2.new(0, 14, 1, -16), sz = UDim2.new(1, -160, 0, 12), z = 84, textSize = 10 })
+	timer:Set(1)
+	local fill = timer.Fill
 
 	local gone = false
 	local entry = {}
@@ -736,10 +722,10 @@ local function raidedPopup(App, n)
 		App.open("battle")
 		raidTarget(App, n.byId, name, nil)
 	end, { sz = UDim2.fromOffset(120, 30), pos = UDim2.new(1, -10, 1, -12), anchor = Vector2.new(1, 1), z = 86, icon = "icon_attack", textSize = 14 })
-	text(card, lost and "Hit them back!" or "Teach them a lesson?", { size = 13, color = C.muted, pos = UDim2.fromOffset(18, 62), sz = UDim2.new(1, -150, 0, 18), z = 84, truncate = true })
+	text(card, lost and "Hit them back!" or "Teach them a lesson?", { size = 13, color = C.muted, pos = UDim2.fromOffset(18, 56), sz = UDim2.new(1, -150, 0, 18), z = 84, truncate = true })
 
 	tw(card, 0.35, { Position = UDim2.fromOffset(0, 0) }, Enum.EasingStyle.Back)
-	tw(fill, RAIDED_SECONDS, { Size = UDim2.fromScale(0, 1) }, Enum.EasingStyle.Linear)
+	tw(fill, RAIDED_SECONDS, { Size = UDim2.new(0, 0, 1, -6) }, Enum.EasingStyle.Linear)
 	task.delay(RAIDED_SECONDS, function() dismiss() end)
 end
 

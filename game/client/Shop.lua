@@ -112,17 +112,11 @@ local function timeLeft(sec)
 	return string.format("%02d:%02d:%02d", h, m, s)
 end
 
--- a coloured pill tag that sizes to its text
+-- a tag that sizes to its text, on the kit's plates: a tinted bar-fill plate, or the dark chip plate when bg is DARK
 local function tag(parent, label, bg, fg, p)
 	p = p or {}
-	local f = mk("Frame", { Name = "Tag", BackgroundColor3 = bg, BorderSizePixel = 0, AutomaticSize = Enum.AutomaticSize.X, Size = UDim2.fromOffset(0, p.h or 20),
-		Position = p.pos or UDim2.new(), AnchorPoint = p.anchor or Vector2.zero, ZIndex = p.z or 12, Rotation = p.rot or 0, LayoutOrder = p.order or 0 }, parent)
-	corner(f, p.radius or 5)
-	mk("UIPadding", { PaddingLeft = UDim.new(0, 7), PaddingRight = UDim.new(0, 7) }, f)
-	if p.stroke then stroke(f, p.stroke, 1.5) end
-	local l = text(f, label, { font = "heavy", size = p.size or 12, color = fg, sz = UDim2.new(0, 0, 1, 0), z = f.ZIndex + 1, rich = p.rich })
-	l.AutomaticSize = Enum.AutomaticSize.X
-	return f, l
+	return UI.tag(parent, label, bg ~= DARK and bg or nil, { pos = p.pos, anchor = p.anchor, z = p.z or 12, order = p.order, rot = p.rot, h = p.h or 20,
+		size = p.size or 12, rich = p.rich, textColor = fg })
 end
 
 -- diagonal corner ribbon (top-right of a card). p.size = corner square in px (default 92) for longer labels
@@ -236,12 +230,7 @@ local function infoPopup(App, title, body)
 	UI.button(bd, "slate", "GOT IT", function() mh.Visible = false end, { sz = UDim2.fromOffset(150, 42), pos = UDim2.new(0.5, 0, 1, -4), anchor = Vector2.new(0.5, 1), z = 74 })
 end
 local function infoBtn(App, parent, title, body, pos, z)
-	local b = mk("TextButton", { Name = "Info", Text = "i", FontFace = UI.Font.heavy, TextSize = 14, TextColor3 = C.manila, BackgroundColor3 = C.slate,
-		AutoButtonColor = false, Size = UDim2.fromOffset(20, 20), Position = pos, ZIndex = z or 30 }, parent)
-	corner(b, UDim.new(1, 0))
-	stroke(b, C.manila, 1.4)
-	b.Activated:Connect(function() infoPopup(App, title, body) end)
-	return b
+	return UI.infoBtn(parent, pos, function() infoPopup(App, title, body) end, { z = z or 30, size = 22 }).Inst
 end
 
 -- ART ROTATOR for passes that unlock several things: crossfades between slides every 2.5 s.
@@ -273,12 +262,8 @@ local function rotator(parent, slides, px, pos, anchor, z, accent)
 			end
 		end
 		if sl.label then
-			local cap = mk("Frame", { BackgroundColor3 = DARK, BackgroundTransparency = 0.1, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromScale(0.5, 1),
-				Size = UDim2.new(1, -4, 0, capH), ZIndex = z + 2 }, g)
-			corner(cap, 5)
-			stroke(cap, sl.tile or accent or C.manila, 1.2, 0.3)
-			text(cap, sl.label, { font = "heavy", size = math.max(11, capH - 6), color = sl.tile or accent or C.manila, align = Enum.TextXAlignment.Center, rich = true,
-				pos = UDim2.fromOffset(4, 0), sz = UDim2.new(1, -8, 1, 0), z = z + 3, scaled = true })
+			UI.tag(g, sl.label, nil, { anchor = Vector2.new(0.5, 1), pos = UDim2.fromScale(0.5, 1), sz = UDim2.new(1, -4, 0, capH), z = z + 2,
+				size = math.max(11, capH - 6), rich = true, textColor = sl.tile or accent or C.manila })
 		end
 		groups[i] = g
 	end
@@ -329,10 +314,10 @@ local function dropRates(App, kind)
 	end
 	infoPopup(App, "DROP RATES", table.concat(lines, "\n"))
 end
+-- the same compact chip as the RATES chip on Inventory crate cards
 local function ratesButton(App, parent, kind, p)
-	local b = UI.button(parent, "slate", "DROP RATES", function() dropRates(App, kind) end,
-		{ sz = p.sz or UDim2.fromOffset(130, 28), pos = p.pos, anchor = p.anchor, z = p.z or 14, icon = "icon_gauge", textSize = p.textSize or 13 })
-	return b
+	return UI.chipBtn(parent, "DROP RATES", function() dropRates(App, kind) end,
+		{ name = "Rates", icon = "icon_gauge", iconColor = C.manila, color = C.manila, h = p.h or 24, size = p.textSize or 12, w = p.w, pos = p.pos, anchor = p.anchor, z = p.z or 14 })
 end
 
 -- crate results: the big reveal when Cabinet installed it, else a toast that points to the Inventory
@@ -361,7 +346,8 @@ end
 ---------------------------------------------------------------- SHOP
 S.shop = { build = function(host, App)
 	local panel, body = UI.panel(host, "SHOP", { sz = UDim2.new(1, -20, 1, -20), pos = UDim2.fromOffset(10, 10), z = 5, titleSize = 26 })
-	local sub = text(panel, "", { font = "bold", size = 15, color = C.muted, pos = UDim2.new(0, 120, 0, 16), sz = UDim2.new(1, -138, 0, 22), z = 7,
+	local subX = host:GetAttribute("TabsRight") or 120 -- right of the STORE / GEAR SHOP sub tabs when inside the composite
+	local sub = text(panel, "", { font = "bold", size = 15, color = C.muted, pos = UDim2.new(0, subX, 0, 16), sz = UDim2.new(1, -subX - 18, 0, 22), z = 7,
 		align = Enum.TextXAlignment.Right, rich = true, truncate = true })
 	local list = UI.list(body, { gap = 10, z = 6 })
 	local obj = { ups = {}, ticks = {}, anchors = {}, builtW = nil, shownGold = nil }
@@ -524,12 +510,7 @@ S.shop = { build = function(host, App)
 		shine(bc, 3.4, 0.3)
 		tag(bc, "LIMITED BUNDLE", C.gold, C.manilaInk, { pos = UDim2.fromOffset(16, 16), z = 26, h = 24, size = 14 })
 		local _, onceL = tag(bc, "ONE PER PLAYER", DARK, C.gold, { pos = UDim2.fromOffset(16, 46), z = 26, h = 20, size = 11, stroke = C.gold })
-		local clockChip = mk("Frame", { BackgroundColor3 = DARK, BackgroundTransparency = 0.15, BorderSizePixel = 0, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -16, 0, 16),
-			Size = UDim2.fromOffset(170, 26), ZIndex = 26 }, bc)
-		corner(clockChip, 6)
-		stroke(clockChip, LIMITED, 1.5)
-		UI.icon(clockChip, "icon_clock", 16, LIMITED, UDim2.fromOffset(8, 5), { z = 27 })
-		local bTimer = text(clockChip, "", { font = "heavy", size = 14, color = LIMITED, pos = UDim2.fromOffset(28, 0), sz = UDim2.new(1, -34, 1, 0), z = 27, scaled = true })
+		local _, bTimer = UI.chip(bc, "", { icon = "icon_clock", color = LIMITED, h = 26, size = 14, anchor = Vector2.new(1, 0), pos = UDim2.new(1, -16, 0, 16), z = 26 })
 		local by = H - 132
 		local bTitle = text(bc, "", { font = "display", size = stack and 26 or (bw < 520 and 24 or 30), pos = UDim2.fromOffset(18, by),
 			sz = UDim2.new(1, -36, 0, 36), z = 26, stroke = 1.6, rich = true, scaled = true })
@@ -567,38 +548,22 @@ S.shop = { build = function(host, App)
 			.. "Gear or <b>ELITE TROOPS</b> that never die in raids. The <b>10-pack</b> guarantees at least one <b>Epic or better</b>. Tap <b>DROP RATES</b> for every % chance.",
 			UDim2.new(1, -34, 0, 14), 30)
 		local cTimer = text(cc, "", { font = "heavy", size = 13, color = LIMITED, pos = UDim2.fromOffset(16, 38), sz = UDim2.new(1, -32, 0, 18), z = 10 })
+		-- left column (DROP RATES, PITY, owned crates), the crate centred in the space to its right so they never overlap
+		local COLW = 118
 		local crateSize = 116
-		aura(cc, LIMITED, 220, UDim2.new(0.5, 0, 0, 62 + crateSize / 2), 9, 0.9, true, true)
-		local crate = UI.img(cc, "crate_limited", { sz = UDim2.fromOffset(crateSize, crateSize), pos = UDim2.new(0.5, 0, 0, 62 + crateSize / 2), anchor = Vector2.new(0.5, 0.5), slice = false, fit = true, z = 11 })
-		tw(crate, 1.6, { Position = UDim2.new(0.5, 0, 0, 56 + crateSize / 2) }, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
+		local cx = math.floor((12 + COLW + 8 + cw - 12) / 2)
+		aura(cc, LIMITED, 220, UDim2.new(0, cx, 0, 62 + crateSize / 2), 9, 0.9, true, true)
+		local crate = UI.img(cc, "crate_limited", { sz = UDim2.fromOffset(crateSize, crateSize), pos = UDim2.new(0, cx, 0, 62 + crateSize / 2), anchor = Vector2.new(0.5, 0.5), slice = false, fit = true, z = 11 })
+		tw(crate, 1.6, { Position = UDim2.new(0, cx, 0, 56 + crateSize / 2) }, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
 		tw(crate, 2.4, { Rotation = 3 }, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
+		ratesButton(App, cc, "limited", { pos = UDim2.fromOffset(12, 64), w = COLW, z = 14 })
+		-- visible PITY meter (Kash 2 Oct), the same kit bar as everywhere else
+		local pityNeed = O.Pity and O.Pity.limited or 30
+		local pity = UI.bar(cc, C.gold, { name = "Pity", pos = UDim2.fromOffset(12, 94), sz = UDim2.fromOffset(COLW, 18), z = 14, textSize = 11 })
 		-- owned crates shortcut
-		local haveBtn = mk("TextButton", { Name = "Have", Text = "", AutoButtonColor = false, BackgroundColor3 = DARK, BackgroundTransparency = 0.1, AnchorPoint = Vector2.new(1, 0),
-			Position = UDim2.new(1, -12, 0, 64), Size = UDim2.fromOffset(92, 24), ZIndex = 14, Visible = false }, cc)
-		corner(haveBtn, 6)
-		stroke(haveBtn, C.gold, 1.4)
-		local haveL = text(haveBtn, "", { font = "heavy", size = 12, color = C.gold, align = Enum.TextXAlignment.Center, sz = UDim2.fromScale(1, 1), z = 15 })
-		haveBtn.Activated:Connect(function()
-			if App.openCrates then App.openCrates("limited", 1, haveBtn) else App.open("inventory") end
-		end)
-		ratesButton(App, cc, "limited", { pos = UDim2.fromOffset(12, 64), sz = UDim2.fromOffset(112, 26), z = 14, textSize = 12 })
-		-- visible PITY meter (Kash 2 Oct)
-		do
-			local okO, O = pcall(require, game:GetService("ReplicatedStorage").Shared.Officers)
-			local need = okO and O.Pity and O.Pity.limited or 30
-			local track = mk("Frame", { Name = "Pity", BackgroundColor3 = DARK, BorderSizePixel = 0, Position = UDim2.fromOffset(12, 96), Size = UDim2.fromOffset(112, 18), ZIndex = 14 }, cc)
-			corner(track, 9)
-			local fill = mk("Frame", { BackgroundColor3 = Color3.fromHex("e9b949"), BorderSizePixel = 0, Size = UDim2.fromScale(0, 1), ZIndex = 14 }, track)
-			corner(fill, 9)
-			local lbl = text(track, "", { font = "heavy", size = 11, color = C.white, align = Enum.TextXAlignment.Center, sz = UDim2.fromScale(1, 1), z = 15, stroke = 1.2 })
-			local function upd(st)
-				local have = math.min(need, (st and st.pity and st.pity.limited) or 0)
-				fill.Size = UDim2.fromScale(have / need, 1)
-				lbl.Text = "PITY " .. have .. "/" .. need
-			end
-			upd(App.state)
-			App.on("full", function(st) if track.Parent then upd(st) end end)
-		end
+		local haveBtn, haveL = UI.chipBtn(cc, "", function(btn)
+			if App.openCrates then App.openCrates("limited", 1, btn) else App.open("inventory") end
+		end, { name = "Have", icon = "icon_boxes", color = C.gold, h = 24, size = 12, w = COLW, pos = UDim2.fromOffset(12, 120), z = 14, visible = false })
 		text(cc, "Gear or <font color='#f0c75a'><b>ELITE TROOPS</b></font> that never die in raids", { size = 14, color = C.ink, align = Enum.TextXAlignment.Center, rich = true,
 			pos = UDim2.fromOffset(12, 184), sz = UDim2.new(1, -24, 0, 20), z = 10, scaled = true })
 		local goldBtn = UI.button(cc, "gold", "OPEN NOW · " .. L.gold .. " GOLD", function(btn)
@@ -648,6 +613,8 @@ S.shop = { build = function(host, App)
 			local n = st.crates and st.crates.limited or 0
 			haveBtn.Visible = n > 0
 			haveL.Text = "x" .. n .. " · OPEN"
+			local have = math.min(pityNeed, (st.pity and st.pity.limited) or 0)
+			pity:Set(have / pityNeed, "PITY", have .. "/" .. pityNeed)
 		end)
 		onTick(function(now)
 			local leftS = L.ends - now
@@ -671,7 +638,7 @@ S.shop = { build = function(host, App)
 		local rightW = W < 820 and 200 or 240
 		text(card, B.name, { font = "display", size = 22, color = C.manila, pos = UDim2.fromOffset(130, 12), sz = UDim2.new(1, -150 - rightW, 0, 28), z = 10, truncate = true })
 		tag(card, "FREE TO PLAY", C.good, C.manilaInk, { pos = UDim2.fromOffset(132, 44), z = 11, h = 20, size = 11 })
-		ratesButton(App, card, "basic", { pos = UDim2.fromOffset(242, 41), sz = UDim2.fromOffset(124, 26), z = 11, textSize = 12 })
+		ratesButton(App, card, "basic", { pos = UDim2.fromOffset(242, 42), z = 11 })
 		text(card, "Gear and officers, bought with cash.", { size = 14, color = C.muted, pos = UDim2.fromOffset(130, 70), sz = UDim2.new(1, -150 - rightW, 0, 36), z = 10, wrap = true, valign = Enum.TextYAlignment.Top })
 		local buy = UI.button(card, "manila", "BUY & OPEN", function(btn)
 			local st = App.state

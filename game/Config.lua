@@ -24,8 +24,9 @@ C.PopularCapitals = { 1, 12, 9, 2, 6, 33 }
 C.PopularMinPlayers = 30
 
 -- Tabs unlock by level (Kash 2 Oct): new players see only WORLD and LAWS, the rest open up as they level.
-C.NavUnlock = { map = 1, laws = 1, properties = 2, shop = 3, country = 4, tasks = 5, military = 6, inventory = 7, bank = 8,
-	battle = 10, bosses = 12, rankings = 12, alliance = 15 }
+-- 2 Oct 23:38: lowered so every tab is open by level 9
+C.NavUnlock = { map = 1, laws = 1, properties = 2, shop = 3, country = 3, tasks = 4, military = 4, inventory = 5, bank = 5,
+	battle = 6, bosses = 7, rankings = 8, alliance = 9 }
 
 -- BADGES (Kash 2 Oct): one easy welcome badge, the rest are very hard goals. id 0 = not created yet (skipped).
 C.Badges = {

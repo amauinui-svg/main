@@ -85,14 +85,13 @@ S._tester = { init = function(App)
 		end
 
 		local right = mk("Frame", { BackgroundTransparency = 1, Position = UDim2.new(0.62, 6, 0, 0), Size = UDim2.new(0.38, -6, 1, 0), ZIndex = 91 }, body)
-		local logBg = mk("Frame", { BackgroundColor3 = C.black, BackgroundTransparency = 0.2, BorderSizePixel = 0, Size = UDim2.new(1, 0, 1, -48), ZIndex = 91 }, right)
-		mk("UICorner", { CornerRadius = UDim.new(0, 6) }, logBg)
+		local logBg = UI.img(right, "inset", { name = "Log", sz = UDim2.new(1, 0, 1, -48), z = 91 })
 		log = UI.list(logBg, { pos = UDim2.fromOffset(6, 6), sz = UDim2.new(1, -12, 1, -12), z = 92, gap = 3 })
-		box = mk("TextBox", { BackgroundColor3 = C.slate, BorderSizePixel = 0, Position = UDim2.new(0, 0, 1, -40), Size = UDim2.new(1, -70, 0, 40), ZIndex = 93,
+		-- command line on the kit's input plate
+		local boxBg = UI.img(right, "input", { name = "Command", pos = UDim2.new(0, 0, 1, -40), sz = UDim2.new(1, -70, 0, 40), z = 92 })
+		box = mk("TextBox", { BackgroundTransparency = 1, BorderSizePixel = 0, Position = UDim2.fromOffset(8, 0), Size = UDim2.new(1, -16, 1, 0), ZIndex = 93,
 			FontFace = Font.fromEnum(Enum.Font.Code), TextSize = 16, TextColor3 = C.ink, PlaceholderText = "/reset, /cash 1m, /help", PlaceholderColor3 = C.dim,
-			Text = "", ClearTextOnFocus = false, TextXAlignment = Enum.TextXAlignment.Left }, right)
-		mk("UICorner", { CornerRadius = UDim.new(0, 6) }, box)
-		mk("UIPadding", { PaddingLeft = UDim.new(0, 8) }, box)
+			Text = "", ClearTextOnFocus = false, TextXAlignment = Enum.TextXAlignment.Left }, boxBg)
 		local function submit() local t = box.Text; box.Text = ""; run(t) end
 		box.FocusLost:Connect(function(enter) if enter then submit(); task.defer(function() box:CaptureFocus() end) end end)
 		UI.button(right, "green", "RUN", submit, { pos = UDim2.new(1, -64, 1, -40), sz = UDim2.fromOffset(64, 40), z = 93, textSize = 15 })

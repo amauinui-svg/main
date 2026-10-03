@@ -180,11 +180,11 @@ do
 	local mid = mk("Frame", { Name = "Money", BackgroundTransparency = 1, Size = UDim2.fromOffset(300, TOP), ZIndex = 21 }, topBar)
 	top.mid = mid
 	UI.icon(mid, "icon_cash", 26, C.good, UDim2.fromOffset(0, 10), { z = 22 })
-	top.cash = text(mid, "$0", { font = "display", size = 28, color = C.good, pos = UDim2.fromOffset(32, 4), sz = UDim2.fromOffset(240, 34), z = 22, scaled = true })
-	top.income = text(mid, "", { font = "bold", size = 13, color = C.muted, pos = UDim2.fromOffset(32, 38), sz = UDim2.fromOffset(110, 18), z = 22 })
+	top.cash = text(mid, "$0", { font = "display", size = 28, color = C.good, pos = UDim2.fromOffset(32, 3), sz = UDim2.fromOffset(240, 30), z = 22, scaled = true })
+	top.income = text(mid, "", { font = "bold", size = 13, color = C.muted, pos = UDim2.fromOffset(32, 38), sz = UDim2.fromOffset(106, 18), z = 22, truncate = true })
 	-- gold bars and merits, big and readable (Kash 19:24)
 	local function currency(x, w, imgKey, fallback, color, name)
-		local b = UI.img(mid, "chip", { button = true, name = name, pos = UDim2.fromOffset(x, 33), sz = UDim2.fromOffset(w, 28), z = 22 })
+		local b = UI.img(mid, "chip", { button = true, name = name, pos = UDim2.fromOffset(x, 34), sz = UDim2.fromOffset(w, 28), z = 22 })
 		local key = (Assets[imgKey] and imgKey) or fallback
 		UI.img(b, key, { sz = UDim2.fromOffset(30, 30), pos = UDim2.new(0, -4, 0.5, 0), anchor = Vector2.new(0, 0.5), z = 24, slice = false, fit = true, color = key == fallback and imgKey ~= fallback and color or nil })
 		local l = text(b, "0", { font = "heavy", size = 17, color = color, pos = UDim2.fromOffset(30, 0), sz = UDim2.new(1, -34, 1, 0), z = 23, scaled = true })
@@ -340,24 +340,29 @@ local COMPOSITE = {
 	shop = { { key = "shop", label = "STORE", title = "SHOP" }, { key = "gearshop", label = "GEAR SHOP", title = "GEAR SHOP" } },
 }
 local ROUTE = { officers = { "military", 2 }, gearshop = { "shop", 2 } }
+-- Sub tabs use the kit's tab plates and sit exactly where the panel title was (panel x 16, y 6). Every child host gets
+-- the attribute TabsRight (panel x where the tabs end) so the child lays its header text and buttons out after them.
+local SUBTAB_W, SUBTAB_GAP, SUBTAB_X, SUBTAB_Y = 150, 6, 26, 16
 for parentKey, kids in pairs(COMPOSITE) do
 	local childDefs = {}
 	for i, k in ipairs(kids) do childDefs[i] = defs[k.key] end
 	defs[parentKey] = { build = function(host, App)
 		local obj = { kids = {}, cur = 1 }
-		local bar = mk("Frame", { Name = "SubTabs", BackgroundTransparency = 1, Position = UDim2.fromOffset(26, 16), Size = UDim2.fromOffset(460, 38), ZIndex = 40 }, host)
-		mk("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder, VerticalAlignment = Enum.VerticalAlignment.Center }, bar)
-		local btns = {}
+		local labels = {}
+		for i, k in ipairs(kids) do labels[i] = k.label end
+		local tabsW = #kids * SUBTAB_W + (#kids - 1) * SUBTAB_GAP
+		local tabsRight = (SUBTAB_X - 10) + tabsW + 14 -- in the child panel's coordinates (panels sit 10 px inside the host)
 		local function hideTitle(root, title)
 			if not title then return end
 			for _, d in ipairs(root:GetDescendants()) do
-				if d:IsA("TextLabel") and d.Text == title then d.Visible = false end
+				if d:IsA("TextLabel") and d.Name == "Title" and d.Text == title then d.Visible = false end
 			end
 		end
+		local tabs
 		function obj.select(i)
 			obj.cur = i
 			for j, kid in ipairs(obj.kids) do kid.host.Visible = j == i end
-			for j, b in ipairs(btns) do b:Set(j == i and "manila" or "slate") end
+			if tabs then tabs:Set(i) end
 			local kid = obj.kids[i]
 			if kid and kid.obj then
 				if App.state and kid.obj.Refresh then pcall(kid.obj.Refresh, kid.obj, App.state) end
@@ -365,19 +370,22 @@ for parentKey, kids in pairs(COMPOSITE) do
 			end
 		end
 		for i, k in ipairs(kids) do
-			local h = mk("Frame", { Name = "Sub_" .. k.key, BackgroundTransparency = 1, Position = UDim2.fromOffset(0, k.below and 52 or 0), Size = UDim2.new(1, 0, 1, k.below and -52 or 0), ZIndex = 3, Visible = i == 1 }, host)
+			local h = mk("Frame", { Name = "Sub_" .. k.key, BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 3, Visible = i == 1 }, host)
+			h:SetAttribute("TabsRight", tabsRight)
 			local okB, o = false, nil
 			if childDefs[i] then okB, o = pcall(childDefs[i].build, h, App) end
 			if not okB then warn("[Idle Country] sub screen " .. k.key .. ": " .. tostring(o)) end
 			obj.kids[i] = { host = h, obj = okB and o or nil }
 			hideTitle(h, k.title)
-			btns[i] = UI.button(bar, i == 1 and "manila" or "slate", k.label, function() if App.play then App.play("tab_open") end; obj.select(i) end,
-				{ sz = UDim2.fromOffset(k.label:len() > 10 and 210 or 140, 38), z = 41, order = i, textSize = 16 })
 		end
+		tabs = UI.tabs(host, labels, function(i)
+			if App.play then App.play("tab_open") end
+			obj.select(i)
+		end, { pos = UDim2.fromOffset(SUBTAB_X, SUBTAB_Y), sz = UDim2.fromOffset(tabsW, 36), w = SUBTAB_W, textSize = 16, z = 40 })
+		tabs:Set(1)
 		function obj:Refresh(st)
 			local kid = obj.kids[obj.cur]
 			if kid and kid.obj and kid.obj.Refresh then kid.obj.Refresh(kid.obj, st) end
-			hideTitle(kid.host, kids[obj.cur].title)
 		end
 		function obj:Tick(st)
 			local kid = obj.kids[obj.cur]

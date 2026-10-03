@@ -121,9 +121,7 @@ local function liftCell(UI, parent, order, z)
 end
 -- small "i" info button: tap or hover shows a short explanation (Kash Q3 UI rule)
 local function infoButton(UI, App, parent, pos, title, body, z)
-	local b = UI.mk("TextButton", { Name = "Info", Text = "i", FontFace = UI.Font.heavy, TextSize = 14, TextColor3 = UI.C.manilaInk, BackgroundColor3 = UI.C.manila,
-		AutoButtonColor = false, Position = pos, Size = UDim2.fromOffset(20, 20), AnchorPoint = Vector2.new(0, 0.5), ZIndex = z or 9 }, parent)
-	UI.mk("UICorner", { CornerRadius = UDim.new(1, 0) }, b)
+	local b = UI.infoBtn(parent, pos, nil, { kind = "manila", z = z or 9, size = 22, anchor = Vector2.new(0, 0.5) }).Inst
 	local tip
 	local function hide() if tip then tip:Destroy(); tip = nil end end
 	local function show()
@@ -379,8 +377,7 @@ local function showFlagEditor(App)
 	end
 	-- a pickable cell with a selection ring and an optional lock badge
 	local function pickCell(parent, ord, selected, locked, onPick)
-		local b = UI.mk("TextButton", { Text = "", AutoButtonColor = false, BackgroundColor3 = C.black, BackgroundTransparency = 0.35, BorderSizePixel = 0, LayoutOrder = ord, ZIndex = 74 }, parent)
-		UI.mk("UICorner", { CornerRadius = UDim.new(0, 6) }, b)
+		local b = UI.img(parent, "inset", { button = true, name = "Pick", order = ord, z = 74 })
 		local ring = UI.mk("UIStroke", { Color = selected and C.gold or C.rule, Thickness = selected and 3 or 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, b)
 		local s = UI.mk("UIScale", {}, b)
 		b.MouseEnter:Connect(function() tween(s, 0.12, { Scale = 1.06 }, Enum.EasingStyle.Back); if not selected then tween(ring, 0.12, { Color = C.manila }) end end)
@@ -601,7 +598,7 @@ S.country = { build = function(host, App)
 	App.showUpgrades = function() showUpgrades(App) end
 
 	local panel, body = UI.panel(host, "COUNTRY", { sz = UDim2.new(1, -20, 1, -20), pos = UDim2.fromOffset(10, 10), z = 5, titleSize = 26 })
-	local sub = text(panel, "", { font = "bold", size = 15, color = C.muted, pos = UDim2.new(0, 18, 0, 16), sz = UDim2.new(1, -36, 0, 22), z = 7, align = Enum.TextXAlignment.Right, rich = true })
+	local sub = text(panel, "", { font = "bold", size = 15, color = C.muted, pos = UDim2.new(0, 150, 0, 16), sz = UDim2.new(1, -168, 0, 22), z = 7, align = Enum.TextXAlignment.Right, rich = true, truncate = true })
 	local list = UI.list(body, { gap = 12, z = 6 })
 	local obj = { era = nil, flagKey = nil }
 

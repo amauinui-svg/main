@@ -329,3 +329,8 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 - Convoys must be BOUGHT: the first is free; each extra convoy is bought with cash (about an hour of law income) once its level (5, 12, 20, 30, 45) is reached. Existing saves keep the convoys they already had.
 - World events were already game wide (same clock in every server). City WANTS are now game wide too (shared MemoryStore + cross-server messages).
 - Overlaps and off-style buttons/pills/panels (e.g. ARMY/OFFICERS sub tabs over the subtitle, the LIMITED "always active" pill) must be fixed across the whole game.
+
+## 2 Oct 23:38 (Kash)
+- Bots (and players) can't raid a country until it has the RAIDS tab (level 6).
+- Tabs unlocked too late: lowered so everything is open by level 9 (Properties 2, Shop 3, Country 3, Orders 4, Military 4, Inventory 5, Bank 5, Raids 6, Bosses 7, Rankings 8, Alliance 9).
+- Off-style pills/progress bars/buttons and overlaps: whole-client pass onto the UI kit (chips, tags, bars, info buttons), composite sub tabs fixed, LIMITED plate, crate card layout, pity bars.

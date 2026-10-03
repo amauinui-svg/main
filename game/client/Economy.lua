@@ -10,7 +10,9 @@ local S = {}
 local function frame(host, App, title)
 	local UI = App.UI
 	local panel, body = UI.panel(host, title, { sz = UDim2.new(1, -20, 1, -20), pos = UDim2.fromOffset(10, 10), z = 5, titleSize = 26 })
-	local sub = UI.text(panel, "", { font = "bold", size = 15, color = UI.C.muted, pos = UDim2.new(0, 18, 0, 16), sz = UDim2.new(1, -36, 0, 22), z = 7, align = Enum.TextXAlignment.Right, rich = true })
+	-- the header line starts after the title (about 16 px per typewriter letter) so a long line can never run under it
+	local x0 = host:GetAttribute("TabsRight") or (18 + #title * 16 + 16)
+	local sub = UI.text(panel, "", { font = "bold", size = 15, color = UI.C.muted, pos = UDim2.new(0, x0, 0, 16), sz = UDim2.new(1, -x0 - 18, 0, 22), z = 7, align = Enum.TextXAlignment.Right, rich = true, truncate = true })
 	return panel, body, sub
 end
 
@@ -84,13 +86,8 @@ local function showRefill(App)
 	end, { pos = UDim2.new(0.5, 6, 0, 8), sz = UDim2.new(0.5, -6, 0, 50), z = 74, textSize = 16 })
 	if cheap then
 		-- "First refill only R$9!" ribbon over the Robux button, with a gentle pulse
-		local rib = UI.mk("Frame", { Name = "Ribbon", BackgroundColor3 = C.bad, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0, 0),
-			Size = UDim2.fromOffset(0, 20), AutomaticSize = Enum.AutomaticSize.X, ZIndex = 78, Rotation = -3 }, rb.Inst)
-		UI.mk("UICorner", { CornerRadius = UDim.new(0, 4) }, rib)
-		UI.mk("UIPadding", { PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8) }, rib)
-		UI.mk("UIStroke", { Color = C.black, Thickness = 1.5, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, rib)
-		local rl = text(rib, "FIRST REFILL ONLY R$" .. robux .. "!", { font = "heavy", size = 12, color = C.white, sz = UDim2.new(0, 0, 1, 0), z = 79 })
-		rl.AutomaticSize = Enum.AutomaticSize.X
+		local rib = UI.tag(rb.Inst, "FIRST REFILL ONLY R$" .. robux .. "!", C.bad, { name = "Ribbon", anchor = Vector2.new(0.5, 0.5), pos = UDim2.new(0.5, 0, 0, 0), h = 20, size = 12,
+			z = 78, rot = -3, pad = 8, textColor = C.white })
 		local rs = UI.mk("UIScale", {}, rib)
 		TweenService:Create(rs, TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Scale = 1.08 }):Play()
 	end
@@ -142,7 +139,11 @@ S.laws = { build = function(host, App)
 		local gs = UI.mk("UIScale", {}, giftBtn.Inst)
 		game:GetService("TweenService"):Create(gs, TweenInfo.new(0.7, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Scale = 1.07 }):Play()
 	end
-	local function giftVis(st) giftBtn.Inst.Visible = st and st.onboarded and not st.groupGift and (st.groupId or 0) ~= 0 or false end
+	local function giftVis(st)
+		giftBtn.Inst.Visible = st and st.onboarded and not st.groupGift and (st.groupId or 0) ~= 0 or false
+		-- the era tabs make room for the button: rebuild them when it appears or goes
+		if tabs and obj.tabsGift ~= nil and obj.tabsGift ~= giftBtn.Inst.Visible and host.Visible and st and obj.Refresh then obj:Refresh(st) end
+	end
 	App.on("full", giftVis)
 	giftVis(App.state)
 
@@ -252,12 +253,17 @@ S.laws = { build = function(host, App)
 	function obj:Refresh(st)
 		local cur = R.PlayerEra(st)
 		local maxTab = math.min(#D.Eras, cur + 1)
-		if not tabs or obj.maxTab ~= maxTab then
+		local giftOn = giftBtn.Inst.Visible
+		if not tabs or obj.maxTab ~= maxTab or obj.tabsGift ~= giftOn then
 			if tabs then tabs.Inst:Destroy() end
 			local labels = {}
 			for e = 1, maxTab do table.insert(labels, string.upper(D.Eras[e].name)) end
 			obj.maxTab = maxTab
-			tabs = UI.tabs(body, labels, function(i) obj.era = i; build(App.state) end, { w = 132, textSize = 13, z = 7 })
+			obj.tabsGift = giftOn
+			-- era tabs shrink to share the row with the FREE GIFT button instead of running under it
+			local avail = App.W() - (App.NAVW or 176) - 48 - (giftOn and 184 or 0)
+			local tabW = math.clamp(math.floor(avail / maxTab) - 6, 72, 132)
+			tabs = UI.tabs(body, labels, function(i) obj.era = i; build(App.state) end, { w = tabW, sz = UDim2.new(1, giftOn and -184 or 0, 0, 34), textSize = 13, z = 7 })
 			obj.era = obj.era or cur
 			tabs:Set(obj.era)
 			build(st)
@@ -300,9 +306,9 @@ S.properties = { build = function(host, App)
 			local any = false
 			for i = #obj.payTiles, 1, -1 do
 				local pt = obj.payTiles[i]
-				if not pt.fill.Parent then table.remove(obj.payTiles, i)
+				if not pt.bar.Inst.Parent then table.remove(obj.payTiles, i)
 				else
-					pt.fill.Size = UDim2.fromScale(frac, 1)
+					pt.bar:Set(frac)
 					if paid then any = true; obj.payOut(pt) end
 				end
 			end
@@ -332,8 +338,8 @@ S.properties = { build = function(host, App)
 		pt.scale.Scale = 1.14
 		tw(pt.scale, 0.35, { Scale = 1 }, Enum.EasingStyle.Back)
 		if pt.flash and pt.flash.Parent then
-			pt.flash.BackgroundTransparency = 0.25
-			tw(pt.flash, 0.45, { BackgroundTransparency = 1 })
+			pt.flash.ImageTransparency = 0.25
+			tw(pt.flash, 0.45, { ImageTransparency = 1 })
 		end
 		local f = text(tile, "+" .. R.Money(pt.amount), { font = "heavy", size = 18, color = C.good, align = Enum.TextXAlignment.Center, anchor = Vector2.new(0.5, 1),
 			pos = UDim2.new(0.5, 0, 1, -50), sz = UDim2.new(1, 0, 0, 22), z = 16, stroke = 1.4 })
@@ -355,49 +361,24 @@ S.properties = { build = function(host, App)
 		local P = D.Props[p]
 		return "lights_e" .. P.era .. "_t" .. P.tier
 	end
+	-- dark name / note plate on a tile or stat box: the kit chip
 	local function plate(parent, s, pos, anchor, z, color)
-		local f = UI.mk("Frame", { BackgroundColor3 = Color3.fromHex("121417"), BackgroundTransparency = 0.15, BorderSizePixel = 0, AutomaticSize = Enum.AutomaticSize.X,
-			Size = UDim2.fromOffset(0, 22), Position = pos, AnchorPoint = anchor, ZIndex = z }, parent)
-		UI.mk("UICorner", { CornerRadius = UDim.new(0, 4) }, f)
-		UI.mk("UIPadding", { PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8) }, f)
-		local l = text(f, s, { font = "bold", size = 13, color = color or C.ink, sz = UDim2.new(0, 0, 1, 0), z = z + 1, rich = true })
-		l.AutomaticSize = Enum.AutomaticSize.X
-		return f, l
+		return UI.chip(parent, s, { pos = pos, anchor = anchor, z = z, h = 22, size = 13, color = color or C.ink, rich = true })
 	end
-	-- hourly income pill on an owned tile: sized once to its text and never resized (the bar lives outside it)
-	local PAY_BAR_H, PAY_BAR_BOTTOM = 10, 10
+	-- hourly income chip on an owned tile: sized once to its text and never resized (the bar lives outside it)
+	local PAY_BAR_H, PAY_BAR_BOTTOM = 16, 8
 	local function incomePill(t, s)
-		local f = UI.mk("Frame", { Name = "IncomePill", BackgroundColor3 = Color3.fromHex("121417"), BackgroundTransparency = 0.08, BorderSizePixel = 0,
-			AutomaticSize = Enum.AutomaticSize.X, Size = UDim2.fromOffset(0, 24), AnchorPoint = Vector2.new(0.5, 1),
-			Position = UDim2.new(0.5, 0, 1, -(PAY_BAR_BOTTOM + PAY_BAR_H + 6)), ZIndex = 12 }, t)
-		UI.mk("UICorner", { CornerRadius = UDim.new(1, 0) }, f)
-		UI.mk("UIStroke", { Color = C.good, Thickness = 1, Transparency = 0.6, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, f)
-		UI.mk("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10) }, f)
-		local l = text(f, s, { font = "heavy", size = 14, color = C.good, sz = UDim2.new(0, 0, 1, 0), z = 13 })
-		l.AutomaticSize = Enum.AutomaticSize.X
+		local f = UI.chip(t, s, { name = "IncomePill", anchor = Vector2.new(0.5, 1), pos = UDim2.new(0.5, 0, 1, -(PAY_BAR_BOTTOM + PAY_BAR_H + 4)), h = 24, size = 14, color = C.good, z = 12 })
 		return f, UI.mk("UIScale", {}, f)
 	end
-	-- the income progress bar: its own rounded track (dark inset, subtle border) across the tile's inner width,
-	-- with a green gradient fill and a soft top highlight. Returns the fill frame and the payout flash frame.
+	-- the income progress bar: the kit bar across the tile's inner width, plus a green flash plate for the payout.
+	-- Returns the bar object and the flash image.
 	local function payBar(t)
-		local track = UI.mk("Frame", { Name = "PayBar", BackgroundColor3 = Color3.fromHex("0b0d10"), BackgroundTransparency = 0.05, BorderSizePixel = 0,
-			AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -PAY_BAR_BOTTOM), Size = UDim2.new(1, -28, 0, PAY_BAR_H), ZIndex = 12, ClipsDescendants = false }, t)
-		UI.mk("UICorner", { CornerRadius = UDim.new(1, 0) }, track)
-		UI.mk("UIStroke", { Color = Color3.fromHex("4a4f57"), Thickness = 1, Transparency = 0.25, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, track)
-		-- inset shading: darker at the top edge, like a groove
-		UI.mk("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.fromRGB(120, 120, 120), Color3.new(1, 1, 1)) }, track)
-		local inner = UI.mk("Frame", { Name = "Inner", BackgroundTransparency = 1, Position = UDim2.fromOffset(2, 2), Size = UDim2.new(1, -4, 1, -4), ZIndex = 13 }, track)
-		local fill = UI.mk("Frame", { Name = "Fill", BackgroundColor3 = C.white, BorderSizePixel = 0, Size = UDim2.fromScale((os.clock() % CYCLE) / CYCLE, 1), ZIndex = 13 }, inner)
-		UI.mk("UICorner", { CornerRadius = UDim.new(1, 0) }, fill)
-		UI.mk("UIGradient", { Rotation = 90, Color = ColorSequence.new({
-			ColorSequenceKeypoint.new(0, Color3.fromHex("b4f29c")), ColorSequenceKeypoint.new(0.5, Color3.fromHex("8fd07a")), ColorSequenceKeypoint.new(1, Color3.fromHex("4f9a45")) }) }, fill)
-		local hi = UI.mk("Frame", { Name = "Highlight", BackgroundColor3 = C.white, BackgroundTransparency = 0.7, BorderSizePixel = 0,
-			Position = UDim2.new(0, 2, 0, 1), Size = UDim2.new(1, -4, 0.38, 0), ZIndex = 14 }, fill)
-		UI.mk("UICorner", { CornerRadius = UDim.new(1, 0) }, hi)
+		local bar = UI.bar(t, C.good, { name = "PayBar", anchor = Vector2.new(0.5, 1), pos = UDim2.new(0.5, 0, 1, -PAY_BAR_BOTTOM), sz = UDim2.new(1, -28, 0, PAY_BAR_H), z = 12, textSize = 10 })
+		bar:Set((os.clock() % CYCLE) / CYCLE)
 		-- payout flash: the whole track glows green for a moment when the cycle pays
-		local flash = UI.mk("Frame", { Name = "Flash", BackgroundColor3 = C.good, BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ZIndex = 15 }, track)
-		UI.mk("UICorner", { CornerRadius = UDim.new(1, 0) }, flash)
-		return fill, flash
+		local flash = UI.img(bar.Inst, "bar_fill", { name = "Flash", color = C.good, alpha = 1, z = bar.Inst.ZIndex + 3 })
+		return bar, flash
 	end
 
 	-- one square tile. kind = "owned" | "sale" | "locked"
@@ -415,13 +396,13 @@ S.properties = { build = function(host, App)
 		-- bobbing scaffold, smoke puffs, BUILDING bar; then the building pops in on the next refresh
 		local site = UI.img(t, "construct", { sz = UDim2.fromScale(0.78, 0.78), pos = UDim2.fromScale(0.5, 0.5), anchor = Vector2.new(0.5, 0.5), z = 9, slice = false, fit = true })
 		local lbl = text(t, "BUILDING", { font = "heavy", size = 16, color = C.gold, align = Enum.TextXAlignment.Center, pos = UDim2.new(0, 0, 1, -44), sz = UDim2.new(1, 0, 0, 20), z = 11, stroke = 1.2 })
-		local track = UI.mk("Frame", { BackgroundColor3 = C.black, BorderSizePixel = 0, Position = UDim2.new(0.12, 0, 1, -20), Size = UDim2.new(0.76, 0, 0, 8), ZIndex = 11 }, t)
-		local fill = UI.mk("Frame", { BackgroundColor3 = C.gold, BorderSizePixel = 0, Size = UDim2.fromScale(0, 1), ZIndex = 12 }, track)
+		local bbar = UI.bar(t, C.gold, { pos = UDim2.new(0.12, 0, 1, -22), sz = UDim2.new(0.76, 0, 0, 14), z = 11, textSize = 10 })
 		local dur = 2.4
 		local started = obj.building[lot]
 		local left = math.max(0.2, dur - (os.clock() - started))
-		fill.Size = UDim2.fromScale(1 - left / dur, 1)
-		tw(fill, left, { Size = UDim2.fromScale(1, 1) }, Enum.EasingStyle.Linear)
+		bbar:Set(1 - left / dur)
+		bbar.Fill.Visible = true
+		tw(bbar.Fill, left, { Size = UDim2.new(1, -6, 1, -6) }, Enum.EasingStyle.Linear)
 		task.spawn(function()
 			local up = true
 			while site.Parent and os.clock() - started < dur do
@@ -459,11 +440,8 @@ S.properties = { build = function(host, App)
 		text(b2, used .. " / " .. st.lotsMax, { font = "display", size = 28, pos = UDim2.fromOffset(16, 26), sz = UDim2.new(0.5, 0, 0, 32), z = 8 })
 		local free = st.lotsMax - used
 		if free > 0 then plate(b2, free .. " OPEN", UDim2.new(1, -12, 0, 10), Vector2.new(1, 0), 9, C.good) end
-		local pips = UI.mk("Frame", { BackgroundTransparency = 1, Position = UDim2.new(0.45, 0, 0, 44), Size = UDim2.new(0.55, -14, 0, 12), ZIndex = 8 }, b2)
-		UI.mk("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 3), SortOrder = Enum.SortOrder.LayoutOrder }, pips)
-		for k = 1, st.lotsMax do
-			UI.mk("Frame", { BackgroundColor3 = k <= used and C.gold or C.slate, BorderSizePixel = 0, Size = UDim2.new(1 / st.lotsMax, -3, 1, 0), ZIndex = 9, LayoutOrder = k }, pips)
-		end
+		local lotsBar = UI.bar(b2, C.gold, { pos = UDim2.new(0.45, 0, 0, 40), sz = UDim2.new(0.55, -14, 0, 18), z = 8, textSize = 11 })
+		lotsBar:Set(used / math.max(1, st.lotsMax))
 
 		local grid = UI.mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, ZIndex = 6, LayoutOrder = 1 }, list)
 		UI.mk("UIGridLayout", { CellSize = UDim2.fromOffset(cell, cell), CellPadding = UDim2.fromOffset(10, 10), SortOrder = Enum.SortOrder.LayoutOrder }, grid)
@@ -521,8 +499,8 @@ S.properties = { build = function(host, App)
 				if not obj.building[k] then
 					local inc = P.inc * propMod
 					local pl, psc = incomePill(t, R.Money(inc) .. "/hr")
-					local fill, flash = payBar(t)
-					table.insert(obj.payTiles, { tile = t, fill = fill, flash = flash, scale = psc, amount = inc / 3600 * CYCLE })
+					local pbar, flash = payBar(t)
+					table.insert(obj.payTiles, { tile = t, bar = pbar, flash = flash, scale = psc, amount = inc / 3600 * CYCLE })
 					local _ = pl
 				end
 			else
@@ -784,11 +762,9 @@ S.bank = { build = function(host, App)
 		UI.clear(vault)
 		UI.icon(vault, "icon_bank", 30, C.gold, UDim2.fromOffset(16, 14), { z = 7 })
 		text(vault, "THE VAULT", { font = "display", size = 22, pos = UDim2.fromOffset(56, 14), sz = UDim2.new(1, -110, 0, 30), z = 7 })
-		local info = UI.img(vault, "chip", { button = true, sz = UDim2.fromOffset(28, 28), pos = UDim2.new(1, -40, 0, 14), z = 8 })
-		text(info, "i", { font = "heavy", size = 17, color = C.gold, align = Enum.TextXAlignment.Center, sz = UDim2.fromScale(1, 1), z = 9 })
-		info.Activated:Connect(function()
+		UI.infoBtn(vault, UDim2.new(1, -40, 0, 14), function()
 			App.confirm("HOW THE BANK WORKS", "• Banked cash <b>can't be stolen</b> in raids.\n• Depositing costs a <b>" .. math.floor(Config.Bank.DepositFee * 100) .. "% fee</b>. Withdrawing is free.\n• It earns <b>" .. (Config.Bank.InterestPerHour * 100) .. "% interest per hour</b> (half while you're offline), with no cap.\n• You can't buy things straight from the bank: withdraw first.", "GOT IT", "manila", function() end)
-		end)
+		end, { z = 8, size = 28 })
 		balance = text(vault, R.Money(st.bank or 0), { font = "display", size = 38, color = C.gold, pos = UDim2.fromOffset(16, 52), sz = UDim2.new(1, -32, 0, 44), z = 7 })
 		rateL = text(vault, "", { size = 15, color = C.muted, rich = true, pos = UDim2.fromOffset(16, 98), sz = UDim2.new(1, -32, 0, 20), z = 7 })
 		text(vault, "DEPOSIT  <font color='#9a9fa6'>(" .. math.floor(Config.Bank.DepositFee * 100) .. "% fee)</font>", { font = "heavy", size = 14, rich = true, pos = UDim2.fromOffset(16, 130), sz = UDim2.new(1, -32, 0, 18), z = 7 })

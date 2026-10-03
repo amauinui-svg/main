@@ -211,17 +211,13 @@ end
 
 -- the small "i" button: tap to open a short explanation (Kash Q3: details behind an i icon)
 local function infoBtn(App, parent, title, body, pos, z)
-	local b = mk("TextButton", { Name = "Info", Text = "i", FontFace = UI.Font.heavy, TextSize = 14, TextColor3 = C.manila, BackgroundColor3 = C.slate,
-		AutoButtonColor = false, Size = UDim2.fromOffset(20, 20), Position = pos, ZIndex = z or 8 }, parent)
-	corner(b, UDim.new(1, 0))
-	stroke(b, C.manila, 1.4)
-	hoverScale(b, 0.15)
-	b.Activated:Connect(function()
+	local b = UI.infoBtn(parent, pos, function()
 		local _, bd, close = popup(App, title, 440, 250)
 		text(bd, body, { size = 16, wrap = true, rich = true, sz = UDim2.new(1, 0, 1, -54), valign = Enum.TextYAlignment.Top, z = 74 })
 		UI.button(bd, "slate", "GOT IT", close, { sz = UDim2.fromOffset(150, 42), pos = UDim2.new(0.5, 0, 1, -4), anchor = Vector2.new(0.5, 1), z = 74 })
-	end)
-	return b
+	end, { z = z or 8, size = 22 })
+	hoverBtn(b)
+	return b.Inst
 end
 
 ---------------------------------------------------------------- DROP RATES (every RNG box, Kash 2 Oct 21:15)
@@ -464,11 +460,10 @@ end
 local function resultCard(parent, r, w, h, z)
 	local item = r.item or {}
 	local rc = rcol(item.rarity)
-	local card = mk("Frame", { Name = "Result", BackgroundColor3 = TILE, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ZIndex = z }, parent)
-	corner(card, 10)
+	local card = UI.card(parent, { name = "Result", sz = UDim2.fromScale(1, 1), z = z })
 	stroke(card, rc, 3)
-	local band = mk("Frame", { BackgroundColor3 = rc, BackgroundTransparency = 0.5, BorderSizePixel = 0, Size = UDim2.fromScale(1, 0.55), ZIndex = z }, card)
-	corner(band, 10)
+	local band = mk("Frame", { BackgroundColor3 = rc, BackgroundTransparency = 0.5, BorderSizePixel = 0, Position = UDim2.fromOffset(4, 4), Size = UDim2.new(1, -8, 0.55, -4), ZIndex = z }, card)
+	corner(band, 8)
 	mk("UIGradient", { Rotation = 90, Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.1), NumberSequenceKeypoint.new(1, 1) }) }, band)
 	local fs = math.max(11, math.floor(h * 0.06))
 	text(card, rar(item.rarity).name, { font = "heavy", size = fs + 2, color = rc, align = Enum.TextXAlignment.Center, pos = UDim2.fromOffset(6, 6), sz = UDim2.new(1, -12, 0, fs + 6), z = z + 2, stroke = 1.2, scaled = true })
@@ -512,10 +507,8 @@ local function resultCard(parent, r, w, h, z)
 	elseif r.type == "officer" then note = r.where == "limited" and "LIMITED SLOT" or "JOINED YOUR CABINET"
 	elseif unit then note = "JOINED YOUR ARMY"
 	else note = "ADDED TO INVENTORY" end
-	local foot = mk("Frame", { BackgroundColor3 = rc, BorderSizePixel = 0, Position = UDim2.new(0, 6, 1, -(footH + 6)), Size = UDim2.new(1, -12, 0, footH), ZIndex = z + 1 }, card)
-	corner(foot, 4)
-	text(foot, note, { font = "heavy", size = fs - 1, color = r.lost and C.white or C.black, align = Enum.TextXAlignment.Center, sz = UDim2.fromScale(1, 1), z = z + 2, scaled = true })
-	if r.lost then foot.BackgroundColor3 = C.bad end
+	UI.tag(card, note, r.lost and C.bad or rc, { pos = UDim2.new(0, 6, 1, -(footH + 6)), sz = UDim2.new(1, -12, 0, footH), z = z + 1, size = fs - 1,
+		textColor = r.lost and C.white or C.black })
 	return card
 end
 
@@ -687,12 +680,19 @@ S.officers = { build = function(host, App)
 	local panel, body = header(host, App, "OFFICERS")
 	local obj = { sig = nil, costBtns = {}, last = { atk = 0, def = 0, tot = 0 }, busy = false }
 
+	-- header: [title or sub tabs] [i] [subtitle ......] [UNEQUIP ALL] [AUTO EQUIP BEST]
+	local hx = host:GetAttribute("TabsRight") or 158
 	infoBtn(App, panel, "OFFICERS", "Officers give your country % boosts. Every officer sits in a <b>slot</b>: you can only hire when a slot is open. "
 		.. "<font color='#ff9a2e'><b>LIMITED</b></font> officers (Mega VIP, Limited Bundle) get their own extra slot.\n\n"
 		.. "Every hire is unique: a rarity plus random traits. Weapons add attack, armor adds defense, on you and on each officer.",
-		UDim2.fromOffset(158, 18), 8)
-	text(panel, "Hire officers with cash. Each one rolls a rarity and traits; their gear adds attack and defense.", { size = 13, color = C.muted, wrap = true,
-		pos = UDim2.fromOffset(186, 10), sz = UDim2.new(1, -186 - 372, 0, 36), z = 7 })
+		UDim2.fromOffset(hx, 15), 8)
+	local subX = hx + 32
+	local subL = text(panel, "Hire officers with cash. Each one rolls a rarity and traits; their gear adds attack and defense.", { size = 13, color = C.muted, wrap = true, scaled = true,
+		pos = UDim2.fromOffset(subX, 8), sz = UDim2.new(1, -subX - 376, 0, 38), z = 7 })
+	-- too narrow (phones): the "i" popup already explains it, so hide the line instead of squashing it
+	local function fitSub() subL.Visible = subL.AbsoluteSize.X >= panel.AbsoluteSize.X * 0.2 end
+	subL:GetPropertyChangedSignal("AbsoluteSize"):Connect(fitSub)
+	task.defer(fitSub)
 
 	-- UNEQUIP ALL / AUTO EQUIP BEST (client-side sequences of equip / unequip)
 	local function runSeq(btn, label, calls, doneMsg)
@@ -856,8 +856,7 @@ S.officers = { build = function(host, App)
 		local pt = portrait(card, o, 76, UDim2.fromOffset(36, 8), 8)
 		if ridx(o.rarity) >= 5 then glow(pt, rc, 1.2, 8, 0.5) end
 		if limited then
-			local band = mk("Frame", { BackgroundColor3 = LIMITED, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, 0), Size = UDim2.new(1, 0, 0, 16), ZIndex = 10 }, pt)
-			text(band, "LIMITED", { font = "heavy", size = 12, color = C.black, align = Enum.TextXAlignment.Center, sz = UDim2.fromScale(1, 1), z = 11 })
+			UI.tag(pt, "LIMITED", LIMITED, { anchor = Vector2.new(0.5, 1), pos = UDim2.new(0.5, 0, 1, -2), sz = UDim2.new(1, -4, 0, 16), z = 10, size = 12, textColor = C.black })
 		end
 		text(card, o.name, { font = "heavy", size = 15, color = limited and LIMITED or C.ink, pos = UDim2.fromOffset(120, 8), sz = UDim2.new(0.3, -124, 0, 20), z = 8, truncate = true })
 		text(card, rar(o.rarity).name, { font = "heavy", size = 13, color = rc, pos = UDim2.fromOffset(120, 30), sz = UDim2.new(0.3, -124, 0, 16), z = 8 })
@@ -868,11 +867,9 @@ S.officers = { build = function(host, App)
 		gearBox(card, st, o.id, o.name, "weapon", 0.47)
 		gearBox(card, st, o.id, o.name, "armor", 0.66)
 		if limited then
-			local chip = mk("Frame", { BackgroundColor3 = DARK, BorderSizePixel = 0, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0.85, 2, 0.5, 0), Size = UDim2.new(0.15, -10, 0, 44), ZIndex = 8 }, card)
-			corner(chip, 6)
-			stroke(chip, LIMITED, 2)
-			text(chip, "LIMITED\n<font color='#9a9fa6'>always active</font>", { font = "heavy", size = 14, color = LIMITED, align = Enum.TextXAlignment.Center, rich = true, wrap = true, scaled = true,
-				pos = UDim2.fromOffset(4, 2), sz = UDim2.new(1, -8, 1, -4), z = 9 })
+			local lp = UI.button(card, "locked", "LIMITED\n<font color='#b9bdc3'>always active</font>", nil,
+				{ pos = UDim2.new(0.85, 2, 0.5, 0), anchor = Vector2.new(0, 0.5), sz = UDim2.new(0.15, -10, 0, 40), z = 8, textSize = 14, rich = true, static = true })
+			lp.Label.TextColor3 = LIMITED
 		else
 			local fb = UI.button(card, "red", "FIRE", function(b) fireOfficer(App, o, b) end,
 				{ pos = UDim2.new(0.85, 2, 0.5, 0), anchor = Vector2.new(0, 0.5), sz = UDim2.new(0.15, -10, 0, 40), z = 8, textSize = 15 })
@@ -887,7 +884,7 @@ S.officers = { build = function(host, App)
 		text(card, free > 0 and "A random recruit joins your cabinet. Pricier hires roll rarer officers."
 			or "Every slot is full. <b>Unlock a slot below</b> or fire an officer to hire again.",
 			{ size = 13, color = C.muted, pos = UDim2.fromOffset(16, 34), sz = UDim2.new(0.42, -16, 0, 30), z = 8, wrap = true, rich = true })
-		ratesBtn(App, card, "hire", { pos = UDim2.new(0, 16, 1, -38), sz = UDim2.fromOffset(150, 30) })
+		ratesBtn(App, card, "hire", { pos = UDim2.new(0, 16, 1, -34), sz = UDim2.fromOffset(150, 28) })
 		for k, t in ipairs(Config.Officers.Hire) do
 			local b = UI.button(card, free > 0 and "gold" or "locked", t.name .. "\n" .. (free > 0 and R.Money(t.cost) or "NO FREE SLOT"), function(btn)
 				local s = App.state
@@ -1046,12 +1043,11 @@ S.inventory = { build = function(host, App)
 	local opts = { { nil, "ALL RARITIES", C.ink } }
 	for _, r in ipairs(O.Rarities) do table.insert(opts, { r.key, r.name, Color3.fromHex(r.color) }) end
 	for i, op in ipairs(opts) do
-		local b = mk("TextButton", { Text = op[2], FontFace = UI.Font.heavy, TextSize = 15, TextColor3 = op[3], BackgroundColor3 = C.slate, BackgroundTransparency = 1, AutoButtonColor = false,
-			TextXAlignment = Enum.TextXAlignment.Left, Size = UDim2.new(1, 0, 0, 30), ZIndex = 32, LayoutOrder = i }, dl)
-		mk("UIPadding", { PaddingLeft = UDim.new(0, 10) }, b)
-		corner(b, 4)
-		b.MouseEnter:Connect(function() b.BackgroundTransparency = 0.2 end)
-		b.MouseLeave:Connect(function() b.BackgroundTransparency = 1 end)
+		-- each option is an inset plate that only shows while hovered
+		local b = UI.img(dl, "inset", { button = true, name = "Opt" .. i, sz = UDim2.new(1, 0, 0, 30), z = 32, order = i, alpha = 1 })
+		text(b, op[2], { font = "heavy", size = 15, color = op[3], pos = UDim2.fromOffset(10, 0), sz = UDim2.new(1, -14, 1, 0), z = 33, truncate = true })
+		b.MouseEnter:Connect(function() b.ImageTransparency = 0 end)
+		b.MouseLeave:Connect(function() b.ImageTransparency = 1 end)
 		b.Activated:Connect(function() pickRar(op[1]) end)
 	end
 	rarBtn = UI.button(body, "slate", "ALL RARITIES", function() drop.Visible = not drop.Visible end,
@@ -1067,7 +1063,7 @@ S.inventory = { build = function(host, App)
 	UI.icon(strip, "icon_crown", 18, C.gold, UDim2.new(0, 10, 0.5, 0), { z = 8, anchor = Vector2.new(0, 0.5) })
 	text(strip, "ELITE TROOPS", { font = "heavy", size = 14, color = C.gold, pos = UDim2.fromOffset(34, 0), sz = UDim2.new(0, 104, 1, 0), z = 8 })
 	infoBtn(App, strip, "ELITE TROOPS", "Elite troops come from the <b>Founder's Crate</b> and the <b>Starter Pack</b>. Each era has one elite unit, much stronger than its regular troops.\n\n"
-		.. "<font color='#f0c75a'><b>Elite troops never die in raids</b></font> and do not use army capacity. They always add their ATK and DEF to your power.", UDim2.new(0, 138, 0.5, -10), 9)
+		.. "<font color='#f0c75a'><b>Elite troops never die in raids</b></font> and do not use army capacity. They always add their ATK and DEF to your power.", UDim2.new(0, 138, 0.5, -11), 9)
 	local chips = UI.list(strip, { horizontal = true, pos = UDim2.fromOffset(166, 4), sz = UDim2.new(1, -172, 1, -4), gap = 8, z = 8 })
 	chips.ScrollBarThickness = 3
 	local function eliteOf(st)
@@ -1196,19 +1192,13 @@ S.inventory = { build = function(host, App)
 		return c, well
 	end
 	local function rarityBar(c, label, rc)
-		local b = mk("Frame", { BackgroundColor3 = rc, BorderSizePixel = 0, Position = UDim2.new(0, 8, 1, -26), Size = UDim2.new(1, -16, 0, 18), ZIndex = 9 }, c)
-		corner(b, 3)
-		text(b, label, { font = "heavy", size = 12, color = C.black, align = Enum.TextXAlignment.Center, sz = UDim2.fromScale(1, 1), z = 10 })
+		UI.tag(c, label, rc, { pos = UDim2.new(0, 8, 1, -26), sz = UDim2.new(1, -16, 0, 18), z = 9, size = 12, textColor = C.black })
 	end
 	local function nameLine(c, s, y)
 		text(c, s, { font = "heavy", size = 15, align = Enum.TextXAlignment.Center, pos = UDim2.fromOffset(6, y or 124), sz = UDim2.new(1, -12, 0, 36), z = 9, wrap = true, scaled = true })
 	end
 	local function tagChip(well, s, color)
-		local ch = mk("Frame", { BackgroundColor3 = color, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -4), Size = UDim2.fromOffset(0, 16), AutomaticSize = Enum.AutomaticSize.X, ZIndex = 11 }, well)
-		corner(ch, 3)
-		mk("UIPadding", { PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6) }, ch)
-		local l = text(ch, s, { font = "heavy", size = 11, color = C.black, sz = UDim2.fromScale(0, 1), z = 12 })
-		l.AutomaticSize = Enum.AutomaticSize.X
+		UI.tag(well, s, color, { anchor = Vector2.new(0.5, 1), pos = UDim2.new(0.5, 0, 1, -4), h = 16, size = 11, z = 11, pad = 6, textColor = C.black })
 	end
 
 	local function gearCard(g, order, wm)
@@ -1245,6 +1235,8 @@ S.inventory = { build = function(host, App)
 		local def = isBasic and Config.Crates.Basic or Config.Crates.Limited
 		local rc = isBasic and rcol("common") or rcol("limited")
 		local c, well = card(order, rc, "CRATE")
+		-- crate layout (top to bottom, nothing overlapping): tag + RATES chip, crate well, name, PITY bar, buttons, band
+		well.Size = UDim2.new(1, -16, 0, 80)
 		if not isBasic then glow(well, rc, 1.1, 8, 0.6) end
 		local img = UI.img(well, isBasic and "crate_basic" or "crate_limited", { sz = UDim2.fromScale(0.82, 0.82), pos = UDim2.fromScale(0.5, 0.5), anchor = Vector2.new(0.5, 0.5), z = 10, slice = false, fit = true })
 		if count > 0 then
@@ -1253,23 +1245,16 @@ S.inventory = { build = function(host, App)
 			img.Rotation = -4
 			TweenService:Create(img, TweenInfo.new(0.9, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Rotation = 4 }):Play()
 		end
-		text(c, def.name, { font = "heavy", size = 14, align = Enum.TextXAlignment.Center, pos = UDim2.fromOffset(6, 122), sz = UDim2.new(1, -12, 0, 20), z = 9, scaled = true })
+		text(c, def.name, { font = "heavy", size = 14, align = Enum.TextXAlignment.Center, pos = UDim2.fromOffset(6, 104), sz = UDim2.new(1, -12, 0, 20), z = 9, scaled = true })
 		-- DROP RATES chip on every crate (Kash: every RNG box shows its drops and % rates)
-		local ratesChip = mk("TextButton", { Name = "Rates", Text = "% RATES", FontFace = UI.Font.heavy, TextSize = 11, TextColor3 = C.manila, BackgroundColor3 = C.slate, AutoButtonColor = false,
-			AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -8, 0, 3), Size = UDim2.fromOffset(60, 18), ZIndex = 12 }, c)
-		corner(ratesChip, 9)
-		stroke(ratesChip, C.manila, 1.2)
-		hoverScale(ratesChip, 0.1)
-		ratesChip.Activated:Connect(function() dropRates(App, kind) end)
+		UI.chipBtn(c, "RATES", function() dropRates(App, kind) end, { name = "Rates", icon = "icon_gauge", iconColor = C.manila, color = C.manila, h = 18, size = 11,
+			pos = UDim2.new(1, -6, 0, 2), anchor = Vector2.new(1, 0), z = 12 })
 		-- visible PITY meter (Kash 2 Oct): fills with every crate that is not Legendary+
 		do
 			local need = O.Pity[kind] or 50
 			local have = math.min(need, (st and st.pity and st.pity[kind]) or 0)
-			local track = mk("Frame", { Name = "Pity", BackgroundColor3 = C.black, BackgroundTransparency = 0.25, BorderSizePixel = 0, Position = UDim2.new(0, 8, 0, 100), Size = UDim2.new(1, -16, 0, 16), ZIndex = 12 }, c)
-			corner(track, 8)
-			local fill = mk("Frame", { BackgroundColor3 = Color3.fromHex("e9b949"), BorderSizePixel = 0, Size = UDim2.new(have / need, 0, 1, 0), ZIndex = 12 }, track)
-			corner(fill, 8)
-			text(track, "PITY " .. have .. "/" .. need, { font = "heavy", size = 11, color = C.white, align = Enum.TextXAlignment.Center, sz = UDim2.fromScale(1, 1), z = 13, stroke = 1.2 })
+			local pity = UI.bar(c, C.gold, { name = "Pity", pos = UDim2.fromOffset(8, 126), sz = UDim2.new(1, -16, 0, 18), z = 9, textSize = 11 })
+			pity:Set(have / need, "PITY", have .. "/" .. need)
 		end
 		if count > 0 then
 			local n = math.min(count, 10)

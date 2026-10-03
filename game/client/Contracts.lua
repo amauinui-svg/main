@@ -153,6 +153,18 @@ S.tasks = { build = function(host, App)
 			local c = UI.chip(holder, p[1], { order = k, h = 24, size = 13, icon = p[2], iconColor = p[3], color = p[4], z = z + 1 })
 			if p[2] == "icon_seal" then local ic = c:FindFirstChild("Icon"); if ic then ic.ImageColor3 = C.white end end
 		end
+		-- three chips do not fit the middle column on narrow screens: shrink the row instead of running under the button
+		local layout = holder:FindFirstChildOfClass("UIListLayout")
+		local sc = UI.mk("UIScale", {}, holder)
+		local function fit()
+			local need, have = layout.AbsoluteContentSize.X, holder.AbsoluteSize.X
+			if need <= 0 or have <= 0 then return end
+			local k = math.clamp(have / need, 0.6, 1) -- both sizes include this UIScale, so the ratio is scale-free
+			if math.abs(k - sc.Scale) > 0.01 then sc.Scale = k end
+		end
+		layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(fit)
+		holder:GetPropertyChangedSignal("AbsoluteSize"):Connect(fit)
+		task.defer(fit)
 	end
 
 	local function rowFrame(order, gold)

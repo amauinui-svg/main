@@ -204,18 +204,12 @@ M._settings = { init = function(App)
 
 	---------------------------------------------------------------- small widgets
 	local ON, OFF = C.good, Color3.fromHex("3a4049")
-	-- pretty switch: returns obj { Inst, Set(v, animate) }
+	-- switch built from the kit's bar plates (track + tinted fill) with a manila chip knob: returns obj { Inst, Set(v, animate) }
 	local function switch(parent, on, z, onToggle)
-		local track = mk("TextButton", { Name = "Switch", Text = "", AutoButtonColor = false, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -16, 0.5, 0),
-			Size = UDim2.fromOffset(64, 32), BackgroundColor3 = on and ON or OFF, BorderSizePixel = 0, ZIndex = z }, parent)
-		mk("UICorner", { CornerRadius = UDim.new(1, 0) }, track)
-		mk("UIStroke", { Color = C.black, Thickness = 2, Transparency = 0.35, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, track)
-		mk("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(190, 190, 190)) }, track)
+		local track = UI.img(parent, "bar_track", { button = true, name = "Switch", anchor = Vector2.new(1, 0.5), pos = UDim2.new(1, -16, 0.5, 0), sz = UDim2.fromOffset(64, 32), z = z })
+		local fill = UI.img(track, "bar_fill", { name = "Fill", pos = UDim2.fromOffset(3, 3), sz = UDim2.new(1, -6, 1, -6), z = z, color = on and ON or OFF })
 		local lbl = text(track, on and "ON" or "OFF", { font = "heavy", size = 12, color = C.white, sz = UDim2.new(1, -36, 1, 0), pos = UDim2.fromOffset(on and 8 or 30, 0), z = z + 1, align = Enum.TextXAlignment.Center, stroke = 1 })
-		local knob = mk("Frame", { Name = "Knob", AnchorPoint = Vector2.new(0, 0.5), Position = on and UDim2.new(1, -29, 0.5, 0) or UDim2.new(0, 3, 0.5, 0), Size = UDim2.fromOffset(26, 26),
-			BackgroundColor3 = C.white, BorderSizePixel = 0, ZIndex = z + 2 }, track)
-		mk("UICorner", { CornerRadius = UDim.new(1, 0) }, knob)
-		mk("UIStroke", { Color = C.black, Thickness = 1, Transparency = 0.5 }, knob)
+		local knob = UI.img(track, "chip_manila", { name = "Knob", anchor = Vector2.new(0, 0.5), pos = on and UDim2.new(1, -29, 0.5, 0) or UDim2.new(0, 3, 0.5, 0), sz = UDim2.fromOffset(26, 26), z = z + 2 })
 		local ks = mk("UIScale", {}, knob)
 		local obj = { Inst = track, on = on }
 		function obj:Set(v, animate)
@@ -225,13 +219,13 @@ M._settings = { init = function(App)
 			local pos = v and UDim2.new(1, -29, 0.5, 0) or UDim2.new(0, 3, 0.5, 0)
 			if animate then
 				tween(knob, 0.18, { Position = pos }, Enum.EasingStyle.Back)
-				tween(track, 0.18, { BackgroundColor3 = v and ON or OFF })
+				tween(fill, 0.18, { ImageColor3 = v and ON or OFF })
 				if not calm() then
 					ks.Scale = 1.15
 					tween(ks, 0.2, { Scale = 1 }, Enum.EasingStyle.Back)
 				end
 			else
-				knob.Position = pos; track.BackgroundColor3 = v and ON or OFF
+				knob.Position = pos; fill.ImageColor3 = v and ON or OFF
 			end
 		end
 		track.Activated:Connect(function() onToggle() end)
@@ -244,29 +238,18 @@ M._settings = { init = function(App)
 		local box = mk("TextButton", { Name = "Slider", Text = "", AutoButtonColor = false, BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0.5),
 			Position = UDim2.new(1, -84, 0.5, 0), Size = UDim2.new(0.5, -60, 0, 36), ZIndex = z }, parent)
 		box:SetAttribute("IC_NoClick", true)
-		local track = mk("Frame", { Name = "Track", BackgroundColor3 = Color3.fromHex("14171b"), BorderSizePixel = 0, AnchorPoint = Vector2.new(0, 0.5),
-			Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.new(1, 0, 0, 12), ZIndex = z }, box)
-		mk("UICorner", { CornerRadius = UDim.new(1, 0) }, track)
-		mk("UIStroke", { Color = Color3.fromHex("4a4f57"), Thickness = 1, Transparency = 0.2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, track)
-		mk("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.fromRGB(150, 150, 150), Color3.new(1, 1, 1)) }, track)
-		local fill = mk("Frame", { Name = "Fill", BackgroundColor3 = C.white, BorderSizePixel = 0, Size = UDim2.fromScale(v, 1), ZIndex = z + 1 }, track)
-		mk("UICorner", { CornerRadius = UDim.new(1, 0) }, fill)
-		mk("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.fromHex("f6dc8a"), Color3.fromHex("c99a32")) }, fill)
-		local knob = mk("Frame", { Name = "Knob", BackgroundColor3 = C.manila, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromScale(v, 0.5), Size = UDim2.fromOffset(24, 24), ZIndex = z + 3 }, track)
-		mk("UICorner", { CornerRadius = UDim.new(1, 0) }, knob)
-		mk("UIStroke", { Color = C.black, Thickness = 2, Transparency = 0.3 }, knob)
-		mk("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(200, 200, 200)) }, knob)
-		local dot = mk("Frame", { BackgroundColor3 = C.manilaInk, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(8, 8), ZIndex = z + 4 }, knob)
-		mk("UICorner", { CornerRadius = UDim.new(1, 0) }, dot)
+		-- the kit bar plates (same as every progress bar) with a manila chip knob
+		local track = UI.img(box, "bar_track", { name = "Track", anchor = Vector2.new(0, 0.5), pos = UDim2.new(0, 0, 0.5, 0), sz = UDim2.new(1, 0, 0, 16), z = z })
+		local fill = UI.img(track, "bar_fill", { name = "Fill", pos = UDim2.fromOffset(3, 3), sz = UDim2.new(v, -6 * v, 1, -6), z = z + 1, color = C.gold })
+		local knob = UI.img(track, "chip_manila", { name = "Knob", anchor = Vector2.new(0.5, 0.5), pos = UDim2.fromScale(v, 0.5), sz = UDim2.fromOffset(22, 26), z = z + 3 })
 		local ks = mk("UIScale", {}, knob)
 		local pct = text(parent, "", { font = "heavy", size = 18, color = C.manila, align = Enum.TextXAlignment.Right, anchor = Vector2.new(1, 0.5),
 			pos = UDim2.new(1, -16, 0.5, 0), sz = UDim2.fromOffset(60, 26), z = z })
 
 		local obj = { Inst = box, v = v }
 		local function show(x)
-			fill.Size = UDim2.fromScale(x, 1)
-			fill.Visible = x > 0.001
+			fill.Size = UDim2.new(x, -6 * x, 1, -6)
+			fill.Visible = x > 0.02
 			knob.Position = UDim2.fromScale(x, 0.5)
 			pct.Text = math.floor(x * 100 + 0.5) .. "%"
 			pct.TextColor3 = x > 0 and C.manila or C.dim
@@ -316,15 +299,15 @@ M._settings = { init = function(App)
 		return obj
 	end
 
+	-- labels on the kit plates: dark text on a light colour = a tinted tag plate, coloured text = the dark chip plate
 	local function chip(parent, s, bg, fg, p)
 		p = p or {}
-		local f = mk("Frame", { Name = "Chip", BackgroundColor3 = bg, BorderSizePixel = 0, Size = UDim2.fromOffset(0, p.h or 26), AutomaticSize = Enum.AutomaticSize.X,
-			Position = p.pos or UDim2.new(), AnchorPoint = p.anchor or Vector2.zero, ZIndex = p.z or 75, LayoutOrder = p.order or 0 }, parent)
-		mk("UICorner", { CornerRadius = UDim.new(0, 6) }, f)
-		mk("UIStroke", { Color = C.black, Thickness = 1.5, Transparency = 0.4 }, f)
-		mk("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10) }, f)
-		local l = text(f, s, { font = "heavy", size = p.size or 14, color = fg or C.white, sz = UDim2.new(0, 0, 1, 0), z = (p.z or 75) + 1 })
-		l.AutomaticSize = Enum.AutomaticSize.X
+		local f
+		if fg == C.black then
+			f = UI.tag(parent, s, bg, { h = p.h or 26, size = p.size or 14, pos = p.pos, anchor = p.anchor, z = p.z or 75, order = p.order, pad = 10, textColor = C.black })
+		else
+			f = UI.chip(parent, s, { h = p.h or 26, size = p.size or 14, pos = p.pos, anchor = p.anchor, z = p.z or 75, order = p.order, color = fg or C.ink })
+		end
 		return f
 	end
 
@@ -372,8 +355,7 @@ M._settings = { init = function(App)
 			if d.slider then
 				-- volume row: name and description on the left, slider and percentage on the right
 				local card = UI.card(list, { sz = UDim2.new(1, 0, 0, 62), z = 73, order = 1 + i })
-				local ib = mk("Frame", { BackgroundColor3 = Color3.fromHex("20252c"), BorderSizePixel = 0, Position = UDim2.fromOffset(12, 11), Size = UDim2.fromOffset(40, 40), ZIndex = 74 }, card)
-				mk("UICorner", { CornerRadius = UDim.new(0, 8) }, ib)
+				local ib = UI.img(card, "inset", { pos = UDim2.fromOffset(12, 11), sz = UDim2.fromOffset(40, 40), z = 74 })
 				local v0 = value(d.key)
 				local ic = UI.icon(ib, d.icon, 24, v0 > 0 and C.manila or C.dim, UDim2.fromScale(0.5, 0.5), { z = 75, anchor = Vector2.new(0.5, 0.5) })
 				text(card, d.name, { font = "heavy", size = 18, pos = UDim2.fromOffset(64, 8), sz = UDim2.new(0.5, -90, 0, 24), z = 74, truncate = true })
@@ -392,8 +374,7 @@ M._settings = { init = function(App)
 			local card = UI.card(list, { button = true, sz = UDim2.new(1, 0, 0, 62), z = 73, order = 1 + i })
 			local glow = mk("Frame", { BackgroundColor3 = C.manila, BackgroundTransparency = 1, BorderSizePixel = 0, Position = UDim2.fromOffset(4, 4), Size = UDim2.new(1, -8, 1, -8), ZIndex = 73 }, card)
 			mk("UICorner", { CornerRadius = UDim.new(0, 6) }, glow)
-			local ib = mk("Frame", { BackgroundColor3 = Color3.fromHex("20252c"), BorderSizePixel = 0, Position = UDim2.fromOffset(12, 11), Size = UDim2.fromOffset(40, 40), ZIndex = 74 }, card)
-			mk("UICorner", { CornerRadius = UDim.new(0, 8) }, ib)
+			local ib = UI.img(card, "inset", { pos = UDim2.fromOffset(12, 11), sz = UDim2.fromOffset(40, 40), z = 74 })
 			local on = value(d.key) == true
 			local ic = UI.icon(ib, d.icon, 24, on and C.manila or C.dim, UDim2.fromScale(0.5, 0.5), { z = 75, anchor = Vector2.new(0.5, 0.5) })
 			text(card, d.name, { font = "heavy", size = 18, pos = UDim2.fromOffset(64, 8), sz = UDim2.new(1, -170, 0, 24), z = 74, truncate = true })
