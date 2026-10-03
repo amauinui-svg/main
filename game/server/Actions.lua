@@ -84,7 +84,7 @@ function act.wonderBuild(plr, p)
 	if era < 2 then return no("Advance to the " .. D.Eras[2].name .. " Era to unlock your Wonder") end
 	local k = (d.wonder or 0) + 1
 	if k > R.WonderMax(era) then return no("Advance to the next era to keep building") end
-	local cost = R.WonderCost(k)
+	local cost = R.WonderCost(k, d.lv)
 	if not PS.Spend(p, cost) then return no("Need " .. R.Money(cost)) end
 	d.wonder = k
 	PS.AddXp(p, math.floor(R.MinuteXp(d.lv) * 10))
@@ -295,7 +295,7 @@ function act.send(plr, p, a)
 	if not c or not b then return no("Bad request") end
 	if c.to then return no("That convoy is on the road") end
 	if c.at == b then return no("The convoy is already here") end
-	local loads = PS.LoadsFor(p, c.at, b)
+	local loads = PS.LoadsFor(p, c.at, b, nil, true)
 	local L
 	for _, x in ipairs(loads) do if x.good == a.good then L = x end end
 	if not L then return no("That load is gone. Pick another.") end

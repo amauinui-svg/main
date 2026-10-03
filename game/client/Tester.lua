@@ -110,7 +110,7 @@ S._tester = { init = function(App)
 
 	local function ensureButton()
 		if btn or not (App.state and App.state.admin) then return end
-		btn = UI.button(App.root, "red", "TEST", toggle, { pos = UDim2.new(0, 8, 1, -46), sz = UDim2.fromOffset(72, 38), z = 89, textSize = 15, name = "TesterButton" })
+		btn = UI.button(App.root, "red", "TEST", toggle, { pos = UDim2.new(1, -86, 1, -48), sz = UDim2.fromOffset(72, 38), z = 89, textSize = 15, name = "TesterButton" })
 	end
 	App.on("full", function() ensureButton() end)
 	ensureButton()

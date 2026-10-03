@@ -282,12 +282,13 @@ function PS.TaxFor(p, b)
 	if c.owner == p.data.alliance and WS.IsMember(p.data.alliance, p.userId) then return 0, nil end
 	return c.tax or 0, c.owner
 end
-function PS.LoadsFor(p, a, b, mods)
+-- withEvent: only a convoy the player sends by hand can claim a world event bonus (not Auto Dispatch)
+function PS.LoadsFor(p, a, b, mods, withEvent)
 	local ctx = PS.TradeCtx(p, mods)
 	ctx.taxPct = PS.TaxFor(p, b)
 	ctx.wants = WS.WantsOf(b)
 	local ev = Events.Active(os.time())
-	if ev and ev.city == b and p.data.wev ~= ev.id then ctx.event = ev end
+	if withEvent and ev and ev.city == b and p.data.wev ~= ev.id then ctx.event = ev end
 	return T.Loads(a, b, ctx)
 end
 

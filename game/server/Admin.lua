@@ -129,7 +129,7 @@ cmd("officer", "/officer legendary  add an officer (needs a free slot). common..
 	local r = O.RarityByKey[tostring(a[1] or "legendary"):lower()]
 	if not r or r.key == "limited" then return "Unknown rarity" end
 	local res = PS.AddOfficer(p, O.NewOfficer(PS.Rng(p), r.index))
-	return res and ("Added a " .. r.name .. " officer") or "No free officer slot. /slot first."
+	return res and ("Added officer: " .. r.name) or "No free officer slot. /slot first."
 end)
 cmd("gear", "/gear mythic  add a gear item", function(_, p, a)
 	local r = O.RarityByKey[tostring(a[1] or "epic"):lower()]

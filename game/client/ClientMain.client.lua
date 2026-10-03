@@ -543,6 +543,8 @@ if game:GetService("RunService"):IsStudio() then
 			elseif k == "close" then App.closeModal()
 			elseif k == "login" and App.showLogin then App.showLogin()
 			elseif k == "settings" and App.openSettings then App.openSettings(arg ~= "" and arg or nil)
+			elseif k == "tester" and App.toggleTester then App.toggleTester()
+			elseif k == "profile" and App.showProfile then App.showProfile(tonumber(arg) or plr.UserId)
 			elseif k == "emit" then App.emit(arg) end
 		end)
 	end)

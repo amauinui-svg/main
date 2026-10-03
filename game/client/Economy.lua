@@ -569,7 +569,7 @@ S.properties = { build = function(host, App)
 			return card
 		end
 		local nextK = stage + 1
-		local cost = R.WonderCost(nextK)
+		local cost = R.WonderCost(nextK, st.lv)
 		local nextName = R.WonderName(nextK)
 		local note = "Next stage <b>" .. R.Money(cost) .. "</b>"
 		if nextName ~= R.WonderName(math.max(1, stage)) or stage == 0 then note ..= "<br/><font color='#9a9fa6'>Begins the " .. nextName .. "</font>" end

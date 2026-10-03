@@ -115,9 +115,10 @@ R.WonderPct = 0.02
 function R.WonderMax(era) return R.WonderStagesPerEra * math.max(0, (era or 1) - 1) end
 function R.WonderEra(k) return math.clamp(1 + math.ceil((k or 0) / R.WonderStagesPerEra), 2, #D.Eras) end
 function R.WonderName(k) return R.WonderNames[R.WonderEra(math.max(1, k or 1))] end
-function R.WonderCost(k)
+-- priced on your level (never below the era's start) so a stage always costs 1 to 3 hours of law income
+function R.WonderCost(k, lv)
 	local E = D.Eras[R.WonderEra(k)]
-	return math.floor(R.MinuteValue(E.start) * 60 * (1 + 0.5 * ((k - 1) % R.WonderStagesPerEra)) / 100 + 0.5) * 100
+	return math.floor(R.MinuteValue(math.max(E.start, lv or 1)) * 60 * (1 + 0.5 * ((k - 1) % R.WonderStagesPerEra)) / 100 + 0.5) * 100
 end
 function R.WonderBonus(k) return R.WonderPct * (k or 0) end
 -- ACHIEVEMENTS and TITLES (Kash 2 Oct: another way to feel progress). Worked out from lifetime stats, so nothing
