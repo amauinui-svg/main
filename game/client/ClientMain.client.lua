@@ -180,7 +180,7 @@ do
 	local mid = mk("Frame", { Name = "Money", BackgroundTransparency = 1, Size = UDim2.fromOffset(300, TOP), ZIndex = 21 }, topBar)
 	top.mid = mid
 	UI.icon(mid, "icon_cash", 26, C.good, UDim2.fromOffset(0, 10), { z = 22 })
-	top.cash = text(mid, "$0", { font = "display", size = 28, color = C.good, pos = UDim2.fromOffset(32, 3), sz = UDim2.fromOffset(240, 30), z = 22, scaled = true })
+	top.cash = text(mid, "$0", { font = "display", size = 28, color = C.good, pos = UDim2.fromOffset(32, 7), sz = UDim2.fromOffset(240, 30), z = 22, scaled = true })
 	top.income = text(mid, "", { font = "bold", size = 13, color = C.muted, pos = UDim2.fromOffset(32, 38), sz = UDim2.fromOffset(106, 18), z = 22, truncate = true })
 	-- gold bars and merits, big and readable (Kash 19:24)
 	local function currency(x, w, imgKey, fallback, color, name)
