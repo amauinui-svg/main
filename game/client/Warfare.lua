@@ -916,10 +916,52 @@ S.battle = { build = function(host, App)
 		end
 	end
 
+	-- RAID HISTORY (Kash 3 Oct): every raid you made and every raid on you
+	local function ago(t)
+		local s = math.max(0, os.time() - (t or 0))
+		if s < 60 then return "just now" elseif s < 3600 then return math.floor(s / 60) .. "m ago"
+		elseif s < 86400 then return math.floor(s / 3600) .. "h ago" end
+		return math.floor(s / 86400) .. "d ago"
+	end
+	local function showHistory()
+		local log = (App.state and App.state.raidLog) or {}
+		local _, bd = popup(App, "RAID HISTORY", 760, 560)
+		local hl = UI.list(bd, { gap = 6, z = 74 })
+		if #log == 0 then
+			text(hl, "No raids yet. Your raids and raids on you will show up here.", { size = 16, color = C.muted, wrap = true, sz = UDim2.new(1, 0, 0, 50), z = 75 })
+			return
+		end
+		for i, e in ipairs(log) do
+			local good = e.win
+			local row = UI.card(hl, { sz = UDim2.new(1, -4, 0, 58), z = 74, order = i, button = e.uid ~= nil })
+			UI.icon(row, e.out and "icon_attack" or "icon_defense", 26, e.out and C.bad or C.blue, UDim2.fromOffset(14, 16), { z = 75 })
+			local who = tostring(e.name or "?")
+			local head = e.out and ("You raided <b>" .. who .. "</b>") or ("<b>" .. who .. "</b> raided you")
+			text(row, head, { size = 16, rich = true, pos = UDim2.fromOffset(52, 6), sz = UDim2.new(1, -260, 0, 22), z = 75, truncate = true })
+			local res
+			if e.out then res = good and "<font color='#8fd07a'><b>VICTORY</b></font>" or "<font color='#e2695f'><b>DEFEAT</b></font>"
+			else res = good and "<font color='#8fd07a'><b>DEFENDED</b></font>" or "<font color='#e2695f'><b>RAIDED</b></font>" end
+			local bits = { res }
+			if (e.lost or 0) > 0 then table.insert(bits, R.Short(e.lost) .. " soldiers lost") end
+			if (e.killed or 0) > 0 then table.insert(bits, R.Short(e.killed) .. " enemy soldiers") end
+			text(row, table.concat(bits, " · "), { size = 13, rich = true, color = C.muted, pos = UDim2.fromOffset(52, 30), sz = UDim2.new(1, -260, 0, 20), z = 75, truncate = true })
+			local cash = tonumber(e.cash) or 0
+			text(row, cash == 0 and "$0" or ((cash > 0 and "+" or "-") .. R.Money(math.abs(cash))), { font = "heavy", size = 18, color = cash > 0 and C.good or cash < 0 and C.bad or C.muted,
+				pos = UDim2.new(1, -200, 0, 6), sz = UDim2.fromOffset(186, 24), z = 75, align = Enum.TextXAlignment.Right })
+			text(row, ago(e.t), { size = 13, color = C.muted, pos = UDim2.new(1, -200, 0, 30), sz = UDim2.fromOffset(186, 20), z = 75, align = Enum.TextXAlignment.Right })
+			if e.uid and row:IsA("GuiButton") then
+				local uid = e.uid
+				row.Activated:Connect(function() if App.showProfile then App.showProfile(uid) end end)
+			end
+		end
+	end
+
 	function obj:Refresh(st)
 		if not st then return end
 		refreshedAt = os.clock()
 		UI.clear(chips)
+		local hb = UI.chip(chips, "HISTORY", { icon = "icon_clock", button = true, z = 8, order = 0 })
+		if hb:IsA("GuiButton") then hb.Activated:Connect(showHistory) end
 		UI.chip(chips, "ATK " .. R.Short(st.atk or 0), { icon = "icon_attack", color = C.bad, z = 8, order = 1 })
 		UI.chip(chips, "DEF " .. R.Short(st.def or 0), { icon = "icon_defense", color = C.blue, z = 8, order = 2 })
 		UI.chip(chips, "SUPPLY " .. (st.sup or 0) .. "/" .. (st.supMax or 0) .. " · " .. (RC.Supply or 2) .. " per raid", { icon = "icon_supply", color = C.sup, z = 8, order = 3 })
@@ -929,6 +971,12 @@ S.battle = { build = function(host, App)
 		UI.clear(list)
 		rows = {}
 		local targets = st.targets or {}
+		-- players in this server who are still too new to raid (so a full server never looks empty for no reason)
+		local low = st.targetsLow or 0
+		if low > 0 then
+			text(list, low .. (low == 1 and " player" or " players") .. " in this server " .. (low == 1 and "is" or "are") .. " below level " .. ((Config.NavUnlock and Config.NavUnlock.battle) or 3) .. " and can't be raided yet.",
+				{ size = 14, color = C.muted, align = Enum.TextXAlignment.Center, sz = UDim2.new(1, 0, 0, 22), z = 7, order = 999 })
+		end
 		if #targets == 0 then
 			text(list, "No nations to raid right now.", { size = 16, color = C.muted, align = Enum.TextXAlignment.Center, sz = UDim2.new(1, 0, 0, 60), z = 7 })
 			return
@@ -940,10 +988,18 @@ S.battle = { build = function(host, App)
 			UI.flag(card, t.flag, 54, { pos = UDim2.new(0, 14, 0.5, 0), anchor = Vector2.new(0, 0.5), z = 8 })
 			-- long nation names shrink to fit instead of cutting to "Empire of..." (small phones)
 			text(card, t.name or "?", { font = "display", size = 19, pos = UDim2.fromOffset(80, 10), sz = UDim2.new(0.3, -92, 0, 24), z = 8, scaled = true })
-			local tags = mk("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(80, 40), Size = UDim2.new(0.3, -80, 0, 22), ZIndex = 8 }, card)
+			local tags = mk("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(80, 40), Size = UDim2.new(0.3, -88, 0, 22), ZIndex = 8, ClipsDescendants = true }, card)
 			mk("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }, tags)
 			UI.chip(tags, "LV " .. (t.lv or 1), { manila = true, h = 22, size = 13, z = 9, order = 1 })
 			if t.tag then UI.chip(tags, "[" .. tostring(t.tag) .. "]", { color = C.gold, h = 22, size = 12, z = 9, order = 3 }) end
+			-- the Roblox player who runs this country (Kash 3 Oct)
+			if t.uid then
+				local av = mk("ImageLabel", { BackgroundColor3 = C.black, BackgroundTransparency = 0.3, BorderSizePixel = 0, Size = UDim2.fromOffset(22, 22), ZIndex = 9, LayoutOrder = 4,
+					Image = "rbxthumb://type=AvatarHeadShot&id=" .. t.uid .. "&w=48&h=48" }, tags)
+				mk("UICorner", { CornerRadius = UDim.new(1, 0) }, av)
+				local who = text(tags, "@" .. tostring(t.un or t.dn or "?"), { font = "bold", size = 13, color = Color3.fromHex("e2cfa3"), sz = UDim2.fromOffset(0, 22), z = 9, order = 5 })
+				who.AutomaticSize = Enum.AutomaticSize.X
+			end
 
 			text(card, "DEFENSE", { font = "bold", size = 12, color = C.muted, pos = UDim2.new(0.3, 0, 0, 10), sz = UDim2.new(0.18, -8, 0, 16), z = 8 })
 			UI.icon(card, "icon_defense", 16, C.blue, UDim2.new(0.3, 0, 0, 30), { z = 8 })

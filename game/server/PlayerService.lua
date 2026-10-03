@@ -576,6 +576,8 @@ function PS.Snapshot(p)
 		crates = d.crates, basicCratePrice = PS.BasicCratePrice(p), login = d.login, loginReady = PS.LoginReady(p),
 		weekly = d.weekly, refresh = d.refresh, bundle = d.bundle, starter = d.starter, wev = d.wev, wonder = d.wonder or 0, admin = PS.Admin and PS.Admin.IsAdmin(p.player) or nil, title = d.title, created = d.created, elite = d.elite, govCredit = d.govCredit, pity = d.pity or {}, tut = d.tut, convoyBought = d.convoyBought or 0, convoyNext = R.ConvoyCost((d.convoyBought or 0) + 1), groupGift = d.groupGift or false, duesRate = PS.DuesRate(p),
 		targets = PS.Raids and PS.Raids.Targets(p) or {},
+		raidLog = d.raidLog,
+		targetsLow = PS.Raids and PS.Raids.ProtectedCount and PS.Raids.ProtectedCount(p) or 0,
 		firstRefill = d.firstRefill or false, settings = d.settings or {}, meta = d.meta or {}, inGroup = p.inGroup or false, premium = p.premium or false, groupId = Config.Group.Id,
 		vip = (PS.VipTier(p) or {}).tag, version = Config.Version,
 	}

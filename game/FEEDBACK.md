@@ -395,3 +395,11 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 
 ## 3 Oct 08:17 (Kash)
 - His own profile must not appear on the leaderboards: Config.HiddenFromRankings (his user id) is filtered out of the Level and Wealth boards.
+
+## 3 Oct 08:42 (Kash)
+- 12 people in his server but nobody raidable: other players were protected until level 5 (the AI rule). Players can now raid each other from level 3 (when RAIDS opens); AI nations still wait until level 5. The Raids list says how many players in the server are still too low to raid.
+- Show the owner of each country in Raids: Roblox avatar + @username under the country name.
+- Heard Roblox footsteps: nobody can move or jump anymore (walk speed 0, jump 0, character anchored, keyboard and touch movement off).
+
+## 3 Oct 08:43 (Kash)
+- Raid history: every raid you made and every raid on you (last 40, saved). RAIDS tab > HISTORY chip opens it: who, VICTORY/DEFEAT or DEFENDED/RAIDED, cash won/lost, soldiers lost, how long ago; tap a player row for their profile.

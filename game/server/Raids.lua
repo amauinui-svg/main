@@ -16,6 +16,16 @@ local Config = require(RS.Shared.Config)
 local RC = Config.Raid
 -- nobody (bots or players) can raid a country before it has the RAIDS tab itself (Kash 2 Oct 23:38)
 local function protectedLv() return math.max(RC.AIMinTargetLevel or 1, (Config.NavUnlock and Config.NavUnlock.battle) or 1) end
+-- Kash 3 Oct 08:42 (12 people in a server, none raidable): players can raid each other as soon as both have the RAIDS tab;
+-- the AI nations still leave new countries alone until AIMinTargetLevel
+local function playerProtectedLv() return (Config.NavUnlock and Config.NavUnlock.battle) or 1 end
+function RA.ProtectedCount(p)
+	local n = 0
+	for _, q in pairs(PS.Profiles) do
+		if q ~= p and q.data.onboarded and not q.loading and not q.leaving and q.data.lv < playerProtectedLv() then n += 1 end
+	end
+	return n, playerProtectedLv()
+end
 
 local O = require(RS.Shared.Officers)
 local RA = {}
@@ -32,6 +42,16 @@ local AI_NAMES = { "Republic of Varnia", "Kingdom of Ostrava", "Federation of Ke
 	"Free State of Ilyria", "Empire of Cordova", "Union of Norvik", "Duchy of Saltreach", "Republic of Brannock" }
 
 local function now() return os.time() end
+-- RAID HISTORY (Kash 3 Oct 08:43): every raid you made and every raid on you, newest first, kept in the save
+local function logRaid(p, e)
+	if not p or not p.data then return end
+	local d = p.data
+	d.raidLog = type(d.raidLog) == "table" and d.raidLog or {}
+	e.t = e.t or os.time()
+	table.insert(d.raidLog, 1, e)
+	while #d.raidLog > 40 do table.remove(d.raidLog) end
+end
+RA.Log = logRaid
 local function avgLevel()
 	local sum, n = 0, 0
 	for _, p in pairs(PS.Profiles) do if p.data.onboarded then sum += p.data.lv; n += 1 end end
@@ -170,11 +190,12 @@ function RA.Targets(p)
 	local list = {}
 	local t = now()
 	for plr, q in pairs(PS.Profiles) do
-		if q ~= p and q.data.onboarded and not q.loading and not q.leaving and q.data.lv >= protectedLv() then
+		if q ~= p and q.data.onboarded and not q.loading and not q.leaving and q.data.lv >= playerProtectedLv() then
 			local _, def = PS.Power(q)
 			local id = "u" .. plr.UserId
 			table.insert(list, {
 				id = id, name = q.data.name, flag = q.data.flag, lv = q.data.lv, def = def,
+				uid = plr.UserId, dn = plr.DisplayName, un = plr.Name, -- the player who owns this country
 				cash = math.floor(q.data.cash), cooldown = math.max(0, (lastHit[id] or 0) + RC.Cooldown - t),
 				shield = math.max(0, (q.data.shield or 0) - t), tag = q.data.alliance and PS.AllianceTag and PS.AllianceTag(q.data.alliance) or nil,
 			})
@@ -392,7 +413,7 @@ local function remoteAttack(plr, p, id, uid, guaranteed)
 	if not card or not card.def then return { ok = false, msg = "No war records for that nation yet" } end
 	local t = now()
 	if (card.sh or 0) > t then return { ok = false, msg = "They are under a raid shield" } end
-	if (card.lv or 0) < protectedLv() then return { ok = false, msg = "That nation is too new to be raided" } end
+	if (card.lv or 0) < playerProtectedLv() then return { ok = false, msg = "That nation is too new to be raided" } end
 	p.raidCd = p.raidCd or {}
 	if not guaranteed and (p.raidCd[id] or 0) + RC.Cooldown > t then return { ok = false, msg = "You just attacked them. Try again in " .. ((p.raidCd[id] or 0) + RC.Cooldown - t) .. "s" } end
 	if not guaranteed and d.sup < RC.Supply then return { ok = false, msg = "Not enough Supply (" .. RC.Supply .. " needed)" } end
@@ -445,6 +466,7 @@ local function remoteAttack(plr, p, id, uid, guaranteed)
 		res.cash = got; res.xp = xp
 		if d.revenge and d.revenge.id == id then d.revenge = nil end
 	end
+	logRaid(p, { out = true, name = card.n, uid = uid, win = win, cash = res.cash or 0, lost = myN, killed = theirN })
 	p.dirty = true
 	return res
 end
@@ -484,6 +506,7 @@ function RA.ApplyHits(plr, p)
 				d.revenge = { id = e.byId, name = e.by, t = e.t }
 				raids.n += 1; raids.cash += steal; raids.lost += n; raids.win = raids.win or e.win
 				raids.by, raids.byId = e.by, e.byId
+				logRaid(p, { out = false, t = e.t, name = e.by, uid = remoteUid and remoteUid(e.byId), win = not e.win, cash = -steal, lost = n })
 			end
 			d.hitApplied = math.max(d.hitApplied or 0, e.t or 0)
 		end
@@ -521,7 +544,7 @@ function RA.Attack(plr, p, id, guaranteed)
 		return { ok = false, msg = "That nation is no longer in this server" }
 	end
 	if q == p then return { ok = false, msg = "You cannot raid yourself" } end
-	if q and q.data.lv < protectedLv() then return { ok = false, msg = "That nation is too new to be raided" } end
+	if q and q.data.lv < playerProtectedLv() then return { ok = false, msg = "That nation is too new to be raided" } end
 	local t = now()
 	if (lastHit[id] or 0) + RC.Cooldown > t then return { ok = false, msg = "They were just raided. Try again in " .. ((lastHit[id] or 0) + RC.Cooldown - t) .. "s" } end
 	-- you can't hammer the same target: one attack per target per cooldown, win or lose (review #7)
@@ -581,8 +604,10 @@ function RA.Attack(plr, p, id, guaranteed)
 		res.cash = got; res.xp = xp
 		if d.revenge and d.revenge.id == id then d.revenge = nil end -- revenge taken
 	end
+	logRaid(p, { out = true, name = defName, uid = qplr and qplr.UserId, ai = ai and true or nil, win = win, cash = res.cash or 0, lost = myN, killed = theirN })
 	-- the defender hears about it, with a REVENGE button
 	if q then
+		logRaid(q, { out = false, name = d.name, uid = plr.UserId, win = not win, cash = -(res.cash or 0), lost = theirN, killed = myN })
 		q.data.revenge = { id = "u" .. plr.UserId, name = d.name, t = t }
 		PS.Note(q, { kind = "raided", by = d.name, byId = "u" .. plr.UserId, win = win, cash = res.cash or 0, lost = theirN })
 		q.dirty = true
@@ -622,6 +647,7 @@ local function aiRaid()
 		ai.cash += steal
 	end
 	q.data.revenge = { id = ai.id, name = ai.name, t = t }
+	logRaid(q, { out = false, name = ai.name, ai = true, win = not win, cash = -steal, lost = lostN })
 	PS.Note(q, { kind = "raided", by = ai.name, byId = ai.id, win = win, cash = steal, lost = lostN })
 	q.dirty = true
 end

@@ -3532,6 +3532,8 @@ function PS.Snapshot(p)
 		crates = d.crates, basicCratePrice = PS.BasicCratePrice(p), login = d.login, loginReady = PS.LoginReady(p),
 		weekly = d.weekly, refresh = d.refresh, bundle = d.bundle, starter = d.starter, wev = d.wev, wonder = d.wonder or 0, admin = PS.Admin and PS.Admin.IsAdmin(p.player) or nil, title = d.title, created = d.created, elite = d.elite, govCredit = d.govCredit, pity = d.pity or {}, tut = d.tut, convoyBought = d.convoyBought or 0, convoyNext = R.ConvoyCost((d.convoyBought or 0) + 1), groupGift = d.groupGift or false, duesRate = PS.DuesRate(p),
 		targets = PS.Raids and PS.Raids.Targets(p) or {},
+		raidLog = d.raidLog,
+		targetsLow = PS.Raids and PS.Raids.ProtectedCount and PS.Raids.ProtectedCount(p) or 0,
 		firstRefill = d.firstRefill or false, settings = d.settings or {}, meta = d.meta or {}, inGroup = p.inGroup or false, premium = p.premium or false, groupId = Config.Group.Id,
 		vip = (PS.VipTier(p) or {}).tag, version = Config.Version,
 	}
@@ -4237,6 +4239,16 @@ local Config = require(RS.Shared.Config)
 local RC = Config.Raid
 -- nobody (bots or players) can raid a country before it has the RAIDS tab itself (Kash 2 Oct 23:38)
 local function protectedLv() return math.max(RC.AIMinTargetLevel or 1, (Config.NavUnlock and Config.NavUnlock.battle) or 1) end
+-- Kash 3 Oct 08:42 (12 people in a server, none raidable): players can raid each other as soon as both have the RAIDS tab;
+-- the AI nations still leave new countries alone until AIMinTargetLevel
+local function playerProtectedLv() return (Config.NavUnlock and Config.NavUnlock.battle) or 1 end
+function RA.ProtectedCount(p)
+	local n = 0
+	for _, q in pairs(PS.Profiles) do
+		if q ~= p and q.data.onboarded and not q.loading and not q.leaving and q.data.lv < playerProtectedLv() then n += 1 end
+	end
+	return n, playerProtectedLv()
+end
 
 local O = require(RS.Shared.Officers)
 local RA = {}
@@ -4253,6 +4265,16 @@ local AI_NAMES = { "Republic of Varnia", "Kingdom of Ostrava", "Federation of Ke
 	"Free State of Ilyria", "Empire of Cordova", "Union of Norvik", "Duchy of Saltreach", "Republic of Brannock" }
 
 local function now() return os.time() end
+-- RAID HISTORY (Kash 3 Oct 08:43): every raid you made and every raid on you, newest first, kept in the save
+local function logRaid(p, e)
+	if not p or not p.data then return end
+	local d = p.data
+	d.raidLog = type(d.raidLog) == "table" and d.raidLog or {}
+	e.t = e.t or os.time()
+	table.insert(d.raidLog, 1, e)
+	while #d.raidLog > 40 do table.remove(d.raidLog) end
+end
+RA.Log = logRaid
 local function avgLevel()
 	local sum, n = 0, 0
 	for _, p in pairs(PS.Profiles) do if p.data.onboarded then sum += p.data.lv; n += 1 end end
@@ -4391,11 +4413,12 @@ function RA.Targets(p)
 	local list = {}
 	local t = now()
 	for plr, q in pairs(PS.Profiles) do
-		if q ~= p and q.data.onboarded and not q.loading and not q.leaving and q.data.lv >= protectedLv() then
+		if q ~= p and q.data.onboarded and not q.loading and not q.leaving and q.data.lv >= playerProtectedLv() then
 			local _, def = PS.Power(q)
 			local id = "u" .. plr.UserId
 			table.insert(list, {
 				id = id, name = q.data.name, flag = q.data.flag, lv = q.data.lv, def = def,
+				uid = plr.UserId, dn = plr.DisplayName, un = plr.Name, -- the player who owns this country
 				cash = math.floor(q.data.cash), cooldown = math.max(0, (lastHit[id] or 0) + RC.Cooldown - t),
 				shield = math.max(0, (q.data.shield or 0) - t), tag = q.data.alliance and PS.AllianceTag and PS.AllianceTag(q.data.alliance) or nil,
 			})
@@ -4613,7 +4636,7 @@ local function remoteAttack(plr, p, id, uid, guaranteed)
 	if not card or not card.def then return { ok = false, msg = "No war records for that nation yet" } end
 	local t = now()
 	if (card.sh or 0) > t then return { ok = false, msg = "They are under a raid shield" } end
-	if (card.lv or 0) < protectedLv() then return { ok = false, msg = "That nation is too new to be raided" } end
+	if (card.lv or 0) < playerProtectedLv() then return { ok = false, msg = "That nation is too new to be raided" } end
 	p.raidCd = p.raidCd or {}
 	if not guaranteed and (p.raidCd[id] or 0) + RC.Cooldown > t then return { ok = false, msg = "You just attacked them. Try again in " .. ((p.raidCd[id] or 0) + RC.Cooldown - t) .. "s" } end
 	if not guaranteed and d.sup < RC.Supply then return { ok = false, msg = "Not enough Supply (" .. RC.Supply .. " needed)" } end
@@ -4666,6 +4689,7 @@ local function remoteAttack(plr, p, id, uid, guaranteed)
 		res.cash = got; res.xp = xp
 		if d.revenge and d.revenge.id == id then d.revenge = nil end
 	end
+	logRaid(p, { out = true, name = card.n, uid = uid, win = win, cash = res.cash or 0, lost = myN, killed = theirN })
 	p.dirty = true
 	return res
 end
@@ -4705,6 +4729,7 @@ function RA.ApplyHits(plr, p)
 				d.revenge = { id = e.byId, name = e.by, t = e.t }
 				raids.n += 1; raids.cash += steal; raids.lost += n; raids.win = raids.win or e.win
 				raids.by, raids.byId = e.by, e.byId
+				logRaid(p, { out = false, t = e.t, name = e.by, uid = remoteUid and remoteUid(e.byId), win = not e.win, cash = -steal, lost = n })
 			end
 			d.hitApplied = math.max(d.hitApplied or 0, e.t or 0)
 		end
@@ -4742,7 +4767,7 @@ function RA.Attack(plr, p, id, guaranteed)
 		return { ok = false, msg = "That nation is no longer in this server" }
 	end
 	if q == p then return { ok = false, msg = "You cannot raid yourself" } end
-	if q and q.data.lv < protectedLv() then return { ok = false, msg = "That nation is too new to be raided" } end
+	if q and q.data.lv < playerProtectedLv() then return { ok = false, msg = "That nation is too new to be raided" } end
 	local t = now()
 	if (lastHit[id] or 0) + RC.Cooldown > t then return { ok = false, msg = "They were just raided. Try again in " .. ((lastHit[id] or 0) + RC.Cooldown - t) .. "s" } end
 	-- you can't hammer the same target: one attack per target per cooldown, win or lose (review #7)
@@ -4802,8 +4827,10 @@ function RA.Attack(plr, p, id, guaranteed)
 		res.cash = got; res.xp = xp
 		if d.revenge and d.revenge.id == id then d.revenge = nil end -- revenge taken
 	end
+	logRaid(p, { out = true, name = defName, uid = qplr and qplr.UserId, ai = ai and true or nil, win = win, cash = res.cash or 0, lost = myN, killed = theirN })
 	-- the defender hears about it, with a REVENGE button
 	if q then
+		logRaid(q, { out = false, name = d.name, uid = plr.UserId, win = not win, cash = -(res.cash or 0), lost = theirN, killed = myN })
 		q.data.revenge = { id = "u" .. plr.UserId, name = d.name, t = t }
 		PS.Note(q, { kind = "raided", by = d.name, byId = "u" .. plr.UserId, win = win, cash = res.cash or 0, lost = theirN })
 		q.dirty = true
@@ -4843,6 +4870,7 @@ local function aiRaid()
 		ai.cash += steal
 	end
 	q.data.revenge = { id = ai.id, name = ai.name, t = t }
+	logRaid(q, { out = false, name = ai.name, ai = true, win = not win, cash = -steal, lost = lostN })
 	PS.Note(q, { kind = "raided", by = ai.name, byId = ai.id, win = win, cash = steal, lost = lostN })
 	q.dirty = true
 end
@@ -6603,6 +6631,15 @@ local Server = script.Parent:WaitForChild("Server")
 
 -- Kash 2 Oct: no shift lock
 game:GetService("StarterPlayer").EnableMouseLockOption = false
+-- Kash 3 Oct: this is a UI game, nobody walks or jumps around the Roblox world (no footsteps, no thumbstick, no WASD)
+do
+	local SP = game:GetService("StarterPlayer")
+	SP.CharacterWalkSpeed = 0
+	SP.CharacterUseJumpPower = true
+	SP.CharacterJumpPower = 0
+	pcall(function() SP.DevComputerMovementMode = Enum.DevComputerMovementMode.Scriptable end)
+	pcall(function() SP.DevTouchMovementMode = Enum.DevTouchMovementMode.Scriptable end)
+end
 
 local Remotes = RS:FindFirstChild("Remotes") or Instance.new("Folder")
 Remotes.Name = "Remotes"; Remotes.Parent = RS
@@ -6714,6 +6751,16 @@ task.spawn(function()
 end)
 Players.PlayerAdded:Connect(function(plr)
 	plr.DevEnableMouseLock = false
+	pcall(function() plr.DevComputerMovementMode = Enum.DevComputerMovementMode.Scriptable end)
+	pcall(function() plr.DevTouchMovementMode = Enum.DevTouchMovementMode.Scriptable end)
+	local function freeze(char)
+		local hum = char:WaitForChild("Humanoid", 10)
+		if hum then hum.WalkSpeed = 0; hum.UseJumpPower = true; hum.JumpPower = 0 end
+		local root = char:WaitForChild("HumanoidRootPart", 10)
+		if root then root.Anchored = true end
+	end
+	plr.CharacterAdded:Connect(freeze)
+	if plr.Character then task.spawn(freeze, plr.Character) end
 	task.wait(1)
 	if plr.Parent then Sync:FireClient(plr, "world", WS.PublicState()) end
 end)
@@ -11364,10 +11411,52 @@ S.battle = { build = function(host, App)
 		end
 	end
 
+	-- RAID HISTORY (Kash 3 Oct): every raid you made and every raid on you
+	local function ago(t)
+		local s = math.max(0, os.time() - (t or 0))
+		if s < 60 then return "just now" elseif s < 3600 then return math.floor(s / 60) .. "m ago"
+		elseif s < 86400 then return math.floor(s / 3600) .. "h ago" end
+		return math.floor(s / 86400) .. "d ago"
+	end
+	local function showHistory()
+		local log = (App.state and App.state.raidLog) or {}
+		local _, bd = popup(App, "RAID HISTORY", 760, 560)
+		local hl = UI.list(bd, { gap = 6, z = 74 })
+		if #log == 0 then
+			text(hl, "No raids yet. Your raids and raids on you will show up here.", { size = 16, color = C.muted, wrap = true, sz = UDim2.new(1, 0, 0, 50), z = 75 })
+			return
+		end
+		for i, e in ipairs(log) do
+			local good = e.win
+			local row = UI.card(hl, { sz = UDim2.new(1, -4, 0, 58), z = 74, order = i, button = e.uid ~= nil })
+			UI.icon(row, e.out and "icon_attack" or "icon_defense", 26, e.out and C.bad or C.blue, UDim2.fromOffset(14, 16), { z = 75 })
+			local who = tostring(e.name or "?")
+			local head = e.out and ("You raided <b>" .. who .. "</b>") or ("<b>" .. who .. "</b> raided you")
+			text(row, head, { size = 16, rich = true, pos = UDim2.fromOffset(52, 6), sz = UDim2.new(1, -260, 0, 22), z = 75, truncate = true })
+			local res
+			if e.out then res = good and "<font color='#8fd07a'><b>VICTORY</b></font>" or "<font color='#e2695f'><b>DEFEAT</b></font>"
+			else res = good and "<font color='#8fd07a'><b>DEFENDED</b></font>" or "<font color='#e2695f'><b>RAIDED</b></font>" end
+			local bits = { res }
+			if (e.lost or 0) > 0 then table.insert(bits, R.Short(e.lost) .. " soldiers lost") end
+			if (e.killed or 0) > 0 then table.insert(bits, R.Short(e.killed) .. " enemy soldiers") end
+			text(row, table.concat(bits, " · "), { size = 13, rich = true, color = C.muted, pos = UDim2.fromOffset(52, 30), sz = UDim2.new(1, -260, 0, 20), z = 75, truncate = true })
+			local cash = tonumber(e.cash) or 0
+			text(row, cash == 0 and "$0" or ((cash > 0 and "+" or "-") .. R.Money(math.abs(cash))), { font = "heavy", size = 18, color = cash > 0 and C.good or cash < 0 and C.bad or C.muted,
+				pos = UDim2.new(1, -200, 0, 6), sz = UDim2.fromOffset(186, 24), z = 75, align = Enum.TextXAlignment.Right })
+			text(row, ago(e.t), { size = 13, color = C.muted, pos = UDim2.new(1, -200, 0, 30), sz = UDim2.fromOffset(186, 20), z = 75, align = Enum.TextXAlignment.Right })
+			if e.uid and row:IsA("GuiButton") then
+				local uid = e.uid
+				row.Activated:Connect(function() if App.showProfile then App.showProfile(uid) end end)
+			end
+		end
+	end
+
 	function obj:Refresh(st)
 		if not st then return end
 		refreshedAt = os.clock()
 		UI.clear(chips)
+		local hb = UI.chip(chips, "HISTORY", { icon = "icon_clock", button = true, z = 8, order = 0 })
+		if hb:IsA("GuiButton") then hb.Activated:Connect(showHistory) end
 		UI.chip(chips, "ATK " .. R.Short(st.atk or 0), { icon = "icon_attack", color = C.bad, z = 8, order = 1 })
 		UI.chip(chips, "DEF " .. R.Short(st.def or 0), { icon = "icon_defense", color = C.blue, z = 8, order = 2 })
 		UI.chip(chips, "SUPPLY " .. (st.sup or 0) .. "/" .. (st.supMax or 0) .. " · " .. (RC.Supply or 2) .. " per raid", { icon = "icon_supply", color = C.sup, z = 8, order = 3 })
@@ -11377,6 +11466,12 @@ S.battle = { build = function(host, App)
 		UI.clear(list)
 		rows = {}
 		local targets = st.targets or {}
+		-- players in this server who are still too new to raid (so a full server never looks empty for no reason)
+		local low = st.targetsLow or 0
+		if low > 0 then
+			text(list, low .. (low == 1 and " player" or " players") .. " in this server " .. (low == 1 and "is" or "are") .. " below level " .. ((Config.NavUnlock and Config.NavUnlock.battle) or 3) .. " and can't be raided yet.",
+				{ size = 14, color = C.muted, align = Enum.TextXAlignment.Center, sz = UDim2.new(1, 0, 0, 22), z = 7, order = 999 })
+		end
 		if #targets == 0 then
 			text(list, "No nations to raid right now.", { size = 16, color = C.muted, align = Enum.TextXAlignment.Center, sz = UDim2.new(1, 0, 0, 60), z = 7 })
 			return
@@ -11388,10 +11483,18 @@ S.battle = { build = function(host, App)
 			UI.flag(card, t.flag, 54, { pos = UDim2.new(0, 14, 0.5, 0), anchor = Vector2.new(0, 0.5), z = 8 })
 			-- long nation names shrink to fit instead of cutting to "Empire of..." (small phones)
 			text(card, t.name or "?", { font = "display", size = 19, pos = UDim2.fromOffset(80, 10), sz = UDim2.new(0.3, -92, 0, 24), z = 8, scaled = true })
-			local tags = mk("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(80, 40), Size = UDim2.new(0.3, -80, 0, 22), ZIndex = 8 }, card)
+			local tags = mk("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(80, 40), Size = UDim2.new(0.3, -88, 0, 22), ZIndex = 8, ClipsDescendants = true }, card)
 			mk("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }, tags)
 			UI.chip(tags, "LV " .. (t.lv or 1), { manila = true, h = 22, size = 13, z = 9, order = 1 })
 			if t.tag then UI.chip(tags, "[" .. tostring(t.tag) .. "]", { color = C.gold, h = 22, size = 12, z = 9, order = 3 }) end
+			-- the Roblox player who runs this country (Kash 3 Oct)
+			if t.uid then
+				local av = mk("ImageLabel", { BackgroundColor3 = C.black, BackgroundTransparency = 0.3, BorderSizePixel = 0, Size = UDim2.fromOffset(22, 22), ZIndex = 9, LayoutOrder = 4,
+					Image = "rbxthumb://type=AvatarHeadShot&id=" .. t.uid .. "&w=48&h=48" }, tags)
+				mk("UICorner", { CornerRadius = UDim.new(1, 0) }, av)
+				local who = text(tags, "@" .. tostring(t.un or t.dn or "?"), { font = "bold", size = 13, color = Color3.fromHex("e2cfa3"), sz = UDim2.fromOffset(0, 22), z = 9, order = 5 })
+				who.AutomaticSize = Enum.AutomaticSize.X
+			end
 
 			text(card, "DEFENSE", { font = "bold", size = 12, color = C.muted, pos = UDim2.new(0.3, 0, 0, 10), sz = UDim2.new(0.18, -8, 0, 16), z = 8 })
 			UI.icon(card, "icon_defense", 16, C.blue, UDim2.new(0.3, 0, 0, 30), { z = 8 })

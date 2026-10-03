@@ -5,6 +5,15 @@ local Server = script.Parent:WaitForChild("Server")
 
 -- Kash 2 Oct: no shift lock
 game:GetService("StarterPlayer").EnableMouseLockOption = false
+-- Kash 3 Oct: this is a UI game, nobody walks or jumps around the Roblox world (no footsteps, no thumbstick, no WASD)
+do
+	local SP = game:GetService("StarterPlayer")
+	SP.CharacterWalkSpeed = 0
+	SP.CharacterUseJumpPower = true
+	SP.CharacterJumpPower = 0
+	pcall(function() SP.DevComputerMovementMode = Enum.DevComputerMovementMode.Scriptable end)
+	pcall(function() SP.DevTouchMovementMode = Enum.DevTouchMovementMode.Scriptable end)
+end
 
 local Remotes = RS:FindFirstChild("Remotes") or Instance.new("Folder")
 Remotes.Name = "Remotes"; Remotes.Parent = RS
@@ -116,6 +125,16 @@ task.spawn(function()
 end)
 Players.PlayerAdded:Connect(function(plr)
 	plr.DevEnableMouseLock = false
+	pcall(function() plr.DevComputerMovementMode = Enum.DevComputerMovementMode.Scriptable end)
+	pcall(function() plr.DevTouchMovementMode = Enum.DevTouchMovementMode.Scriptable end)
+	local function freeze(char)
+		local hum = char:WaitForChild("Humanoid", 10)
+		if hum then hum.WalkSpeed = 0; hum.UseJumpPower = true; hum.JumpPower = 0 end
+		local root = char:WaitForChild("HumanoidRootPart", 10)
+		if root then root.Anchored = true end
+	end
+	plr.CharacterAdded:Connect(freeze)
+	if plr.Character then task.spawn(freeze, plr.Character) end
 	task.wait(1)
 	if plr.Parent then Sync:FireClient(plr, "world", WS.PublicState()) end
 end)
