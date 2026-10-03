@@ -434,3 +434,6 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 
 ## 3 Oct 09:17 (Kash)
 - More thumbnail concepts with the title overlaid on the art (no split background), many variations, showing game mechanics. Made 14 concepts x2 (art/ads/v4): pass laws, get rich, trade the world, world event x2.5, raid players, spy first, legendary drop, hire officers, defeat bosses, hut to empire, capture cities, earn while AFK, build wonders, bank your cash.
+
+## 3 Oct 09:41 (Kash)
+- v3/v4 art style drifted away from what he wants (too grungy/painted). Keep the layouts and concepts, but match the 2 Oct thumbnails (N04 Steal Their Cash, the Idle Country icon): those used real references. Variants can be better too. Plan in art/ads/v5/PROMPTS.md. Blocked: Flow usage limit on both Nano Banana Pro and Nano Banana 2.
