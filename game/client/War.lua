@@ -148,16 +148,17 @@ S.bosses = { build = function(host, App)
 		shakeId += 1
 		local my = shakeId
 		local slashes = math.clamp(n or 1, 1, 3)
-		for k = 1, slashes do
-			task.delay((k - 1) * 0.07, function()
-				local sl = UI.mk("Frame", { BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5),
-					Position = UDim2.fromScale(0.5 + (k - 2) * 0.16 + (math.random() - 0.5) * 0.08, 0.5 + (math.random() - 0.5) * 0.15),
-					Size = UDim2.new(0, 10, 1.15, 0), Rotation = 35 + math.random(-12, 12), ZIndex = 11, BackgroundTransparency = 0.05 }, pHold)
-				UI.mk("UIStroke", { Color = Color3.fromRGB(255, 70, 50), Thickness = 3 }, sl)
-				sl.Size = UDim2.new(0, 10, 0, 0)
-				TS:Create(sl, TweenInfo.new(0.09, Enum.EasingStyle.Quad), { Size = UDim2.new(0, 10, 1.15, 0) }):Play()
-				task.delay(0.12, function() TS:Create(sl, TweenInfo.new(0.25), { BackgroundTransparency = 1, Size = UDim2.new(0, 2, 1.15, 0) }):Play() end)
-				task.delay(0.4, function() sl:Destroy() end)
+		-- slash sprite (fx_slash) centred on the portrait: x1 one cut, x5 an X, ALL three cuts fanned around the centre
+		local ROT = ({ { 0 }, { 0, 90 }, { -14, 0, 14 } })[slashes]
+		for k, rot in ipairs(ROT) do
+			task.delay((k - 1) * 0.08, function()
+				local sl = UI.mk("ImageLabel", { BackgroundTransparency = 1, Image = UI.asset("fx_slash"), AnchorPoint = Vector2.new(0.5, 0.5),
+					Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(0.35, 0.35), Rotation = rot + math.random(-6, 6), ZIndex = 11 }, pHold)
+				TS:Create(sl, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Size = UDim2.fromScale(1.25, 1.25) }):Play()
+				task.delay(0.16, function()
+					TS:Create(sl, TweenInfo.new(0.28, Enum.EasingStyle.Quad), { ImageTransparency = 1, Size = UDim2.fromScale(1.4, 1.4) }):Play()
+				end)
+				task.delay(0.5, function() sl:Destroy() end)
 			end)
 		end
 		flash.BackgroundTransparency = 0.35
@@ -185,6 +186,7 @@ S.bosses = { build = function(host, App)
 		end
 		App.play(slashes >= 3 and "crit" or "hit_blade")
 	end
+	App.bossFx = hitFx -- Studio test hook: IC_Cmd "bossfx:<1-3>"
 	local name = text(card, "", { font = "display", size = 34, color = C.manila, pos = UDim2.fromOffset(24, 18), sz = UDim2.new(1, -PW - 60, 0, 40), z = 7, scaled = true })
 	local desc = text(card, "", { size = 17, color = C.muted, pos = UDim2.fromOffset(24, 62), sz = UDim2.new(1, -PW - 60, 0, 22), z = 7, truncate = true })
 	local hp = UI.bar(card, C.bad, { pos = UDim2.fromOffset(24, 110), sz = UDim2.new(1, -PW - 60, 0, 34), z = 7, textSize = 17 })

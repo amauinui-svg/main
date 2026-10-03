@@ -125,6 +125,7 @@ local A = {
 	["icon_xp"] = "rbxassetid://128065649248339",
 	["input"] = "rbxassetid://123746516275334",
 	["inset"] = "rbxassetid://106245626007088",
+	["fx_slash"] = "rbxassetid://111641630970449", -- glowing sword slash sprite for boss hits (transparent PNG, diagonal, centred)
 	-- boss portraits, one per era (Kash 3 Oct, Nano Banana 2)
 	["boss_1"] = "rbxassetid://79643217062561", ["boss_2"] = "rbxassetid://123415271395714", ["boss_3"] = "rbxassetid://88536653696741",
 	-- boss_5 (Robber Baron) and boss_6 (Rogue General) removed: both had a cigar, and Roblox moderated boss_6 as tobacco.

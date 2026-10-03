@@ -471,3 +471,6 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 
 ## 3 Oct 10:53 (Kash)
 - Boss takes-damage animation: each hit shows slash marks (1/2/3 for x1/x5/ALL), a red flash, a squash punch, a shake and a big damage number on the portrait, with a blade or crit sound. A killing blow shakes harder and greys the portrait out.
+
+## 3 Oct 11:02 (Kash)
+- Boss slash effect looked cheap and sat left of centre (bug: slash k was offset by (k-2)*16%). Replaced with a glowing sword-slash sprite (fx_slash, transparent PNG drawn in code, game/assets/fx) that pops in centred on the portrait: x1 one cut, x5 an X, ALL three fanned cuts.

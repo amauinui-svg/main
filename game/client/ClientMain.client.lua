@@ -962,6 +962,7 @@ if game:GetService("RunService"):IsStudio() then
 			elseif k == "afk" and App.openAfk then App.openAfk()
 			elseif k == "sounds" and App.soundBoard then App.soundBoard()
 			elseif k == "profile" and App.showProfile then App.showProfile(tonumber(arg) or plr.UserId)
+			elseif k == "bossfx" and App.bossFx then App.bossFx(1234, tonumber(arg) or 1, arg == "kill")
 			elseif k == "confetti" and App.confetti then App.confetti(tonumber(arg) or 140)
 			elseif k == "emit" then App.emit(arg)
 			elseif k == "vp" then
