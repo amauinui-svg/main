@@ -1,13 +1,16 @@
 -- Shop: the store screen (key "shop", replaces the old list in Social.lua because this module loads later) and the
--- VIP / MEGA VIP chat tags (_vipTags init). Layout: LIMITED hero row (Limited Bundle + Founder's Crate), Supply Crate,
--- VIP passes, game passes, gold packs + gold spends, repeatable boosts. Built once per width, then Refresh/Tick only
--- update owned states, prices and timers so hover/shine animations keep running.
+-- VIP / MEGA VIP chat tags (_vipTags init). Layout: STARTER PACK (new players only), LIMITED hero row (Limited Bundle +
+-- Founder's Crate), Supply Crate, VIP passes, game passes, gold packs + gold spends, repeatable boosts. Built once per
+-- width, then Refresh/Tick only update owned states, prices and timers so hover/shine animations keep running.
+-- Every RNG box has a DROP RATES button (Cabinet's App.dropRates, with a text fallback here).
+-- Passes that unlock several things crossfade their art between those things (Kash 2 Oct 21:15); rays sit BEHIND the art.
 local RS = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local Shared = RS:WaitForChild("Shared")
 local R = require(Shared.Rules)
 local O = require(Shared.Officers)
+local M = require(Shared.Military)
 local Config = require(Shared.Config)
 local UI = require(script.Parent:WaitForChild("UI"))
 local C = UI.C
@@ -122,15 +125,17 @@ local function tag(parent, label, bg, fg, p)
 	return f, l
 end
 
--- diagonal corner ribbon (top-right of a card)
-local function ribbon(card, label, bg, fg)
-	local clip = mk("Frame", { Name = "Ribbon", BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -2, 0, 2), Size = UDim2.fromOffset(92, 92),
+-- diagonal corner ribbon (top-right of a card). p.size = corner square in px (default 92) for longer labels
+local function ribbon(card, label, bg, fg, p)
+	p = p or {}
+	local S = p.size or 92
+	local clip = mk("Frame", { Name = "Ribbon", BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -2, 0, 2), Size = UDim2.fromOffset(S, S),
 		ClipsDescendants = true, ZIndex = 30 }, card)
-	local band = mk("Frame", { BackgroundColor3 = bg, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(58, 34), Size = UDim2.fromOffset(150, 24),
-		Rotation = 45, ZIndex = 30 }, clip)
+	local band = mk("Frame", { BackgroundColor3 = bg, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(math.floor(S * 0.63), math.floor(S * 0.37)),
+		Size = UDim2.fromOffset(math.floor(S * 1.63), p.h or 24), Rotation = 45, ZIndex = 30 }, clip)
 	mk("UIGradient", { Color = ColorSequence.new(bg:Lerp(C.white, 0.25), bg) , Rotation = 90 }, band)
 	stroke(band, C.black, 1, 0.5)
-	text(band, label, { font = "heavy", size = 12, color = fg, align = Enum.TextXAlignment.Center, sz = UDim2.fromScale(1, 1), z = 31 })
+	text(band, label, { font = "heavy", size = p.textSize or 12, color = fg, align = Enum.TextXAlignment.Center, sz = UDim2.fromScale(1, 1), z = 31 })
 	return clip
 end
 
@@ -239,6 +244,97 @@ local function infoBtn(App, parent, title, body, pos, z)
 	return b
 end
 
+-- ART ROTATOR for passes that unlock several things: crossfades between slides every 2.5 s.
+-- slide = { img = asset key } | { icon = icon key, tile = Color3 } | { flag = UI.flag def, tile = Color3 }, plus label.
+-- Lives at ZIndex z; put any rays / aura at a LOWER ZIndex in the same parent so they render behind it.
+local ROTATE_EVERY, FADE = 2.5, 0.5
+local function rotator(parent, slides, px, pos, anchor, z, accent)
+	local box = mk("Frame", { Name = "ArtRotator", BackgroundTransparency = 1, Position = pos, AnchorPoint = anchor or Vector2.zero, Size = UDim2.fromOffset(px, px), ZIndex = z }, parent)
+	local groups = {}
+	for i, sl in ipairs(slides) do
+		local g = mk("CanvasGroup", { Name = "Slide" .. i, BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), GroupTransparency = i == 1 and 0 or 1, ZIndex = z }, box)
+		local capH = sl.label and math.max(18, math.floor(px * 0.16)) or 0
+		if sl.img then
+			UI.img(g, sl.img, { sz = UDim2.new(1, 0, 1, sl.full and 0 or -capH), slice = false, fit = true, z = z })
+		else
+			local tc = sl.tile or accent or C.manila
+			local tile = mk("Frame", { BackgroundColor3 = DARK, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 4),
+				Size = UDim2.new(0.84, 0, 0.84, -capH), ZIndex = z }, g)
+			mk("UIAspectRatioConstraint", { AspectRatio = 1 }, tile)
+			corner(tile, 12)
+			stroke(tile, tc, 2.5)
+			local wash = mk("Frame", { BackgroundColor3 = tc, BackgroundTransparency = 0.5, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ZIndex = z }, tile)
+			corner(wash, 12)
+			mk("UIGradient", { Rotation = -90, Transparency = NumberSequence.new({ kp(0, 0.15), kp(0.75, 1), kp(1, 1) }) }, wash)
+			if sl.flag then
+				UI.flag(tile, sl.flag, math.floor(px * 0.58), { anchor = Vector2.new(0.5, 0.5), pos = UDim2.fromScale(0.5, 0.5), z = z + 1 })
+			else
+				UI.img(tile, sl.icon or "icon_sparkles", { sz = UDim2.fromScale(0.56, 0.56), pos = UDim2.fromScale(0.5, 0.5), anchor = Vector2.new(0.5, 0.5), color = tc:Lerp(C.white, 0.25), slice = false, fit = true, z = z + 1 })
+			end
+		end
+		if sl.label then
+			local cap = mk("Frame", { BackgroundColor3 = DARK, BackgroundTransparency = 0.1, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromScale(0.5, 1),
+				Size = UDim2.new(1, -4, 0, capH), ZIndex = z + 2 }, g)
+			corner(cap, 5)
+			stroke(cap, sl.tile or accent or C.manila, 1.2, 0.3)
+			text(cap, sl.label, { font = "heavy", size = math.max(11, capH - 6), color = sl.tile or accent or C.manila, align = Enum.TextXAlignment.Center, rich = true,
+				pos = UDim2.fromOffset(4, 0), sz = UDim2.new(1, -8, 1, 0), z = z + 3, scaled = true })
+		end
+		groups[i] = g
+	end
+	local obj = { box = box, alpha = 0, cur = 1 }
+	function obj:Dim(on)
+		self.alpha = on and 0.35 or 0
+		local g = groups[self.cur]
+		if g then g.GroupTransparency = self.alpha end
+	end
+	if #groups > 1 then
+		task.spawn(function()
+			while box.Parent do
+				task.wait(ROTATE_EVERY)
+				if not box.Parent then break end
+				local nxt = obj.cur % #groups + 1
+				tw(groups[obj.cur], FADE, { GroupTransparency = 1 }, Enum.EasingStyle.Sine)
+				tw(groups[nxt], FADE, { GroupTransparency = obj.alpha }, Enum.EasingStyle.Sine)
+				obj.cur = nxt
+			end
+		end)
+	end
+	return obj
+end
+
+-- DROP RATES for an RNG box: Cabinet's full table popup (App.dropRates), or a text list from the same server tables
+local function dropRates(App, kind)
+	if App.dropRates then
+		local ok = pcall(App.dropRates, kind)
+		if ok then return end
+	end
+	local luck = App.state and App.state.gp and App.state.gp.CrateLuck
+	local lines = {}
+	for _, e in ipairs(O.CrateInfo[kind] or {}) do
+		local w = table.clone(e.odds)
+		if luck then for i = 5, #w do w[i] *= 2 end end
+		local tot = 0
+		for _, v in ipairs(w) do tot += v end
+		table.insert(lines, "<b>" .. e.label .. ": " .. e.pct .. "%</b>")
+		local parts = {}
+		for i = 1, O.RollTiers do
+			local v = tot > 0 and e.pct * w[i] / tot or 0
+			if v > 0 then
+				local str = (string.format("%.4f", v):gsub("0+$", ""):gsub("%.$", ""))
+				table.insert(parts, "<font color='#" .. O.Rarities[i].color .. "'>" .. O.Rarities[i].name .. "</font> " .. str .. "%")
+			end
+		end
+		table.insert(lines, table.concat(parts, "  "))
+	end
+	infoPopup(App, "DROP RATES", table.concat(lines, "\n"))
+end
+local function ratesButton(App, parent, kind, p)
+	local b = UI.button(parent, "slate", "DROP RATES", function() dropRates(App, kind) end,
+		{ sz = p.sz or UDim2.fromOffset(130, 28), pos = p.pos, anchor = p.anchor, z = p.z or 14, icon = "icon_gauge", textSize = p.textSize or 13 })
+	return b
+end
+
 -- crate results: the big reveal when Cabinet installed it, else a toast that points to the Inventory
 local function showCrateResult(App, res)
 	if App.crateReveal then
@@ -253,7 +349,9 @@ local function showCrateResult(App, res)
 	end
 	if best and best.item then
 		local rr = O.RarityByKey[best.item.rarity or "common"] or O.Rarities[1]
-		App.toast("YOU GOT " .. string.upper(best.item.name or "AN ITEM"), rr.name .. (best.type == "officer" and " officer" or " gear") .. " · see your INVENTORY", Color3.fromHex(rr.color))
+		local what = best.type == "officer" and " officer" or best.type == "troops" and " elite troops" or " gear"
+		local name = best.type == "troops" and ((best.item.n or 0) .. "x " .. (best.item.name or "elite troops")) or (best.item.name or "an item")
+		App.toast("YOU GOT " .. string.upper(name), rr.name .. what .. " · see your INVENTORY", Color3.fromHex(rr.color))
 	else
 		App.toast("CRATE OPENED", "See your INVENTORY", "gold")
 	end
@@ -314,20 +412,25 @@ S.shop = { build = function(host, App)
 		local cell, card = liftCard(parent, { order = p.order, hot = p.hot, glow = p.glow, halo = p.halo, baseGlow = p.baseGlow })
 		local artH = p.artH or 104
 		local glowC = p.artGlow or C.manila
-		aura(card, glowC, artH * 1.25, UDim2.new(0.5, 0, 0, 14 + artH / 2), 9, 0.35, false)
-		local art = UI.img(card, p.art, { sz = UDim2.new(1, -28, 0, artH), pos = UDim2.new(0.5, 0, 0, 14), anchor = Vector2.new(0.5, 0), slice = false, fit = true, z = 10 })
+		aura(card, glowC, artH * 1.25, UDim2.new(0.5, 0, 0, 14 + artH / 2), 9, 0.35, false) -- z 9: behind the art (z 10+)
+		local art, rot
+		if p.slides then
+			rot = rotator(card, p.slides, artH, UDim2.new(0.5, 0, 0, 14), Vector2.new(0.5, 0), 10, glowC)
+		else
+			art = UI.img(card, p.art, { sz = UDim2.new(1, -28, 0, artH), pos = UDim2.new(0.5, 0, 0, 14), anchor = Vector2.new(0.5, 0), slice = false, fit = true, z = 10 })
+		end
 		local y = 18 + artH
 		local name = text(card, p.name, { font = "heavy", size = 18, color = p.nameColor or C.ink, align = Enum.TextXAlignment.Center, pos = UDim2.fromOffset(10, y), sz = UDim2.new(1, -20, 0, 22), z = 10, truncate = true })
 		local desc = text(card, p.desc, { size = 13, color = C.muted, align = Enum.TextXAlignment.Center, valign = Enum.TextYAlignment.Top, wrap = true, rich = true,
 			pos = UDim2.fromOffset(12, y + 24), sz = UDim2.new(1, -24, 1, -(y + 24) - (p.live and 82 or 62)), z = 10 })
 		local check = UI.icon(card, "icon_check", 26, C.good, UDim2.new(1, -14, 0, 14), { z = 12, anchor = Vector2.new(1, 0) })
 		check.Visible = false
-		return { cell = cell, card = card, art = art, name = name, desc = desc, check = check,
+		return { cell = cell, card = card, art = art, rot = rot, name = name, desc = desc, check = check,
 			btnSz = UDim2.new(1, -28, 0, 42), btnPos = UDim2.new(0.5, 0, 1, -14) }
 	end
 	local function markOwned(t, owned)
 		t.check.Visible = owned and true or false
-		t.art.ImageTransparency = owned and 0.35 or 0
+		if t.rot then t.rot:Dim(owned) elseif t.art then t.art.ImageTransparency = owned and 0.35 or 0 end
 		t.name.TextColor3 = owned and C.muted or C.ink
 	end
 
@@ -337,6 +440,58 @@ S.shop = { build = function(host, App)
 		App.req("buyPass", { key = key }, btn)
 	end
 	local function crateOver() return App.now() > Config.Crates.Limited.ends end
+
+	------------------------------------------------------------ 0. STARTER PACK (new players only, one time)
+	local function starter()
+		local SP = Config.Products.StarterPack
+		if not SP then return end
+		local head = section("starter", "STARTER PACK", "One time offer for new players up to level " .. SP.maxLevel, "icon_gift", C.gold)
+		local W = innerW()
+		local narrow = W < 760
+		local H = 196
+		local wrap = mk("Frame", { Name = "Starter", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, H + 20), LayoutOrder = nextOrder(), ZIndex = 7 }, list)
+		mk("UIPadding", { PaddingTop = UDim.new(0, 10), PaddingBottom = UDim.new(0, 10), PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10) }, wrap)
+		local PALE = Color3.fromHex("fff1b8")
+		local _, card = liftCard(wrap, { name = "StarterCard", hot = true, glow = C.gold, baseGlow = 0.45, halo = { C.gold, PALE }, haloPad = 8 })
+		gradBorder(card, { C.gold, PALE, C.gold, PALE, C.gold }, 4)
+		shine(card, 3, 0.4)
+		ribbon(card, "NEW PLAYERS ONLY", C.bad, C.white, { size = 128, h = 26, textSize = 13 })
+		-- the property for your era, with golden rays BEHIND it (rays z 9, building z 11)
+		local art = narrow and 128 or 160
+		local artBox = mk("Frame", { Name = "Art", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 14, 0.5, 0), Size = UDim2.fromOffset(art, art), ZIndex = 9 }, card)
+		FX.beams(UI, artBox, C.gold, math.floor(art * 1.45), UDim2.fromScale(0.5, 0.5), 9, 0.75)
+		local prop = UI.img(artBox, "prop_e1_t3", { sz = UDim2.fromScale(1, 1), slice = false, fit = true, z = 11 })
+		local x = 14 + art + 18
+		local rightW = narrow and 170 or 230
+		text(card, "STARTER PACK", { font = "display", size = narrow and 26 or 30, color = C.gold, pos = UDim2.fromOffset(x, 14), sz = UDim2.new(1, -x - 120, 0, 34), z = 12, stroke = 1.4, truncate = true })
+		local body = text(card, "", { size = 16, color = C.ink, rich = true, wrap = true, valign = Enum.TextYAlignment.Top,
+			pos = UDim2.fromOffset(x, 54), sz = UDim2.new(1, -x - rightW - 14, 0, 44), z = 12 })
+		body.Text = "A strong property for your era, <b><font color='#f0c75a'>" .. SP.troops .. " elite troops</font></b>, <b><font color='#f0c75a'>"
+			.. R.Commas(SP.gold) .. " gold</font></b>. One time only."
+		local chips = mk("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(x, 104), Size = UDim2.new(1, -x - rightW - 14, 0, 28), ZIndex = 12 }, card)
+		mk("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Wraps = true, Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }, chips)
+		UI.chip(chips, "Strong property", { order = 1, icon = "icon_properties", iconColor = C.gold, size = 13, z = 12 })
+		local _, eliteL = UI.chip(chips, "", { order = 2, icon = "icon_military", iconColor = C.gold, size = 13, z = 12 })
+		UI.chip(chips, R.Commas(SP.gold) .. " gold", { order = 3, icon = "icon_gold", iconColor = C.gold, size = 13, z = 12 })
+		text(card, "Elite troops never die in raids", { font = "bold", size = 13, color = C.muted, pos = UDim2.fromOffset(x, H - 38), sz = UDim2.new(1, -x - rightW - 14, 0, 18), z = 12, truncate = true })
+		text(card, "ONE TIME ONLY", { font = "heavy", size = 13, color = C.gold, align = Enum.TextXAlignment.Center, anchor = Vector2.new(1, 1), pos = UDim2.new(1, -14, 1, -72),
+			sz = UDim2.fromOffset(rightW - 14, 18), z = 13 })
+		local buy = ownButton(card, "green", "R$ " .. SP.robux, function(btn)
+			local st = App.state
+			if st and st.starter then return end
+			buyProduct("StarterPack", btn)
+		end, { sz = UDim2.fromOffset(rightW - 14, 54), pos = UDim2.new(1, -14, 1, -14), anchor = Vector2.new(1, 1), z = 14, textSize = 22 })
+		up(function(st)
+			local show = (not st.starter) and (tonumber(st.lv) or 1) <= SP.maxLevel
+			head.Visible = show
+			wrap.Visible = show
+			buy:Set(st.starter and true or false, "OWNED")
+			local era = math.clamp(tonumber(st.era) or R.EraOf(tonumber(st.lv) or 1) or 1, 1, 8)
+			prop.Image = UI.asset("prop_e" .. era .. "_t3")
+			local unit = M.Elite[era]
+			eliteL.Text = SP.troops .. "x " .. (unit and unit.name or "elite troops")
+		end)
+	end
 
 	------------------------------------------------------------ 1. LIMITED hero row
 	local function hero()
@@ -376,7 +531,7 @@ S.shop = { build = function(host, App)
 		UI.icon(clockChip, "icon_clock", 16, LIMITED, UDim2.fromOffset(8, 5), { z = 27 })
 		local bTimer = text(clockChip, "", { font = "heavy", size = 14, color = LIMITED, pos = UDim2.fromOffset(28, 0), sz = UDim2.new(1, -34, 1, 0), z = 27, scaled = true })
 		local by = H - 132
-		local bTitle = text(bc, "LIMITED BUNDLE · <font color='#3fd27a'>999 R$</font>", { font = "display", size = stack and 26 or (bw < 520 and 24 or 30), pos = UDim2.fromOffset(18, by),
+		local bTitle = text(bc, "", { font = "display", size = stack and 26 or (bw < 520 and 24 or 30), pos = UDim2.fromOffset(18, by),
 			sz = UDim2.new(1, -36, 0, 36), z = 26, stroke = 1.6, rich = true, scaled = true })
 		bTitle.Text = "LIMITED BUNDLE · <font color='#3fd27a'>" .. Config.Products.LimitedBundle.robux .. " R$</font>"
 		text(bc, "<b><font color='#ff9a2e'>Empress Valeria Thorne</font></b> (LIMITED officer) + <b><font color='#f0c75a'>Founder's Saber</font></b>",
@@ -409,7 +564,7 @@ S.shop = { build = function(host, App)
 		local _, cc = liftCard(row, { name = "Crate", sz = UDim2.fromOffset(cw, H), pos = stack and UDim2.fromOffset(0, H + gap) or UDim2.fromOffset(bw + gap, 0), glow = LIMITED, baseGlow = 0.7 })
 		text(cc, L.name, { font = "display", size = 22, color = C.manila, pos = UDim2.fromOffset(16, 10), sz = UDim2.new(1, -60, 0, 28), z = 10, truncate = true })
 		infoBtn(App, cc, L.name, "One crate, two prices: open one now for <b>" .. L.gold .. " gold</b>, or buy Robux packs that go to your <b>Inventory</b> to open any time.\n\n"
-			.. "Mostly cool gear, sometimes an officer. The <b>10-pack</b> guarantees at least one <b>Epic or better</b>. The <b>2x Crate Luck</b> pass doubles Legendary+ odds.",
+			.. "Gear or <b>ELITE TROOPS</b> that never die in raids (never officers). The <b>10-pack</b> guarantees at least one <b>Epic or better</b>. Tap <b>DROP RATES</b> for every % chance.",
 			UDim2.new(1, -34, 0, 14), 30)
 		local cTimer = text(cc, "", { font = "heavy", size = 13, color = LIMITED, pos = UDim2.fromOffset(16, 38), sz = UDim2.new(1, -32, 0, 18), z = 10 })
 		local crateSize = 116
@@ -426,7 +581,9 @@ S.shop = { build = function(host, App)
 		haveBtn.Activated:Connect(function()
 			if App.openCrates then App.openCrates("limited", 1, haveBtn) else App.open("inventory") end
 		end)
-		text(cc, "Mostly cool gear, sometimes an officer", { size = 14, color = C.ink, align = Enum.TextXAlignment.Center, pos = UDim2.fromOffset(12, 184), sz = UDim2.new(1, -24, 0, 20), z = 10, truncate = true })
+		ratesButton(App, cc, "limited", { pos = UDim2.fromOffset(12, 64), sz = UDim2.fromOffset(112, 26), z = 14, textSize = 12 })
+		text(cc, "Gear or <font color='#f0c75a'><b>ELITE TROOPS</b></font> that never die in raids", { size = 14, color = C.ink, align = Enum.TextXAlignment.Center, rich = true,
+			pos = UDim2.fromOffset(12, 184), sz = UDim2.new(1, -24, 0, 20), z = 10, scaled = true })
 		local goldBtn = UI.button(cc, "gold", "OPEN NOW · " .. L.gold .. " GOLD", function(btn)
 			if crateOver() then return end
 			local st = App.state
@@ -497,7 +654,8 @@ S.shop = { build = function(host, App)
 		local rightW = W < 820 and 200 or 240
 		text(card, B.name, { font = "display", size = 22, color = C.manila, pos = UDim2.fromOffset(130, 12), sz = UDim2.new(1, -150 - rightW, 0, 28), z = 10, truncate = true })
 		tag(card, "FREE TO PLAY", C.good, C.manilaInk, { pos = UDim2.fromOffset(132, 44), z = 11, h = 20, size = 11 })
-		text(card, "Gear and the odd officer. Opens right away.", { size = 14, color = C.muted, pos = UDim2.fromOffset(130, 70), sz = UDim2.new(1, -150 - rightW, 0, 36), z = 10, wrap = true, valign = Enum.TextYAlignment.Top })
+		ratesButton(App, card, "basic", { pos = UDim2.fromOffset(242, 41), sz = UDim2.fromOffset(124, 26), z = 11, textSize = 12 })
+		text(card, "Mostly gear. An officer only when you have an open officer slot.", { size = 14, color = C.muted, pos = UDim2.fromOffset(130, 70), sz = UDim2.new(1, -150 - rightW, 0, 36), z = 10, wrap = true, valign = Enum.TextYAlignment.Top })
 		local buy = UI.button(card, "manila", "BUY & OPEN", function(btn)
 			local st = App.state
 			local price = st and st.basicCratePrice or 0
@@ -522,12 +680,13 @@ S.shop = { build = function(host, App)
 		section("vip", "VIP", "Forever perks and a chat tag everyone sees · Mega VIP replaces VIP (they do not stack)", "icon_crown", VIPGOLD)
 		local H = 236
 		local g, cw = grid(330, H, 18, 2, 12)
-		local function vipCard(key, order, color, perks, premium)
+		local function vipCard(key, order, color, perks, premium, slides)
 			local pass = Config.Passes[key]
 			local _, card = liftCard(g, { order = order, hot = premium, glow = color, baseGlow = premium and 0.5 or 0.85, halo = premium and { PINK, C.gold } or nil, haloPad = 10 })
 			local art = math.clamp(math.floor(cw * 0.3), 96, 150)
+			-- rays / glow at z 9, the rotating art at z 11: the light sits BEHIND the image (Kash 2 Oct 21:15)
 			aura(card, color, premium and math.floor(art * 1.8) or math.floor(art * 1.3), UDim2.fromOffset(14 + art / 2, 16 + art / 2), 9, premium and 0.9 or 0.4, premium, true)
-			local img = UI.img(card, PASS_ART[key], { sz = UDim2.fromOffset(art, art), pos = UDim2.fromOffset(14, 16), slice = false, fit = true, z = 10 })
+			local img = rotator(card, slides, art, UDim2.fromOffset(14, 16), nil, 11, color)
 			local x = 26 + art
 			local tagText = Config.VIP[key].tag
 			text(card, string.upper(pass.name), { font = "display", size = 26, color = color, pos = UDim2.fromOffset(x, 12), sz = UDim2.new(1, -x - (premium and 56 or 16), 0, 32), z = 10, truncate = true, stroke = 1 })
@@ -546,28 +705,55 @@ S.shop = { build = function(host, App)
 			end
 			return btn, img
 		end
-		local V, M = Config.VIP.VIP, Config.VIP.MegaVIP
+		local V, MV = Config.VIP.VIP, Config.VIP.MegaVIP
+		local function pctOf(x) return math.floor(x * 100 + 0.5) end
 		local vb, vimg = vipCard("VIP", 1, VIPGOLD, {
-			"+" .. math.floor(V.cash * 100 + 0.5) .. "% cash from everything",
-			"+" .. math.floor(V.regen * 100 + 0.5) .. "% faster Influence regen",
+			"+" .. pctOf(V.cash) .. "% cash from everything",
+			"+" .. pctOf(V.regen) .. "% faster Influence regen",
 			"<font color='#f0c75a'>[VIP]</font> chat tag",
-		}, false)
+		}, false, {
+			{ img = PASS_ART.VIP, label = "VIP" },
+			{ icon = "icon_cash", tile = C.good, label = "+" .. pctOf(V.cash) .. "% CASH" },
+			{ icon = "icon_influence", tile = C.inf, label = "+" .. pctOf(V.regen) .. "% REGEN" },
+			{ icon = "icon_crown", tile = VIPGOLD, label = "[VIP] CHAT TAG" },
+		})
+		local vipOfficer = O.VIPOfficer()
 		local mb, mimg = vipCard("MegaVIP", 2, PINK, {
-			"+" .. math.floor(M.cash * 100 + 0.5) .. "% cash from everything",
-			"+" .. math.floor(M.regen * 100 + 0.5) .. "% faster Influence regen",
-			"LIMITED officer <b><font color='#ff9a2e'>Marshal Aurelio Vance</font></b>",
+			"+" .. pctOf(MV.cash) .. "% cash from everything",
+			"+" .. pctOf(MV.regen) .. "% faster Influence regen",
+			"LIMITED officer <b><font color='#ff9a2e'>" .. vipOfficer.name .. "</font></b>",
 			"<font color='#ff4f8b'>[MEGA VIP]</font> chat tag",
-		}, true)
+		}, true, {
+			{ img = PASS_ART.MegaVIP, label = "MEGA VIP" },
+			{ img = vipOfficer.img or "officer_megavip", label = "LIMITED OFFICER", tile = LIMITED },
+			{ icon = "icon_cash", tile = C.good, label = "+" .. pctOf(MV.cash) .. "% CASH" },
+			{ icon = "icon_influence", tile = C.inf, label = "+" .. pctOf(MV.regen) .. "% REGEN" },
+			{ icon = "icon_crown", tile = PINK, label = "[MEGA VIP] CHAT TAG" },
+		})
 		up(function(st)
 			local gp = st.gp or {}
 			mb:Set(gp.MegaVIP and true or false, "OWNED")
 			if gp.MegaVIP and not gp.VIP then vb:Set(true, "MEGA VIP ACTIVE") else vb:Set(gp.VIP and true or false, "OWNED") end
-			vimg.ImageTransparency = (gp.VIP or gp.MegaVIP) and 0.3 or 0
-			mimg.ImageTransparency = gp.MegaVIP and 0.3 or 0
+			vimg:Dim((gp.VIP or gp.MegaVIP) and true or false)
+			mimg:Dim(gp.MegaVIP and true or false)
 		end)
 	end
 
 	------------------------------------------------------------ 4. GAME PASSES
+	-- passes that unlock several things rotate between them (single-unlock passes keep their one image)
+	local MULTI = {
+		AutoDispatch = {
+			{ img = PASS_ART.AutoDispatch, label = "AUTO DISPATCH" },
+			{ icon = "icon_package", tile = C.manila, label = "PICKS THE BEST LOAD" },
+			{ icon = "icon_clock", tile = C.blue, label = "TRADES WHILE OFFLINE" },
+		},
+		CustomFlag = {
+			{ img = PASS_ART.CustomFlag, label = "CUSTOM FLAG" },
+			{ flag = { l = "nordic", c = { "1f3a93", "f0c75a", "c0392b" } }, tile = C.blue, label = "NEW LAYOUTS" },
+			{ flag = { l = "disc", c = { "1b1b1b", "f0c75a", "c0392b" }, e = "icon_crown" }, tile = C.gold, label = "EMBLEMS" },
+			{ icon = "icon_flag", tile = C.good, label = "YOUR OWN IMAGE" },
+		},
+	}
 	local function passes()
 		section("passes", "GAME PASSES", "Buy once, keep forever", "icon_ticket", C.manila)
 		local g = grid(220, 262, 14, 3, 8)
@@ -576,7 +762,7 @@ S.shop = { build = function(host, App)
 			if key ~= "VIP" and key ~= "MegaVIP" then
 				local pass = Config.Passes[key]
 				k += 1
-				local t = tallCard(g, { order = k, art = PASS_ART[key] or "icon_sparkles", name = string.upper(pass.name), desc = pass.desc, glow = C.manila })
+				local t = tallCard(g, { order = k, art = PASS_ART[key] or "icon_sparkles", slides = MULTI[key], name = string.upper(pass.name), desc = pass.desc, glow = C.manila })
 				local btn = ownButton(t.card, "green", "R$ " .. pass.price, function(b) buyPass(key, b) end, { sz = t.btnSz, pos = t.btnPos, anchor = Vector2.new(0.5, 1), z = 12, textSize = 17 })
 				up(function(st)
 					local owned = st.gp and st.gp[key]
@@ -697,6 +883,7 @@ S.shop = { build = function(host, App)
 		obj.ups, obj.ticks, obj.anchors = {}, {}, {}
 		order = 0
 		obj.builtW = innerW()
+		starter()
 		hero()
 		supply()
 		vip()

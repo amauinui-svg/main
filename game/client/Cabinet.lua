@@ -1,12 +1,15 @@
--- Cabinet screens: OFFICERS (you + seated officers, gear slots, hiring, slots, bench) and INVENTORY (gear, officers,
--- crates). Layouts copied from the reference game's CREW and INVENTORY tabs (Kash 1 Oct 16:45), in our kit.
--- Also owns the crate / hire REVEAL popup, exposed as App.crateReveal(App, result, opts) for other screens (Shop).
+-- Cabinet screens: OFFICERS (you, LIMITED slots, seated officers, gear slots, hiring, slots) and INVENTORY (gear,
+-- officers, crates, elite troops). Layouts copied from the reference game's CREW and INVENTORY tabs (Kash 1 Oct 16:45).
+-- NO BENCH (Kash 2 Oct): officers only join into an open slot; limited officers live in their own slots (cab.ltd).
+-- Also owns the crate / hire REVEAL popup, exposed as App.crateReveal(App, result, opts) for other screens (Shop),
+-- and the DROP RATES popup for every RNG box, exposed as App.dropRates(kind) with kind "limited" | "basic" | "hire".
 local RS = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local Shared = RS:WaitForChild("Shared")
 local R = require(Shared.Rules)
 local O = require(Shared.Officers)
+local M = require(Shared.Military)
 local Config = require(Shared.Config)
 local Assets = require(Shared.Assets)
 local UI = require(script.Parent:WaitForChild("UI"))
@@ -17,6 +20,7 @@ local S = {}
 local OVERLAY = 0.45 -- ClientMain's modal backdrop transparency (restored after our darker reveal overlay)
 local DARK = Color3.fromHex("121519")
 local TILE = Color3.fromHex("1b1f25")
+local LIMITED = Color3.fromHex("ff9a2e")
 
 ---------------------------------------------------------------- small helpers
 local function tw(o, t, props, style, dir, rep)
@@ -91,8 +95,10 @@ local SHORT = { law = "law cash", props = "property income", convoy = "convoy pa
 local function traitLine(t) return "+" .. tostring(t.v) .. "% " .. (SHORT[t.k] or (O.TraitByKey[t.k] and O.TraitByKey[t.k].name) or tostring(t.k)) end
 local function gearMain(g) return "+" .. tostring(g.power or 0) .. "% " .. (g.kind == "weapon" and "attack" or "defense") end
 local function gearStat(g) return gearMain(g) .. (g.perk and ("  " .. traitLine(g.perk)) or "") end
+-- v is already a percent; up to 4 decimals so tiny odds (0.0375%) are shown exactly, never rounded to 0
 local function pct(v)
-	local s = string.format("%.2f", v)
+	if not v or v <= 0 then return "-" end
+	local s = string.format("%.4f", v)
 	s = (s:gsub("0+$", ""))
 	s = (s:gsub("%.$", ""))
 	return s .. "%"
@@ -111,7 +117,7 @@ local function invOf(st)
 end
 local function cabOf(st)
 	local cab = st and st.cab or {}
-	return { slots = cab.slots or {}, player = cab.player or {}, bought = cab.bought or 0 }
+	return { slots = cab.slots or {}, player = cab.player or {}, bought = cab.bought or 0, ltd = cab.ltd or {} }
 end
 local function slotsOf(st) return (st and st.officerSlots) or Config.Officers.StartSlots end
 -- gear id -> { id = holderId, name = holderName }
@@ -138,6 +144,26 @@ local function seatedMap(st)
 	end
 	return m
 end
+-- limited officers in their exclusive slots, in slot order
+local function ltdList(st)
+	local out = {}
+	local inv = invOf(st)
+	for _, id in ipairs(cabOf(st).ltd) do
+		if inv.officers[id] then table.insert(out, inv.officers[id]) end
+	end
+	return out
+end
+local function ltdSet(st)
+	local m = {}
+	for _, o in ipairs(ltdList(st)) do m[o.id] = true end
+	return m
+end
+local function freeSlots(st)
+	local cab, inv = cabOf(st), invOf(st)
+	local n = 0
+	for i = 1, slotsOf(st) do if not (cab.slots[i] and inv.officers[cab.slots[i]]) then n += 1 end end
+	return n
+end
 local function gearSorted(st, kind)
 	local out = {}
 	for _, g in pairs(invOf(st).gear) do if not kind or g.kind == kind then table.insert(out, g) end end
@@ -153,7 +179,7 @@ local function gearSorted(st, kind)
 end
 local function bonuses(st)
 	local cab, inv = cabOf(st), invOf(st)
-	return O.Bonuses({ slots = cab.slots, player = cab.player }, inv)
+	return O.Bonuses({ slots = cab.slots, player = cab.player, ltd = cab.ltd }, inv, slotsOf(st))
 end
 
 -- count a label up from its last value (stat boxes)
@@ -195,6 +221,123 @@ local function infoBtn(App, parent, title, body, pos, z)
 		text(bd, body, { size = 16, wrap = true, rich = true, sz = UDim2.new(1, 0, 1, -54), valign = Enum.TextYAlignment.Top, z = 74 })
 		UI.button(bd, "slate", "GOT IT", close, { sz = UDim2.fromOffset(150, 42), pos = UDim2.new(0.5, 0, 1, -4), anchor = Vector2.new(0.5, 1), z = 74 })
 	end)
+	return b
+end
+
+---------------------------------------------------------------- DROP RATES (every RNG box, Kash 2 Oct 21:15)
+-- Built from the same tables the server rolls with (O.CrateInfo, O.HireOdds) and the same luck rule as O.Roll
+-- (2x Crate Luck doubles Legendary and up, then everything is renormalised), so the numbers always match.
+local function weights(odds, luck)
+	local w = table.clone(odds or {})
+	if luck then for i = 5, #w do w[i] *= 2 end end
+	local tot = 0
+	for _, v in ipairs(w) do tot += v end
+	if tot > 0 then for i, v in ipairs(w) do w[i] = v / tot end end
+	return w -- fractions that sum to 1
+end
+-- columns = { { name, share (percent of all drops) or nil, vals = { [rarity index] = percent of ALL drops }, extra = { [i] = "x4" } } }
+local function dropColumns(kind, st)
+	local luck = (st and st.gp and st.gp.CrateLuck) and true or false
+	local cols, notes = {}, {}
+	if kind == "hire" then
+		for _, t in ipairs(Config.Officers.Hire) do
+			local w = weights(O.HireOdds[t.key], luck)
+			local vals = {}
+			for i = 1, O.RollTiers do vals[i] = (w[i] or 0) * 100 end
+			table.insert(cols, { name = t.name, sub = R.Money(t.cost), vals = vals })
+		end
+		table.insert(notes, "Each hire gives one officer with random traits. You can only hire into an <b>open officer slot</b>.")
+	else
+		for _, e in ipairs(O.CrateInfo[kind] or {}) do
+			local w = weights(e.odds, luck)
+			local troops = string.find(string.lower(e.label), "troop") ~= nil
+			local vals, extra = {}, troops and {} or nil
+			for i = 1, O.RollTiers do
+				vals[i] = e.pct * (w[i] or 0)
+				if extra then extra[i] = "x" .. tostring(O.EliteSize[i] or 0) end
+			end
+			table.insert(cols, { name = e.label, sub = pct(e.pct) .. " of drops", vals = vals, extra = extra, color = troops and C.gold or nil })
+		end
+		if kind == "limited" then
+			table.insert(notes, "Never gives officers. <b>Elite troops</b> are your era's elite unit (pack size by rarity) and <font color='#f0c75a'><b>never die in raids</b></font>.")
+			table.insert(notes, "A <b>10-pack</b> guarantees Epic or better: if nothing Epic+ dropped, the last crate is upgraded to Epic.")
+		else
+			table.insert(notes, "The officer roll only counts when you have an <b>open officer slot</b>. With every slot full, that roll becomes gear of the same rarity.")
+			if st and freeSlots(st) == 0 then
+				table.insert(notes, "<font color='#e2695f'><b>Every slot is full right now: this crate gives gear only.</b></font>")
+			end
+		end
+	end
+	table.insert(notes, luck and "<font color='#f0c75a'><b>2x CRATE LUCK ACTIVE:</b></font> Legendary and up doubled (included above)."
+		or "The <b>2x Crate Luck</b> pass doubles Legendary and up.")
+	return cols, notes, luck
+end
+
+local function dropRates(App, kind)
+	local st = App.state
+	local cols, notes, luck = dropColumns(kind, st)
+	local name = kind == "hire" and "HIRING" or (kind == "basic" and Config.Crates.Basic.name or Config.Crates.Limited.name)
+	local rowH, headH = 26, 54
+	local tableH = headH + rowH * (O.RollTiers + 1)
+	local footH = luck and 52 or 106
+	local _, bd, close = popup(App, name .. " · DROP RATES", 700, 48 + 12 + tableH + 22 * #notes + 20 + footH)
+	local area = UI.list(bd, { sz = UDim2.new(1, 0, 1, -footH), gap = 6, z = 74 })
+	local tbl = mk("Frame", { Name = "Rates", BackgroundTransparency = 1, Size = UDim2.new(1, -4, 0, tableH), ZIndex = 74, LayoutOrder = 1 }, area)
+	local rw = #cols > 2 and 0.22 or 0.28
+	local cw = (1 - rw) / math.max(1, #cols)
+	text(tbl, "RARITY", { font = "heavy", size = 13, color = C.muted, valign = Enum.TextYAlignment.Bottom, pos = UDim2.fromOffset(8, 0), sz = UDim2.new(rw, -8, 0, headH - 6), z = 75 })
+	for c, col in ipairs(cols) do
+		local x = rw + (c - 1) * cw
+		text(tbl, string.upper(col.name), { font = "heavy", size = 13, color = col.color or C.manila, align = Enum.TextXAlignment.Center, wrap = true, scaled = true,
+			pos = UDim2.new(x, 4, 0, 0), sz = UDim2.new(cw, -8, 0, headH - 22), z = 75 })
+		if col.sub then
+			text(tbl, col.sub, { font = "bold", size = 12, color = C.muted, align = Enum.TextXAlignment.Center, pos = UDim2.new(x, 4, 0, headH - 22), sz = UDim2.new(cw, -8, 0, 16), z = 75, truncate = true })
+		end
+	end
+	local totals = {}
+	for i = 1, O.RollTiers + 1 do
+		local y = headH + (i - 1) * rowH
+		local band = mk("Frame", { BackgroundColor3 = i % 2 == 1 and C.slate or DARK, BackgroundTransparency = i <= O.RollTiers and 0.35 or 0, BorderSizePixel = 0,
+			Position = UDim2.fromOffset(0, y), Size = UDim2.new(1, 0, 0, rowH), ZIndex = 74 }, tbl)
+		corner(band, 4)
+		if i <= O.RollTiers then
+			local r = O.Rarities[i]
+			text(band, r.name, { font = "heavy", size = 15, color = Color3.fromHex(r.color), pos = UDim2.fromOffset(8, 0), sz = UDim2.new(rw, -8, 1, 0), z = 75, stroke = 1 })
+			for c, col in ipairs(cols) do
+				local v = col.vals[i] or 0
+				totals[c] = (totals[c] or 0) + v
+				local s = pct(v)
+				if v > 0 and col.extra then s = s .. "  <font color='#9a9fa6'>" .. col.extra[i] .. "</font>" end
+				text(band, s, { font = "heavy", size = 15, color = v > 0 and C.ink or C.dim, align = Enum.TextXAlignment.Center, rich = true,
+					pos = UDim2.new(rw + (c - 1) * cw, 0, 0, 0), sz = UDim2.new(cw, 0, 1, 0), z = 75 })
+			end
+		else
+			stroke(band, C.rule, 1)
+			text(band, "TOTAL", { font = "heavy", size = 14, color = C.manila, pos = UDim2.fromOffset(8, 0), sz = UDim2.new(rw, -8, 1, 0), z = 75 })
+			for c in ipairs(cols) do
+				text(band, pct(totals[c] or 0), { font = "heavy", size = 15, color = C.manila, align = Enum.TextXAlignment.Center,
+					pos = UDim2.new(rw + (c - 1) * cw, 0, 0, 0), sz = UDim2.new(cw, 0, 1, 0), z = 75 })
+			end
+		end
+	end
+	for k, n in ipairs(notes) do
+		local l = text(area, n, { size = 14, color = C.ink, wrap = true, rich = true, sz = UDim2.new(1, -8, 0, 0), z = 75, order = 1 + k })
+		l.AutomaticSize = Enum.AutomaticSize.Y
+	end
+	if not luck then
+		local pass = Config.Passes and Config.Passes.CrateLuck
+		local lb = UI.button(bd, "gold", "Increase your luck!" .. (pass and ("  R$" .. pass.price) or ""), function(b) App.req("buyPass", { key = "CrateLuck" }, b) end,
+			{ pos = UDim2.new(0.5, 0, 1, -54), anchor = Vector2.new(0.5, 1), sz = UDim2.fromOffset(340, 44), z = 74, icon = "icon_sparkles", textSize = 18 })
+		hoverBtn(lb)
+	end
+	UI.button(bd, "slate", "CLOSE", close, { pos = UDim2.new(0.5, 0, 1, -2), anchor = Vector2.new(0.5, 1), sz = UDim2.fromOffset(200, 44), z = 74 })
+end
+-- a compact "DROP RATES" button that opens the popup for kind
+local function ratesBtn(App, parent, kind, p)
+	p = p or {}
+	local b = UI.button(parent, "slate", p.label or "DROP RATES", function() dropRates(App, kind) end,
+		{ pos = p.pos, anchor = p.anchor, sz = p.sz or UDim2.fromOffset(150, 30), z = p.z or 8, textSize = p.textSize or 14, icon = p.icon ~= false and "icon_gauge" or nil, order = p.order })
+	hoverBtn(b)
 	return b
 end
 
@@ -260,41 +403,16 @@ end
 
 ---------------------------------------------------------------- shared officer actions
 local function fireOfficer(App, o, btn)
-	local body = "Fire <b>" .. o.name .. "</b>? You get <b>nothing</b> back. Their gear returns to your inventory."
-	if o.limited then body = body .. "\n<font color='#ff9a2e'><b>This LIMITED officer can never be hired again.</b></font>" end
+	if o.limited then
+		App.toast("LIMITED OFFICERS STAY", "They have their own slot and can't be fired", "bad")
+		if btn and btn.Inst then App.shake(btn.Inst) end
+		return
+	end
+	local body = "Fire <b>" .. o.name .. "</b>? You get <b>nothing</b> back. Their gear returns to your inventory and their slot opens up for a new hire."
 	App.confirm("FIRE OFFICER?", body, "FIRE", "red", function()
 		local res = App.req("fire", { id = o.id }, btn)
-		if res.ok then App.toast(string.upper(o.name) .. " FIRED", nil, "bad") end
+		if res.ok then App.toast(string.upper(o.name) .. " FIRED", "Their slot is free: hire someone new", "bad") end
 	end)
-end
-
--- seat into the first free slot, or ask which seated officer to swap with
-local function seatOfficer(App, o, btn)
-	local st = App.state
-	local cab, inv = cabOf(st), invOf(st)
-	for i = 1, slotsOf(st) do
-		if not (cab.slots[i] and inv.officers[cab.slots[i]]) then
-			local res = App.req("seat", { id = o.id, slot = i }, btn)
-			if res.ok then App.toast(string.upper(o.name) .. " SEATED", "Slot " .. i .. " · their bonuses are now active", "good") end
-			return
-		end
-	end
-	local _, bd, close = popup(App, "SWAP WITH WHO?", 560, 120 + 70 * math.min(5, slotsOf(st)))
-	text(bd, "Every slot is full. Pick an officer to send to the bench.", { size = 15, color = C.muted, sz = UDim2.new(1, 0, 0, 22), z = 74 })
-	local lst = UI.list(bd, { pos = UDim2.fromOffset(0, 30), sz = UDim2.new(1, 0, 1, -30), gap = 6, z = 74 })
-	for i = 1, slotsOf(st) do
-		local cur = inv.officers[cab.slots[i]]
-		if cur then
-			local row = UI.card(lst, { sz = UDim2.new(1, 0, 0, 62), z = 75, order = i })
-			portrait(row, cur, 48, UDim2.fromOffset(8, 7), 76)
-			text(row, cur.name, { font = "heavy", size = 16, pos = UDim2.fromOffset(66, 8), sz = UDim2.new(1, -200, 0, 22), z = 76, truncate = true })
-			text(row, rar(cur.rarity).name .. " · slot " .. i, { font = "bold", size = 13, color = rcol(cur.rarity), pos = UDim2.fromOffset(66, 32), sz = UDim2.new(1, -200, 0, 18), z = 76 })
-			UI.button(row, "manila", "SWAP", function(b)
-				local res = App.req("seat", { id = o.id, slot = i }, b)
-				if res.ok then close(); App.toast(string.upper(o.name) .. " SEATED", cur.name .. " moved to the bench", "good") end
-			end, { pos = UDim2.new(1, -10, 0.5, 0), anchor = Vector2.new(1, 0.5), sz = UDim2.fromOffset(110, 40), z = 77, textSize = 16 })
-		end
-	end
 end
 
 -- gear picker for one holder slot: owned gear of that kind, sorted by power, with EQUIP buttons
@@ -340,7 +458,8 @@ local function openPicker(App, holderId, holderName, slot)
 end
 
 ---------------------------------------------------------------- REVEAL (crates and hires)
--- one result card: { type = "gear"|"officer", item, where = "slot"|"bench", lost = bool }
+-- one result card: { type = "gear"|"officer"|"troops", item, where = "slot"|"limited", lost = bool }
+-- troops item (Founder's Crate): { era, n, rarity, name } -> M.Elite[era] has the unit's name / atk / def
 local function resultCard(parent, r, w, h, z)
 	local item = r.item or {}
 	local rc = rcol(item.rarity)
@@ -353,19 +472,35 @@ local function resultCard(parent, r, w, h, z)
 	local fs = math.max(11, math.floor(h * 0.06))
 	text(card, rar(item.rarity).name, { font = "heavy", size = fs + 2, color = rc, align = Enum.TextXAlignment.Center, pos = UDim2.fromOffset(6, 6), sz = UDim2.new(1, -12, 0, fs + 6), z = z + 2, stroke = 1.2, scaled = true })
 	local imgH = math.floor(h * 0.42)
+	local unit = r.type == "troops" and (M.Elite[tonumber(item.era) or 1] or M.Elite[1]) or nil
 	if r.type == "officer" then
 		portrait(card, item, imgH, UDim2.new(0.5, 0, 0, fs + 14), z + 1, { anchor = Vector2.new(0.5, 0), thick = 2 })
+	elseif unit then
+		-- elite troops: a gold-framed tile with the military crest and the pack size
+		local tile = mk("Frame", { Name = "Elite", BackgroundColor3 = DARK, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, fs + 14),
+			Size = UDim2.fromOffset(imgH, imgH), ZIndex = z + 1, ClipsDescendants = true }, card)
+		corner(tile, 8)
+		stroke(tile, C.gold, 2)
+		local wash = mk("Frame", { BackgroundColor3 = rc, BackgroundTransparency = 0.45, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ZIndex = z + 1 }, tile)
+		mk("UIGradient", { Rotation = -90, Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.1), NumberSequenceKeypoint.new(0.8, 1), NumberSequenceKeypoint.new(1, 1) }) }, wash)
+		UI.img(tile, "icon_military", { sz = UDim2.fromScale(0.6, 0.6), pos = UDim2.fromScale(0.5, 0.56), anchor = Vector2.new(0.5, 0.5), color = rc:Lerp(C.white, 0.35), z = z + 2, slice = false, fit = true })
+		UI.icon(tile, unit.icon or "icon_crown", math.floor(imgH * 0.24), C.gold, UDim2.new(0.5, 0, 0, 4), { z = z + 3, anchor = Vector2.new(0.5, 0) })
+		text(tile, "x" .. tostring(item.n or 0), { font = "heavy", size = math.max(14, math.floor(imgH * 0.22)), color = C.white, align = Enum.TextXAlignment.Right,
+			anchor = Vector2.new(1, 1), pos = UDim2.new(1, -6, 1, -2), sz = UDim2.new(1, -8, 0, math.max(16, math.floor(imgH * 0.26))), z = z + 3, stroke = 1.6 })
 	else
 		gearImage(card, item, UDim2.fromOffset(imgH, imgH), UDim2.new(0.5, 0, 0, fs + 14), z + 1, Vector2.new(0.5, 0))
 	end
 	local y = fs + 18 + imgH
-	text(card, item.name or "?", { font = "heavy", size = fs + 1, align = Enum.TextXAlignment.Center, pos = UDim2.fromOffset(6, y), sz = UDim2.new(1, -12, 0, (fs + 2) * 2), z = z + 2, wrap = true, scaled = true })
+	local title = unit and (tostring(item.n or 0) .. "x " .. (item.name or unit.name)) or (item.name or "?")
+	text(card, title, { font = "heavy", size = fs + 1, align = Enum.TextXAlignment.Center, pos = UDim2.fromOffset(6, y), sz = UDim2.new(1, -12, 0, (fs + 2) * 2), z = z + 2, wrap = true, scaled = true })
 	y += (fs + 2) * 2 + 2
 	local lines
 	if r.type == "officer" then
 		local t = {}
 		for k, tr in ipairs(item.traits or {}) do if k <= 4 then table.insert(t, traitLine(tr)) end end
 		lines = (item.title and (item.title .. "\n") or "") .. table.concat(t, "\n")
+	elseif unit then
+		lines = "ELITE TROOPS\nATK " .. R.Short(unit.atk) .. "  DEF " .. R.Short(unit.def) .. " each\nElite troops never die in raids"
 	else
 		lines = (item.kind == "weapon" and "WEAPON" or "ARMOR") .. "\n" .. gearMain(item) .. (item.perk and ("\n" .. traitLine(item.perk)) or "")
 	end
@@ -373,7 +508,8 @@ local function resultCard(parent, r, w, h, z)
 	text(card, lines, { font = "bold", size = fs - 1, color = C.good, align = Enum.TextXAlignment.Center, valign = Enum.TextYAlignment.Top, pos = UDim2.fromOffset(6, y), sz = UDim2.new(1, -12, 1, -(y + footH + 6)), z = z + 2, wrap = true, scaled = true })
 	local note
 	if r.lost then note = "INVENTORY FULL · LOST"
-	elseif r.type == "officer" then note = r.where == "bench" and "SENT TO THE BENCH" or "JOINED YOUR CABINET"
+	elseif r.type == "officer" then note = r.where == "limited" and "LIMITED SLOT" or "JOINED YOUR CABINET"
+	elseif unit then note = "JOINED YOUR ARMY"
 	else note = "ADDED TO INVENTORY" end
 	local foot = mk("Frame", { BackgroundColor3 = rc, BorderSizePixel = 0, Position = UDim2.new(0, 6, 1, -(footH + 6)), Size = UDim2.new(1, -12, 0, footH), ZIndex = z + 1 }, card)
 	corner(foot, 4)
@@ -530,6 +666,7 @@ end
 local function installReveal(App)
 	App.crateReveal = App.crateReveal or reveal
 	App.openCrates = App.openCrates or function(kind, n, btn) openCrates(App, kind, n, btn) end
+	App.dropRates = App.dropRates or function(kind) dropRates(App, kind) end
 end
 
 ---------------------------------------------------------------- OFFICERS
@@ -543,8 +680,9 @@ S.officers = { build = function(host, App)
 	local panel, body = header(host, App, "OFFICERS")
 	local obj = { sig = nil, costBtns = {}, last = { atk = 0, def = 0, tot = 0 }, busy = false }
 
-	infoBtn(App, panel, "OFFICERS", "Officers give your country % boosts. Only officers in a <b>slot</b> count; the rest wait on the bench.\n\n"
-		.. "Every hire is unique: a rarity plus random traits. Rarer = more and bigger traits. Weapons add attack, armor adds defense, on you and on each officer.",
+	infoBtn(App, panel, "OFFICERS", "Officers give your country % boosts. Every officer sits in a <b>slot</b>: you can only hire when a slot is open. "
+		.. "<font color='#ff9a2e'><b>LIMITED</b></font> officers (Mega VIP, Limited Bundle) get their own extra slot.\n\n"
+		.. "Every hire is unique: a rarity plus random traits. Weapons add attack, armor adds defense, on you and on each officer.",
 		UDim2.fromOffset(158, 18), 8)
 	text(panel, "Hire officers with cash. Each one rolls a rarity and traits; their gear adds attack and defense.", { size = 13, color = C.muted, wrap = true,
 		pos = UDim2.fromOffset(186, 10), sz = UDim2.new(1, -186 - 372, 0, 36), z = 7 })
@@ -570,9 +708,13 @@ S.officers = { build = function(host, App)
 		local cab, inv = cabOf(st), invOf(st)
 		local calls = {}
 		for _, k in ipairs({ "weapon", "armor" }) do if cab.player[k] then table.insert(calls, { "unequip", { holder = "player", slot = k } }) end end
+		local who = ltdList(st)
 		for i = 1, slotsOf(st) do
 			local o = cab.slots[i] and inv.officers[cab.slots[i]]
-			if o then for _, k in ipairs({ "weapon", "armor" }) do if o[k] then table.insert(calls, { "unequip", { holder = o.id, slot = k } }) end end end
+			if o then table.insert(who, o) end
+		end
+		for _, o in ipairs(who) do
+			for _, k in ipairs({ "weapon", "armor" }) do if o[k] then table.insert(calls, { "unequip", { holder = o.id, slot = k } }) end end
 		end
 		runSeq(unequipBtn, "UNEQUIP ALL", calls, { "Nobody is wearing gear", "ALL GEAR UNEQUIPPED" })
 	end, { pos = UDim2.new(1, -194, 0, 10), anchor = Vector2.new(1, 0), sz = UDim2.fromOffset(170, 38), z = 8, textSize = 15 })
@@ -580,6 +722,7 @@ S.officers = { build = function(host, App)
 		local st = App.state
 		local cab, inv = cabOf(st), invOf(st)
 		local holders = { { id = "player", h = cab.player } }
+		for _, o in ipairs(ltdList(st)) do table.insert(holders, { id = o.id, h = o }) end
 		for i = 1, slotsOf(st) do
 			local o = cab.slots[i] and inv.officers[cab.slots[i]]
 			if o then table.insert(holders, { id = o.id, h = o }) end
@@ -686,87 +829,68 @@ S.officers = { build = function(host, App)
 		UI.chip(card, "LEADER", { pos = UDim2.new(1, -12, 0.5, 0), anchor = Vector2.new(1, 0.5), z = 8, icon = "icon_crown", manila = true, size = 13 })
 	end
 
+	-- one officer row. slotIndex = normal slot number, or nil for a LIMITED officer in its exclusive slot
 	local function officerRow(st, o, slotIndex, order)
 		local rc = rcol(o.rarity)
-		local card = UI.card(list, { sz = UDim2.new(1, 0, 0, 92), z = 7, order = order })
-		if slotIndex > 1 then arrow(card, true, 10, function() App.req("seat", { id = o.id, slot = slotIndex - 1 }) end) end
-		if slotIndex < slotsOf(st) then arrow(card, false, 50, function() App.req("seat", { id = o.id, slot = slotIndex + 1 }) end) end
+		local limited = slotIndex == nil
+		local card = UI.card(list, { sz = UDim2.new(1, 0, 0, 92), z = 7, order = order, hot = limited })
+		if limited then
+			-- the special orange LIMITED frame: thick border, warm wash from the left, a LIMITED band under the portrait
+			stroke(card, LIMITED, 3)
+			local wash = mk("Frame", { Name = "LimitedWash", BackgroundColor3 = LIMITED, BackgroundTransparency = 0.55, BorderSizePixel = 0, Position = UDim2.fromOffset(3, 3),
+				Size = UDim2.new(0.45, 0, 1, -6), ZIndex = 7 }, card)
+			corner(wash, 8)
+			mk("UIGradient", { Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(1, 1) }) }, wash)
+			UI.icon(card, "icon_sparkles", 18, LIMITED, UDim2.fromOffset(9, 10), { z = 9 })
+		else
+			if slotIndex > 1 then arrow(card, true, 10, function() App.req("seat", { id = o.id, slot = slotIndex - 1 }) end) end
+			if slotIndex < slotsOf(st) then arrow(card, false, 50, function() App.req("seat", { id = o.id, slot = slotIndex + 1 }) end) end
+		end
 		local pt = portrait(card, o, 76, UDim2.fromOffset(36, 8), 8)
 		if ridx(o.rarity) >= 5 then glow(pt, rc, 1.2, 8, 0.5) end
-		text(card, o.name, { font = "heavy", size = 15, pos = UDim2.fromOffset(120, 8), sz = UDim2.new(0.3, -124, 0, 20), z = 8, truncate = true })
+		if limited then
+			local band = mk("Frame", { BackgroundColor3 = LIMITED, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, 0), Size = UDim2.new(1, 0, 0, 16), ZIndex = 10 }, pt)
+			text(band, "LIMITED", { font = "heavy", size = 12, color = C.black, align = Enum.TextXAlignment.Center, sz = UDim2.fromScale(1, 1), z = 11 })
+		end
+		text(card, o.name, { font = "heavy", size = 15, color = limited and LIMITED or C.ink, pos = UDim2.fromOffset(120, 8), sz = UDim2.new(0.3, -124, 0, 20), z = 8, truncate = true })
 		text(card, rar(o.rarity).name, { font = "heavy", size = 13, color = rc, pos = UDim2.fromOffset(120, 30), sz = UDim2.new(0.3, -124, 0, 16), z = 8 })
-		text(card, string.upper(o.title or "") .. " · SLOT " .. slotIndex, { font = "bold", size = 12, color = C.muted, pos = UDim2.fromOffset(120, 48), sz = UDim2.new(0.3, -124, 0, 16), z = 8, truncate = true })
+		text(card, string.upper(o.title or "") .. (limited and " · LIMITED SLOT" or (" · SLOT " .. slotIndex)), { font = "bold", size = 12, color = C.muted, pos = UDim2.fromOffset(120, 48), sz = UDim2.new(0.3, -124, 0, 16), z = 8, truncate = true })
 		local t = {}
 		for k, tr in ipairs(o.traits or {}) do if k <= 4 then table.insert(t, traitLine(tr)) end end
 		text(card, table.concat(t, "\n"), { font = "bold", size = 13, color = C.good, pos = UDim2.new(0.3, 0, 0, 8), sz = UDim2.new(0.17, -8, 1, -16), z = 8, wrap = true })
 		gearBox(card, st, o.id, o.name, "weapon", 0.47)
 		gearBox(card, st, o.id, o.name, "armor", 0.66)
-		local bb = UI.button(card, "slate", "BENCH", function(b) App.req("seat", { id = o.id, slot = 0 }, b) end,
-			{ pos = UDim2.new(0.85, 2, 0, 8), sz = UDim2.new(0.15, -10, 0, 34), z = 8, textSize = 14 })
-		local fb = UI.button(card, "red", "FIRE", function(b) fireOfficer(App, o, b) end,
-			{ pos = UDim2.new(0.85, 2, 1, -42), sz = UDim2.new(0.15, -10, 0, 34), z = 8, textSize = 14 })
-		hoverBtn(bb); hoverBtn(fb)
-	end
-
-	local function oddsPopup()
-		local st = App.state
-		local luck = st and st.gp and st.gp.CrateLuck
-		local _, bd, close = popup(App, "HIRE ODDS", 620, 470)
-		local tiers = Config.Officers.Hire
-		local grid = mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, -110), ZIndex = 74 }, bd)
-		local rowH = 1 / (O.RollTiers + 1)
-		text(grid, "RARITY", { font = "heavy", size = 14, color = C.muted, pos = UDim2.fromScale(0, 0), sz = UDim2.new(0.34, 0, rowH, 0), z = 75 })
-		local function odds(key)
-			local w = table.clone(O.HireOdds[key] or {})
-			if luck then
-				for i = 5, #w do w[i] *= 2 end
-				local tot = 0
-				for _, v in ipairs(w) do tot += v end
-				if tot > 0 then for i, v in ipairs(w) do w[i] = v / tot * 100 end end
-			end
-			return w
-		end
-		for c, t in ipairs(tiers) do
-			local x = 0.34 + (c - 1) * 0.22
-			text(grid, t.name, { font = "heavy", size = 13, color = C.muted, align = Enum.TextXAlignment.Center, pos = UDim2.fromScale(x, 0), sz = UDim2.new(0.22, 0, rowH, 0), z = 75, scaled = true })
-			local w = odds(t.key)
-			for i = 1, O.RollTiers do
-				local v = w[i] or 0
-				text(grid, pct(v), { font = "heavy", size = 18, color = v > 0 and C.ink or C.dim, align = Enum.TextXAlignment.Center, pos = UDim2.fromScale(x, rowH * i), sz = UDim2.new(0.22, 0, rowH, 0), z = 75 })
-			end
-		end
-		for i = 1, O.RollTiers do
-			local r = O.Rarities[i]
-			text(grid, r.name, { font = "heavy", size = 19, color = Color3.fromHex(r.color), pos = UDim2.fromScale(0, rowH * i), sz = UDim2.new(0.34, 0, rowH, 0), z = 75, stroke = 1 })
-		end
-		if luck then
-			text(bd, "2x CRATE LUCK ACTIVE · Legendary and up doubled", { font = "heavy", size = 14, color = C.gold, align = Enum.TextXAlignment.Center, pos = UDim2.new(0, 0, 1, -104), sz = UDim2.new(1, 0, 0, 44), z = 74 })
+		if limited then
+			local chip = mk("Frame", { BackgroundColor3 = DARK, BorderSizePixel = 0, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0.85, 2, 0.5, 0), Size = UDim2.new(0.15, -10, 0, 44), ZIndex = 8 }, card)
+			corner(chip, 6)
+			stroke(chip, LIMITED, 2)
+			text(chip, "LIMITED\n<font color='#9a9fa6'>always active</font>", { font = "heavy", size = 14, color = LIMITED, align = Enum.TextXAlignment.Center, rich = true, wrap = true, scaled = true,
+				pos = UDim2.fromOffset(4, 2), sz = UDim2.new(1, -8, 1, -4), z = 9 })
 		else
-			local pass = Config.Passes and Config.Passes.CrateLuck
-			local lb = UI.button(bd, "gold", "Increase your luck!" .. (pass and ("  R$" .. pass.price) or ""), function(b) App.req("buyPass", { key = "CrateLuck" }, b) end,
-				{ pos = UDim2.new(0.5, 0, 1, -58), anchor = Vector2.new(0.5, 1), sz = UDim2.fromOffset(340, 44), z = 74, icon = "icon_sparkles", textSize = 18 })
-			hoverBtn(lb)
+			local fb = UI.button(card, "red", "FIRE", function(b) fireOfficer(App, o, b) end,
+				{ pos = UDim2.new(0.85, 2, 0.5, 0), anchor = Vector2.new(0, 0.5), sz = UDim2.new(0.15, -10, 0, 40), z = 8, textSize = 15 })
+			hoverBtn(fb)
 		end
-		UI.button(bd, "slate", "CLOSE", close, { pos = UDim2.new(0.5, 0, 1, -2), anchor = Vector2.new(0.5, 1), sz = UDim2.fromOffset(200, 44), z = 74 })
 	end
 
 	local function hireRow(st, order, free)
 		local card = UI.card(list, { sz = UDim2.new(1, 0, 0, 100), z = 7, order = order })
-		stroke(card, C.rule, 1)
-		text(card, free > 0 and (free > 1 and (free .. " EMPTY SLOTS") or "EMPTY SLOT") or "HIRE TO BENCH", { font = "display", size = 21, color = C.manila, pos = UDim2.fromOffset(16, 8), sz = UDim2.new(0.45, -16, 0, 26), z = 8 })
-		text(card, free > 0 and "A random recruit joins your cabinet. Pricier hires roll rarer officers." or "Every slot is full: new hires wait on the bench.",
-			{ size = 13, color = C.muted, pos = UDim2.fromOffset(16, 34), sz = UDim2.new(0.42, -16, 0, 30), z = 8, wrap = true })
-		local ob = UI.button(card, "slate", "HIRE ODDS", oddsPopup, { pos = UDim2.new(0, 16, 1, -38), sz = UDim2.fromOffset(150, 30), z = 8, textSize = 14, icon = "icon_gauge" })
-		hoverBtn(ob)
+		stroke(card, free > 0 and C.rule or C.bad, 1, free > 0 and 0 or 0.4)
+		text(card, free > 0 and (free > 1 and (free .. " EMPTY SLOTS") or "EMPTY SLOT") or "NO FREE SLOT", { font = "display", size = 21, color = free > 0 and C.manila or C.bad, pos = UDim2.fromOffset(16, 8), sz = UDim2.new(0.42, -16, 0, 26), z = 8 })
+		text(card, free > 0 and "A random recruit joins your cabinet. Pricier hires roll rarer officers."
+			or "Every slot is full. <b>Unlock a slot below</b> or fire an officer to hire again.",
+			{ size = 13, color = C.muted, pos = UDim2.fromOffset(16, 34), sz = UDim2.new(0.42, -16, 0, 30), z = 8, wrap = true, rich = true })
+		ratesBtn(App, card, "hire", { pos = UDim2.new(0, 16, 1, -38), sz = UDim2.fromOffset(150, 30) })
 		for k, t in ipairs(Config.Officers.Hire) do
-			local b = UI.button(card, "gold", t.name .. "\n" .. R.Money(t.cost), function(btn)
+			local b = UI.button(card, free > 0 and "gold" or "locked", t.name .. "\n" .. (free > 0 and R.Money(t.cost) or "NO FREE SLOT"), function(btn)
 				local s = App.state
-				if s.cash < t.cost then App.toast("Not enough cash", t.name .. " costs " .. R.Money(t.cost), "bad"); App.shake(btn.Inst); return end
+				if freeSlots(s) == 0 then App.toast("NO FREE SLOT", "Unlock a slot or fire an officer first", "bad"); App.shake(btn.Inst); return end
+				if (s.cash or 0) < t.cost then App.toast("Not enough cash", t.name .. " costs " .. R.Money(t.cost), "bad"); App.shake(btn.Inst); return end
 				local res = App.req("hire", { tier = t.key }, btn)
 				if res.ok and res.officer then hireReveal(App, res.officer, res.where) end
 			end, { pos = UDim2.new(0.43 + (k - 1) * 0.19, 0, 0.5, 0), anchor = Vector2.new(0, 0.5), sz = UDim2.new(0.18, -4, 0, 60), z = 8, textSize = 16 })
 			hoverBtn(b)
-			costBtn(b, t.cost, "gold")
+			if free > 0 then costBtn(b, t.cost, "gold") end
 		end
 	end
 
@@ -779,7 +903,7 @@ S.officers = { build = function(host, App)
 		local rightW = (cost and 264 or 0) + (showPass and 196 or 0)
 		UI.icon(card, "icon_lock", 26, C.dim, UDim2.new(0, 16, 0.5, 0), { z = 8, anchor = Vector2.new(0, 0.5) })
 		text(card, cost and "LOCKED SLOT" or "ALL SLOTS UNLOCKED", { font = "display", size = 21, color = C.muted, pos = UDim2.fromOffset(54, 10), sz = UDim2.new(1, -64 - rightW, 0, 26), z = 8, truncate = true })
-		text(card, cost and "Buy this slot to seat another officer. Each slot costs more than the last." or "You own every officer slot you can buy.",
+		text(card, cost and "Buy this slot to hire another officer. Each slot costs more than the last." or "You own every officer slot you can buy.",
 			{ size = 13, color = C.muted, pos = UDim2.fromOffset(54, 38), sz = UDim2.new(1, -64 - rightW, 0, 32), z = 8, wrap = true })
 		if cost then
 			local b = UI.button(card, "gold", "UNLOCK SLOT  " .. R.Money(cost), function(btn)
@@ -798,36 +922,25 @@ S.officers = { build = function(host, App)
 		end
 	end
 
-	local function benchSection(st, order, seated)
-		local inv = invOf(st)
-		local bench = {}
-		for id, o in pairs(inv.officers) do if not seated[id] then table.insert(bench, o) end end
-		table.sort(bench, function(a, b)
-			local ra, rb = ridx(a.rarity), ridx(b.rarity)
-			if ra ~= rb then return ra > rb end
-			return (a.name or "") < (b.name or "")
-		end)
+	-- LIMITED slots: exclusive slots for limited officers (Mega VIP, Limited Bundle), never using a normal slot
+	local function limitedSection(st, order)
+		local ltd = ltdList(st)
+		if #ltd == 0 then return end
 		local hdr = mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 34), ZIndex = 7, LayoutOrder = order }, list)
-		text(hdr, "BENCH  " .. #bench .. "/" .. Config.Officers.BenchMax, { font = "display", size = 22, color = C.manila, pos = UDim2.fromOffset(4, 4), sz = UDim2.fromOffset(200, 28), z = 8, auto = Enum.AutomaticSize.X })
-		infoBtn(App, hdr, "THE BENCH", "Officers on the bench give <b>no bonuses</b>. Seat them to put them to work.\n\nNew hires and crate officers go here when every slot is full. The bench holds "
-			.. Config.Officers.BenchMax .. ".", UDim2.new(0, 196, 0, 8), 8)
-		if #bench == 0 then
-			text(list, "No officers on the bench.", { size = 15, color = C.dim, sz = UDim2.new(1, 0, 0, 24), z = 8, order = order + 1, pos = UDim2.fromOffset(6, 0) })
-			return
-		end
-		for k, o in ipairs(bench) do
-			local rc = rcol(o.rarity)
-			local card = UI.card(list, { sz = UDim2.new(1, 0, 0, 66), z = 7, order = order + k })
-			portrait(card, o, 52, UDim2.fromOffset(10, 7), 8)
-			text(card, o.name, { font = "heavy", size = 15, pos = UDim2.fromOffset(72, 8), sz = UDim2.new(0.3, -76, 0, 20), z = 8, truncate = true })
-			text(card, rar(o.rarity).name .. (o.title and ("  ·  " .. string.upper(o.title)) or ""), { font = "heavy", size = 12, color = rc, pos = UDim2.fromOffset(72, 32), sz = UDim2.new(0.3, -76, 0, 16), z = 8, truncate = true })
-			local t = {}
-			for _, tr in ipairs(o.traits or {}) do table.insert(t, traitLine(tr)) end
-			text(card, table.concat(t, "   "), { font = "bold", size = 13, color = C.good, pos = UDim2.new(0.3, 0, 0, 0), sz = UDim2.new(0.42, -8, 1, 0), z = 8, wrap = true })
-			local sb = UI.button(card, "green", "SEAT", function(b) seatOfficer(App, o, b) end, { pos = UDim2.new(1, -116, 0.5, 0), anchor = Vector2.new(1, 0.5), sz = UDim2.new(0.13, 0, 0, 40), z = 8, textSize = 15 })
-			local fb = UI.button(card, "red", "FIRE", function(b) fireOfficer(App, o, b) end, { pos = UDim2.new(1, -10, 0.5, 0), anchor = Vector2.new(1, 0.5), sz = UDim2.fromOffset(96, 40), z = 8, textSize = 15 })
-			hoverBtn(sb); hoverBtn(fb)
-		end
+		text(hdr, "LIMITED SLOTS", { font = "display", size = 22, color = LIMITED, pos = UDim2.fromOffset(4, 4), sz = UDim2.fromOffset(190, 28), z = 8 })
+		infoBtn(App, hdr, "LIMITED SLOTS", "Limited officers from <b>Mega VIP</b> and the <b>Limited Bundle</b> sit in their own exclusive slots. "
+			.. "They never take a normal slot, always give their bonuses and can't be fired.", UDim2.fromOffset(200, 8), 8)
+		for k, o in ipairs(ltd) do officerRow(st, o, nil, order + k) end
+	end
+	-- no limited officer yet: a slim pointer to where they come from
+	local function limitedTeaser(order)
+		local card = UI.card(list, { sz = UDim2.new(1, 0, 0, 60), z = 7, order = order })
+		stroke(card, LIMITED, 1, 0.5)
+		UI.icon(card, "icon_sparkles", 22, LIMITED, UDim2.new(0, 16, 0.5, 0), { z = 8, anchor = Vector2.new(0, 0.5) })
+		text(card, "<font color='#ff9a2e'><b>LIMITED SLOT</b></font>  Mega VIP and the Limited Bundle add an exclusive officer in their own extra slot.",
+			{ size = 14, color = C.muted, rich = true, wrap = true, pos = UDim2.fromOffset(50, 0), sz = UDim2.new(1, -200, 1, 0), z = 8 })
+		local b = UI.button(card, "manila", "SHOP", function() App.open("shop") end, { pos = UDim2.new(1, -12, 0.5, 0), anchor = Vector2.new(1, 0.5), sz = UDim2.fromOffset(130, 40), z = 8, icon = "icon_shop", textSize = 15 })
+		hoverBtn(b)
 	end
 
 	-- signature of everything the rows show, so a sync that changes nothing here does not rebuild (and break hovers)
@@ -836,6 +949,7 @@ S.officers = { build = function(host, App)
 		local parts = { slotsOf(st), tostring(st.nextSlotCost), tostring(st.name), tostring(st.lv), st.gp and st.gp.BonusOfficer and 1 or 0, st.gp and st.gp.CrateLuck and 1 or 0,
 			tostring(cab.player.weapon), tostring(cab.player.armor) }
 		for i = 1, slotsOf(st) do table.insert(parts, tostring(cab.slots[i])) end
+		table.insert(parts, "L" .. table.concat(cab.ltd, ","))
 		local ids = {}
 		for id, o in pairs(inv.officers) do table.insert(ids, id .. ":" .. tostring(o.weapon) .. ":" .. tostring(o.armor)) end
 		table.sort(ids)
@@ -850,7 +964,8 @@ S.officers = { build = function(host, App)
 	local function updateStats(st)
 		local seatedN = 0
 		for _ in pairs(seatedMap(st)) do seatedN += 1 end
-		countL.Text = seatedN .. " OF " .. slotsOf(st) .. " OFFICERS"
+		local ltdN = #ltdList(st)
+		countL.Text = seatedN .. " OF " .. slotsOf(st) .. " OFFICERS" .. (ltdN > 0 and (" +" .. ltdN .. " LTD") or "")
 		local b = bonuses(st)
 		local atk = math.floor((b.attack + b.gearAtk) * 100 + 0.5)
 		local def = math.floor((b.defense + b.gearDef) * 100 + 0.5)
@@ -871,16 +986,16 @@ S.officers = { build = function(host, App)
 			UI.clear(list)
 			obj.costBtns = {}
 			local cab, inv = cabOf(st), invOf(st)
-			local seated = seatedMap(st)
 			playerRow(st, 1)
+			limitedSection(st, 2) -- orders 2..(2 + n), normal slots start at 30
 			local free = 0
 			for i = 1, slotsOf(st) do
 				local o = cab.slots[i] and inv.officers[cab.slots[i]]
-				if o then officerRow(st, o, i, 10 + i) else free += 1 end
+				if o then officerRow(st, o, i, 30 + i) else free += 1 end
 			end
 			hireRow(st, 100, free)
 			lockedRow(st, 101)
-			benchSection(st, 200, seated)
+			if #ltdList(st) == 0 then limitedTeaser(150) end
 			updateStats(st)
 		end
 		self:Tick(st)
@@ -901,7 +1016,7 @@ S.inventory = { build = function(host, App)
 	local panel, body = header(host, App, "INVENTORY")
 	local obj = { tab = 1, rar = nil, sig = nil }
 	local sub = text(panel, "", { font = "bold", size = 14, color = C.muted, pos = UDim2.fromOffset(250, 16), sz = UDim2.new(1, -300, 0, 22), z = 7, align = Enum.TextXAlignment.Right, rich = true, truncate = true })
-	infoBtn(App, panel, "INVENTORY", "Everything you own. <b>Weapons</b> add attack and <b>armor</b> adds defense when worn by you or a seated officer. "
+	infoBtn(App, panel, "INVENTORY", "Everything you own. <b>Weapons</b> add attack and <b>armor</b> adds defense when worn by you or one of your officers. "
 		.. "Legendary and better gear rolls a bonus perk.\n\nOpen <b>crates</b> here. Tap a card for details, equip or discard.", UDim2.new(1, -36, 0, 18), 8)
 
 	local FILTERS = { "ALL", "WEAPONS", "ARMOR", "OFFICERS", "CRATES" }
@@ -937,6 +1052,38 @@ S.inventory = { build = function(host, App)
 	hoverBtn(rarBtn)
 
 	local grid = UI.list(body, { pos = UDim2.fromOffset(0, 44), sz = UDim2.new(1, 0, 1, -44), grid = UDim2.fromOffset(150, 214), gap = 10, z = 6 })
+
+	-- ELITE TROOPS strip (Founder's Crate / Starter Pack): one chip per era you own elite troops of
+	local STRIP_H = 44
+	local strip = UI.img(body, "inset", { name = "EliteStrip", pos = UDim2.fromOffset(0, 44), sz = UDim2.new(1, -12, 0, STRIP_H - 6), z = 7, visible = false })
+	stroke(strip, C.gold, 1.5, 0.3)
+	UI.icon(strip, "icon_crown", 18, C.gold, UDim2.new(0, 10, 0.5, 0), { z = 8, anchor = Vector2.new(0, 0.5) })
+	text(strip, "ELITE TROOPS", { font = "heavy", size = 14, color = C.gold, pos = UDim2.fromOffset(34, 0), sz = UDim2.new(0, 104, 1, 0), z = 8 })
+	infoBtn(App, strip, "ELITE TROOPS", "Elite troops come from the <b>Founder's Crate</b> and the <b>Starter Pack</b>. Each era has one elite unit, much stronger than its regular troops.\n\n"
+		.. "<font color='#f0c75a'><b>Elite troops never die in raids</b></font> and do not use army capacity. They always add their ATK and DEF to your power.", UDim2.new(0, 138, 0.5, -10), 9)
+	local chips = UI.list(strip, { horizontal = true, pos = UDim2.fromOffset(166, 4), sz = UDim2.new(1, -172, 1, -4), gap = 8, z = 8 })
+	chips.ScrollBarThickness = 3
+	local function eliteOf(st)
+		local out = {}
+		for k, n in pairs((st and st.elite) or {}) do
+			local era, cnt = tonumber(k), tonumber(n) or 0
+			if era and cnt > 0 and M.Elite[era] then table.insert(out, { era = era, n = cnt, u = M.Elite[era] }) end
+		end
+		table.sort(out, function(a, b) return a.era > b.era end)
+		return out
+	end
+	local function buildStrip(st, show)
+		UI.clear(chips)
+		local list = eliteOf(st)
+		show = show and #list > 0
+		strip.Visible = show
+		grid.Position = UDim2.fromOffset(0, show and 44 + STRIP_H or 44)
+		grid.Size = UDim2.new(1, 0, 1, show and -(44 + STRIP_H) or -44)
+		for i, e in ipairs(list) do
+			UI.chip(chips, "<b>" .. R.Commas(e.n) .. "x " .. e.u.name .. "</b>  <font color='#e2695f'>ATK " .. R.Short(e.u.atk) .. "</font> <font color='#7fb0e6'>DEF " .. R.Short(e.u.def) .. "</font>",
+				{ order = i, icon = "icon_military", iconColor = C.gold, rich = true, size = 13, h = 26, z = 9 })
+		end
+	end
 	local empty = text(body, "", { size = 17, color = C.dim, align = Enum.TextXAlignment.Center, pos = UDim2.new(0, 0, 0.5, 0), sz = UDim2.new(1, 0, 0, 50), z = 8, wrap = true, visible = false })
 
 	---------------------------------------------- details popups
@@ -963,9 +1110,9 @@ S.inventory = { build = function(host, App)
 		local eq = UI.button(bar, "green", "EQUIP ON...", function()
 			local s = App.state
 			local cab, inv = cabOf(s), invOf(s)
-			local seated = seatedMap(s)
+			local seated, ltd = seatedMap(s), ltdSet(s)
 			local holders = { { id = "player", name = "You", seat = 0 } }
-			for id, o in pairs(inv.officers) do table.insert(holders, { id = id, name = o.name, o = o, seat = seated[id] or 99 }) end
+			for id, o in pairs(inv.officers) do table.insert(holders, { id = id, name = o.name, o = o, seat = ltd[id] and 0.5 or seated[id] or 99 }) end
 			table.sort(holders, function(a, b) if a.seat ~= b.seat then return a.seat < b.seat end; return a.name < b.name end)
 			local _, bd2, close2 = popup(App, "EQUIP " .. string.upper(g.name) .. " ON", 600, 480)
 			local lst = UI.list(bd2, { sz = UDim2.new(1, 0, 1, -54), gap = 6, z = 74 })
@@ -975,7 +1122,7 @@ S.inventory = { build = function(host, App)
 				local row = UI.card(lst, { sz = UDim2.new(1, 0, 0, 62), z = 75, order = k, hot = hd.id == "player" })
 				if hd.id == "player" then playerPortrait(row, 48, UDim2.fromOffset(8, 7), 76) else portrait(row, hd.o, 48, UDim2.fromOffset(8, 7), 76) end
 				text(row, hd.name, { font = "heavy", size = 16, color = hd.id == "player" and C.gold or C.ink, pos = UDim2.fromOffset(66, 6), sz = UDim2.new(1, -210, 0, 20), z = 76, truncate = true })
-				local where = hd.id == "player" and "HEAD OF STATE" or (hd.seat < 99 and ("SLOT " .. hd.seat) or "BENCH (no bonus)")
+				local where = hd.id == "player" and "HEAD OF STATE" or hd.seat == 0.5 and "LIMITED SLOT" or (hd.seat < 99 and ("SLOT " .. hd.seat) or "NOT SEATED")
 				text(row, where, { font = "bold", size = 12, color = hd.o and rcol(hd.o.rarity) or C.manila, pos = UDim2.fromOffset(66, 26), sz = UDim2.new(1, -210, 0, 15), z = 76 })
 				text(row, cg and ("Now: " .. cg.name .. " (" .. gearMain(cg) .. ")") or "Now: empty", { size = 12, color = cg and rcol(cg.rarity) or C.dim, pos = UDim2.fromOffset(66, 42), sz = UDim2.new(1, -210, 0, 15), z = 76, truncate = true })
 				if cur == g.id then
@@ -1010,25 +1157,25 @@ S.inventory = { build = function(host, App)
 		local st = App.state
 		local rc = rcol(o.rarity)
 		local slot = seatedMap(st)[o.id]
+		local isLtd = ltdSet(st)[o.id] or o.limited
 		local _, bd, close = popup(App, string.upper(o.name), 560, 360)
 		local holder = mk("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(180, 180), ZIndex = 74, ClipsDescendants = true }, bd)
 		aura(holder, rc, 260, UDim2.fromScale(0.5, 0.5), 74, math.min(1, 0.2 + 0.1 * ridx(o.rarity)))
 		portrait(holder, o, 160, UDim2.fromScale(0.5, 0.5), 75, { anchor = Vector2.new(0.5, 0.5), thick = 3 })
 		local info = mk("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(196, 0), Size = UDim2.new(1, -196, 0, 190), ZIndex = 74 }, bd)
 		text(info, rar(o.rarity).name .. " OFFICER", { font = "heavy", size = 18, color = rc, sz = UDim2.new(1, 0, 0, 24), z = 75 })
-		text(info, (o.title or "") .. " · " .. (slot and ("Slot " .. slot) or "On the bench (no bonus)"), { size = 14, color = C.muted, pos = UDim2.fromOffset(0, 26), sz = UDim2.new(1, 0, 0, 18), z = 75 })
+		text(info, (o.title or "") .. " · " .. (isLtd and "Limited slot (always active)" or slot and ("Slot " .. slot) or "Not seated"), { size = 14, color = isLtd and LIMITED or C.muted, pos = UDim2.fromOffset(0, 26), sz = UDim2.new(1, 0, 0, 18), z = 75 })
 		local t = {}
 		for _, tr in ipairs(o.traits or {}) do table.insert(t, traitLine(tr)) end
 		text(info, table.concat(t, "\n"), { font = "heavy", size = 18, color = C.good, pos = UDim2.fromOffset(0, 54), sz = UDim2.new(1, 0, 0, 110), z = 75, wrap = true, valign = Enum.TextYAlignment.Top })
 		local bar = mk("Frame", { BackgroundTransparency = 1, Position = UDim2.new(0, 0, 1, -46), Size = UDim2.new(1, 0, 0, 46), ZIndex = 74 }, bd)
 		mk("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 10), SortOrder = Enum.SortOrder.LayoutOrder, HorizontalAlignment = Enum.HorizontalAlignment.Right }, bar)
 		UI.button(bar, "manila", "OFFICERS", function() close(); App.open("officers") end, { sz = UDim2.fromOffset(140, 44), z = 75, order = 1, textSize = 16 })
-		if slot then
-			UI.button(bar, "slate", "BENCH", function(b) local r = App.req("seat", { id = o.id, slot = 0 }, b); if r.ok then close() end end, { sz = UDim2.fromOffset(120, 44), z = 75, order = 2, textSize = 16 })
-		else
-			UI.button(bar, "green", "SEAT", function(b) close(); seatOfficer(App, o, b) end, { sz = UDim2.fromOffset(120, 44), z = 75, order = 2, textSize = 16 })
-		end
-		UI.button(bar, "red", "FIRE", function(b) fireOfficer(App, o, b) end, { sz = UDim2.fromOffset(110, 44), z = 75, order = 3, textSize = 16 })
+		UI.button(bar, isLtd and "locked" or "red", "FIRE", function(b)
+			if isLtd then fireOfficer(App, o, b); return end
+			close()
+			fireOfficer(App, o, b)
+		end, { sz = UDim2.fromOffset(110, 44), z = 75, order = 3, textSize = 16 })
 	end
 
 	---------------------------------------------- cards
@@ -1068,12 +1215,17 @@ S.inventory = { build = function(host, App)
 		rarityBar(c, rar(g.rarity).name, rc)
 		c.Activated:Connect(function() gearDetails(g) end)
 	end
-	local function officerCard(o, order, seated)
+	local function officerCard(o, order, seated, ltd)
 		local rc = rcol(o.rarity)
 		local c, well = card(order, rc, "OFFICER")
 		if ridx(o.rarity) >= 4 then glow(well, rc, 1.1, 8, math.min(1, 0.1 * ridx(o.rarity))) end
 		UI.img(well, portraitKey(o), { sz = UDim2.fromScale(0.86, 0.9), pos = UDim2.fromScale(0.5, 1), anchor = Vector2.new(0.5, 1), color = tintFor(o, rc), z = 10, slice = false, fit = true })
-		tagChip(well, seated[o.id] and ("SLOT " .. seated[o.id]) or "BENCH", seated[o.id] and C.good or C.muted)
+		if ltd[o.id] then
+			stroke(well, LIMITED, 2)
+			tagChip(well, "LIMITED SLOT", LIMITED)
+		else
+			tagChip(well, seated[o.id] and ("SLOT " .. seated[o.id]) or "NOT SEATED", seated[o.id] and C.good or C.muted)
+		end
 		nameLine(c, o.name)
 		local t = {}
 		for k, tr in ipairs(o.traits or {}) do if k <= 2 then table.insert(t, traitLine(tr)) end end
@@ -1095,6 +1247,13 @@ S.inventory = { build = function(host, App)
 			TweenService:Create(img, TweenInfo.new(0.9, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Rotation = 4 }):Play()
 		end
 		text(c, def.name, { font = "heavy", size = 14, align = Enum.TextXAlignment.Center, pos = UDim2.fromOffset(6, 122), sz = UDim2.new(1, -12, 0, 20), z = 9, scaled = true })
+		-- DROP RATES chip on every crate (Kash: every RNG box shows its drops and % rates)
+		local ratesChip = mk("TextButton", { Name = "Rates", Text = "% RATES", FontFace = UI.Font.heavy, TextSize = 11, TextColor3 = C.manila, BackgroundColor3 = C.slate, AutoButtonColor = false,
+			AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -8, 0, 3), Size = UDim2.fromOffset(60, 18), ZIndex = 12 }, c)
+		corner(ratesChip, 9)
+		stroke(ratesChip, C.manila, 1.2)
+		hoverScale(ratesChip, 0.1)
+		ratesChip.Activated:Connect(function() dropRates(App, kind) end)
 		if count > 0 then
 			local n = math.min(count, 10)
 			if n > 1 then
@@ -1129,18 +1288,23 @@ S.inventory = { build = function(host, App)
 		end
 		rarityBar(c, isBasic and "SUPPLY" or "LIMITED", rc)
 		c.Activated:Connect(function()
-			local body2 = isBasic and ("Mostly common gear, sometimes an officer. Bought with cash: about " .. Config.Crates.Basic.lawMinutes .. " minutes of law income at your level.")
-				or "Mostly cool gear and sometimes an officer. A 10-pack guarantees Epic or better. Buy with gold or Robux. Limited time!"
-			local _, bd, close = popup(App, def.name, 440, 230)
-			text(bd, body2, { size = 16, wrap = true, sz = UDim2.new(1, 0, 1, -54), valign = Enum.TextYAlignment.Top, z = 74 })
-			UI.button(bd, "slate", "CLOSE", close, { sz = UDim2.fromOffset(150, 42), pos = UDim2.new(0.5, 0, 1, -4), anchor = Vector2.new(0.5, 1), z = 74 })
+			local body2 = isBasic and ("Mostly gear. An officer only drops when you have an <b>open officer slot</b>. Bought with cash: about " .. Config.Crates.Basic.lawMinutes .. " minutes of law income at your level.")
+				or "Gear or <b>ELITE TROOPS</b> (never officers). Elite troops never die in raids. A 10-pack guarantees Epic or better. Buy with gold or Robux. Limited time!"
+			local _, bd, close = popup(App, def.name, 460, 250)
+			text(bd, body2, { size = 16, wrap = true, rich = true, sz = UDim2.new(1, 0, 1, -54), valign = Enum.TextYAlignment.Top, z = 74 })
+			UI.button(bd, "slate", "CLOSE", close, { sz = UDim2.fromOffset(150, 42), pos = UDim2.new(0, 0, 1, -4), anchor = Vector2.new(0, 1), z = 74 })
+			local dr = UI.button(bd, "gold", "DROP RATES", function() dropRates(App, kind) end, { sz = UDim2.fromOffset(190, 42), pos = UDim2.new(1, 0, 1, -4), anchor = Vector2.new(1, 1), z = 74, icon = "icon_gauge", textSize = 16 })
+			hoverBtn(dr)
 		end)
 	end
 
 	local function sig(st)
 		local inv, cab = invOf(st), cabOf(st)
 		local crates = st.crates or {}
-		local parts = { obj.tab, tostring(obj.rar), tostring(crates.basic), tostring(crates.limited), tostring(cab.player.weapon), tostring(cab.player.armor),
+		local el = {}
+		for k, n in pairs(st.elite or {}) do table.insert(el, tostring(k) .. "=" .. tostring(n)) end
+		table.sort(el)
+		local parts = { obj.tab, tostring(obj.rar), tostring(crates.basic), tostring(crates.limited), tostring(cab.player.weapon), tostring(cab.player.armor), table.concat(el, ","), "L" .. table.concat(cab.ltd, ","),
 			tostring(st.basicCratePrice), (st.cash or 0) >= (st.basicCratePrice or 0) and 1 or 0, (st.gold or 0) >= Config.Crates.Limited.gold and 1 or 0 }
 		for i = 1, slotsOf(st) do table.insert(parts, tostring(cab.slots[i])) end
 		local ids = {}
@@ -1166,6 +1330,7 @@ S.inventory = { build = function(host, App)
 		UI.clear(grid)
 		drop.Visible = false
 		local tab, rk = obj.tab, obj.rar
+		buildStrip(st, (tab == 1 or tab == 5) and not rk)
 		local order = 0
 		local shown = 0
 		-- crates first (only when no rarity filter)
@@ -1195,11 +1360,11 @@ S.inventory = { build = function(host, App)
 			if a.p ~= b.p then return a.p > b.p end
 			return a.n < b.n
 		end)
-		local wm, seated = wearers(st), seatedMap(st)
+		local wm, seated, ltd = wearers(st), seatedMap(st), ltdSet(st)
 		for _, it in ipairs(items) do
 			order += 1
 			shown += 1
-			if it.g then gearCard(it.g, order, wm) else officerCard(it.o, order, seated) end
+			if it.g then gearCard(it.g, order, wm) else officerCard(it.o, order, seated, ltd) end
 		end
 		empty.Visible = #items == 0 and (tab ~= 1 and tab ~= 5 or rk ~= nil)
 		if empty.Visible then
@@ -1210,5 +1375,8 @@ S.inventory = { build = function(host, App)
 	function obj:Opened() obj.sig = nil; if App.state then self:Refresh(App.state) end end
 	return obj
 end }
+
+-- install the reveal / open-crate / drop-rates hooks at start-up, so the Shop can use them before these screens are built
+S._cabinetHooks = { init = function(App) installReveal(App) end }
 
 return S

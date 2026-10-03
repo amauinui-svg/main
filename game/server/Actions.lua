@@ -628,7 +628,7 @@ function act.fire(plr, p, a)
 	local d = p.data
 	local o = type(a.id) == "string" and d.inv.officers[a.id]
 	if not o then return no("Unknown officer") end
-	if o.limited then return no("Limited officers can't be fired. Bench them instead.") end
+	if o.limited then return no("Limited officers stay in their own slot and can't be fired.") end
 	-- their gear goes back to the inventory
 	o.weapon, o.armor = nil, nil
 	local i = officerSlotIndex(d, a.id)

@@ -661,71 +661,86 @@ local function raidTarget(App, id, name, btn)
 	return res
 end
 
----------------------------------------------------------------- RAIDED popup + SPIED note (ClientMain calls App.raidedPopup / App.spiedNote)
+---------------------------------------------------------------- RAIDED + SPIED notes (ClientMain calls App.raidedPopup / App.spiedNote)
+-- Kash 2 Oct: "this popup should be smaller, it shouldn't take up your screen because players will most likely be
+-- attacked often". Both are compact cards that slide in at the top right below the HUD and never block the screen.
+local noteHost
+local function getNoteHost(App)
+	if noteHost and noteHost.Parent then return noteHost end
+	local mk = App.UI.mk
+	noteHost = mk("Frame", { Name = "Notes", BackgroundTransparency = 1, Active = false, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -14, 0, (App.TOP or 64) + 12),
+		Size = UDim2.fromOffset(340, 0), AutomaticSize = Enum.AutomaticSize.Y, ZIndex = 82 }, App.root)
+	mk("UIListLayout", { Padding = UDim.new(0, 6), HorizontalAlignment = Enum.HorizontalAlignment.Right, SortOrder = Enum.SortOrder.LayoutOrder }, noteHost)
+	return noteHost
+end
+
+local RAIDED_MAX, RAIDED_SECONDS = 3, 8
+local raidedLive = {} -- oldest first: { dismiss = fn }
 local function raidedPopup(App, n)
 	if type(n) ~= "table" then return end
 	local UI = App.UI
 	local C = UI.C
 	local mk, text = UI.mk, UI.text
-	local revengeProd = Config.Products and Config.Products.RevengeStrike
-	local price = revengeProd and revengeProd.robux or 49
-	task.spawn(function()
-		-- never cover another popup: wait (up to a minute) for the modal host to be free, else just toast
-		local waited = 0
-		while App.modalHost.Visible and waited < 60 do task.wait(0.5); waited += 0.5 end
-		local name = tostring(n.by or "Someone")
-		if App.modalHost.Visible then
-			App.toast(n.win and (string.upper(name) .. " RAIDED YOU") or ("YOU HELD OFF " .. string.upper(name)), "Open RAIDS to hit back", n.win and "bad" or "good")
-			return
-		end
-		local mh = App.modalHost
-		UI.clear(mh)
-		mh.Visible = true
-		mh.BackgroundTransparency = OVERLAY
-		local catcher = mk("TextButton", { Name = "Backdrop", Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 70 }, mh)
-		catcher.Activated:Connect(function() closeModal(App) end)
-		local W, H = math.min(500, App.W() - 32), math.min(360, App.H() - 32)
-		local panel = UI.img(mh, "panel", { button = true, name = "Raided", sz = UDim2.fromOffset(W, H), pos = UDim2.fromScale(0.5, 0.5), anchor = Vector2.new(0.5, 0.5), z = 71 })
-		local accent = n.win and C.bad or C.good
-		mk("UIStroke", { Color = accent, Thickness = 2, Transparency = 0.2 }, panel)
-		local x = UI.img(panel, "btn_slate", { button = true, name = "Close", sz = UDim2.fromOffset(34, 32), pos = UDim2.new(1, -44, 0, 10), z = 76 })
-		UI.icon(x, "icon_x", 16, C.ink, UDim2.new(0.5, 0, 0.5, -1), { z = 77, anchor = Vector2.new(0.5, 0.5) })
-		x.Activated:Connect(function() closeModal(App) end)
-		-- emblem
-		local em = mk("Frame", { BackgroundColor3 = Color3.fromHex("10141a"), BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0, 62), Size = UDim2.fromOffset(78, 78), ZIndex = 73 }, panel)
-		mk("UICorner", { CornerRadius = UDim.new(1, 0) }, em)
-		mk("UIStroke", { Color = accent, Thickness = 3 }, em)
-		UI.img(panel, "glow_soft", { color = accent, alpha = 0.5, slice = false, z = 72, anchor = Vector2.new(0.5, 0.5), pos = UDim2.new(0.5, 0, 0, 62), sz = UDim2.fromOffset(150, 150) })
-		UI.icon(em, n.win and "icon_flame" or "icon_defense", 40, accent, UDim2.fromScale(0.5, 0.5), { z = 74, anchor = Vector2.new(0.5, 0.5) })
-		text(panel, n.win and (string.upper(name) .. " RAIDED YOU") or ("YOU HELD OFF " .. string.upper(name)), { font = "display", size = 28, color = n.win and C.bad or C.good,
-			align = Enum.TextXAlignment.Center, pos = UDim2.fromOffset(20, 108), sz = UDim2.new(1, -40, 0, 34), z = 73, scaled = true, stroke = 1 })
-		local rows = mk("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 150), Size = UDim2.new(1, -40, 0, 40), ZIndex = 73 }, panel)
-		mk("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 10), SortOrder = Enum.SortOrder.LayoutOrder }, rows)
-		if n.win then
-			local _, l = rewardPill(UI, rows, "icon_cash", C.bad, "-$0", 1, 74)
-			countUp(l, 0, n.cash or 0, function(v) return "-" .. R.Money(v) end, 0.8)
-		else
-			rewardPill(UI, rows, "icon_cash", C.good, "Cash safe", 1, 74)
-		end
-		rewardPill(UI, rows, "icon_military", (n.lost or 0) > 0 and C.bad or C.muted, R.Commas(n.lost or 0) .. ((n.lost == 1) and " soldier lost" or " soldiers lost"), 2, 74)
-		text(panel, n.win and "Hit back: ATTACK them now, or use a guaranteed REVENGE STRIKE." or "Their raid failed. Teach them a lesson?",
-			{ size = 15, color = C.muted, wrap = true, align = Enum.TextXAlignment.Center, pos = UDim2.fromOffset(24, 198), sz = UDim2.new(1, -48, 0, 40), z = 73 })
-		local bar = mk("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -20), Size = UDim2.new(1, -40, 0, 50), ZIndex = 74 }, panel)
-		mk("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 12), SortOrder = Enum.SortOrder.LayoutOrder }, bar)
-		local bw = math.floor((W - 40 - 12) / 2)
-		UI.button(bar, "red", "ATTACK", function(btn)
-			if not n.byId then App.toast("They left the server", nil, "bad"); App.shake(btn.Inst); return end
-			closeModal(App)
-			App.open("battle")
-			raidTarget(App, n.byId, name, nil)
-		end, { sz = UDim2.fromOffset(bw, 50), z = 75, order = 1, icon = "icon_attack", textSize = 19 })
-		UI.button(bar, "gold", "REVENGE · " .. price .. " R$", function(btn)
-			if not n.byId then App.toast("They left the server", nil, "bad"); App.shake(btn.Inst); return end
-			local res = App.req("revengeStrike", { id = n.byId }, btn)
-			if res.ok then closeModal(App) end
-		end, { sz = UDim2.fromOffset(bw, 50), z = 75, order = 2, icon = "icon_crosshair", textSize = 16 })
-		FX.popIn(panel, 0.6, 0.34)
-	end)
+	local name = tostring(n.by or "Someone")
+	local lost = n.win -- the attacker won: you lost cash
+	local accent = lost and C.bad or C.good
+	-- at most 3 on screen: a new one replaces the oldest
+	while #raidedLive >= RAIDED_MAX do
+		local old = table.remove(raidedLive, 1)
+		old.dismiss(true)
+	end
+	local host = getNoteHost(App)
+	-- the layout positions the cell (no input); the card inside slides in from the right
+	local cell = mk("Frame", { Name = "Raided", BackgroundTransparency = 1, Active = false, Size = UDim2.fromOffset(340, 96), ZIndex = 82, LayoutOrder = math.floor(os.clock() * 10) }, host)
+	local card = UI.img(cell, "panel_plain", { name = "Card", sz = UDim2.fromScale(1, 1), pos = UDim2.fromOffset(360, 0), z = 83 })
+	mk("UIStroke", { Color = accent, Thickness = 1.5, Transparency = 0.25 }, card)
+	mk("Frame", { Name = "Accent", Size = UDim2.new(0, 5, 1, -12), Position = UDim2.fromOffset(6, 6), BackgroundColor3 = accent, BorderSizePixel = 0, ZIndex = 84 }, card)
+	local em = mk("Frame", { BackgroundColor3 = Color3.fromHex("10141a"), BorderSizePixel = 0, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 18, 0, 30), Size = UDim2.fromOffset(38, 38), ZIndex = 84 }, card)
+	mk("UICorner", { CornerRadius = UDim.new(1, 0) }, em)
+	mk("UIStroke", { Color = accent, Thickness = 2 }, em)
+	UI.icon(em, lost and "icon_flame" or "icon_defense", 22, accent, UDim2.fromScale(0.5, 0.5), { z = 85, anchor = Vector2.new(0.5, 0.5) })
+	text(card, lost and (string.upper(name) .. " RAIDED YOU") or ("YOU HELD OFF " .. string.upper(name)), { font = "display", size = 17, color = accent,
+		pos = UDim2.fromOffset(64, 8), sz = UDim2.new(1, -110, 0, 22), z = 84, truncate = true })
+	-- cash lost (counts up) and soldiers lost on one line
+	local line = text(card, "", { font = "bold", size = 14, rich = true, pos = UDim2.fromOffset(64, 32), sz = UDim2.new(1, -72, 0, 18), z = 84, truncate = true })
+	local soldiers = R.Commas(n.lost or 0) .. ((n.lost == 1) and " soldier lost" or " soldiers lost")
+	local soldiersTxt = "<font color='" .. ((n.lost or 0) > 0 and "#e2695f" or "#9a9fa6") .. "'>" .. soldiers .. "</font>"
+	if lost then
+		countUp(line, 0, n.cash or 0, function(v) return "<font color='#e2695f'>-" .. R.Money(v) .. "</font>  ·  " .. soldiersTxt end, 0.8)
+	else
+		line.Text = "<font color='#8fd07a'><b>Defended!</b> Cash safe</font>  ·  " .. soldiersTxt
+	end
+	-- auto-hide timer bar along the bottom edge
+	local track = mk("Frame", { Name = "Timer", BackgroundColor3 = C.black, BackgroundTransparency = 0.4, BorderSizePixel = 0, Position = UDim2.new(0, 14, 1, -6), Size = UDim2.new(1, -24, 0, 3), ZIndex = 84 }, card)
+	local fill = mk("Frame", { BackgroundColor3 = accent, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ZIndex = 85 }, track)
+
+	local gone = false
+	local entry = {}
+	local function dismiss(instant)
+		if gone then return end
+		gone = true
+		for i, e in ipairs(raidedLive) do if e == entry then table.remove(raidedLive, i); break end end
+		if instant then cell:Destroy(); return end
+		tw(card, 0.22, { Position = UDim2.fromOffset(360, 0) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+		task.delay(0.24, function() cell:Destroy() end)
+	end
+	entry.dismiss = dismiss
+	table.insert(raidedLive, entry)
+
+	local x = UI.img(card, "btn_slate", { button = true, name = "Close", sz = UDim2.fromOffset(28, 26), pos = UDim2.new(1, -36, 0, 8), z = 86 })
+	UI.icon(x, "icon_x", 14, C.ink, UDim2.new(0.5, 0, 0.5, -1), { z = 87, anchor = Vector2.new(0.5, 0.5) })
+	x.Activated:Connect(function() dismiss() end)
+	UI.button(card, "red", "RAID BACK", function(btn)
+		if not n.byId then App.toast("They left the server", nil, "bad"); App.shake(btn.Inst); return end
+		dismiss()
+		App.open("battle")
+		raidTarget(App, n.byId, name, nil)
+	end, { sz = UDim2.fromOffset(120, 30), pos = UDim2.new(1, -10, 1, -12), anchor = Vector2.new(1, 1), z = 86, icon = "icon_attack", textSize = 14 })
+	text(card, lost and "Hit them back!" or "Teach them a lesson?", { size = 13, color = C.muted, pos = UDim2.fromOffset(18, 62), sz = UDim2.new(1, -150, 0, 18), z = 84, truncate = true })
+
+	tw(card, 0.35, { Position = UDim2.fromOffset(0, 0) }, Enum.EasingStyle.Back)
+	tw(fill, RAIDED_SECONDS, { Size = UDim2.fromScale(0, 1) }, Enum.EasingStyle.Linear)
+	task.delay(RAIDED_SECONDS, function() dismiss() end)
 end
 
 local spiedHost
@@ -734,11 +749,8 @@ local function spiedNote(App, n)
 	local UI = App.UI
 	local C = UI.C
 	local mk, text = UI.mk, UI.text
-	if not (spiedHost and spiedHost.Parent) then
-		spiedHost = mk("Frame", { Name = "SpiedNotes", BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -14, 0, (App.TOP or 64) + 12),
-			Size = UDim2.fromOffset(330, 0), AutomaticSize = Enum.AutomaticSize.Y, ZIndex = 82 }, App.root)
-		mk("UIListLayout", { Padding = UDim.new(0, 6), HorizontalAlignment = Enum.HorizontalAlignment.Right, SortOrder = Enum.SortOrder.LayoutOrder }, spiedHost)
-	end
+	-- shares the top right notes column with the raided cards so they stack instead of overlapping
+	spiedHost = getNoteHost(App)
 	-- the layout positions the cell; the card inside is centre-anchored so it pops from its middle
 	local cell = mk("TextButton", { Name = "Spied", Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.fromOffset(330, 70), ZIndex = 82, LayoutOrder = math.floor(os.clock() * 10) }, spiedHost)
 	local card = UI.img(cell, "panel_plain", { name = "Card", sz = UDim2.fromScale(1, 1), pos = UDim2.fromScale(0.5, 0.5), anchor = Vector2.new(0.5, 0.5), z = 83 })

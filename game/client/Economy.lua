@@ -502,6 +502,108 @@ S.properties = { build = function(host, App)
 		end
 	end
 
+	---------------------------------------------------------------- WONDER (Kash 2 Oct)
+	-- Unlocked by the first era advance. Built in stages (5 per era reached), each +2% property income.
+	-- Art: wonder_era{2..8}; until those exist the card draws a gradient tile with golden rays and a big icon.
+	local WONDER_ICON = { "icon_landmark", "icon_landmark", "icon_church", "icon_castle", "icon_factory", "icon_bank", "icon_cpu", "icon_satellite" }
+	obj.wonderSeen = 0
+	local function wonderCard(st)
+		local era = R.PlayerEra(st)
+		local stage = math.max(st.wonder or 0, obj.wonderSeen or 0)
+		local locked = era < 2
+		local maxS = R.WonderMax(era)
+		local full = not locked and stage >= maxS
+		local wEra = R.WonderEra(math.max(1, stage))
+		local card = UI.card(list, { sz = UDim2.new(1, 0, 0, 196), z = 7, order = -1, hot = not locked })
+		card.Name = "Wonder"
+		local cscale = UI.mk("UIScale", {}, card)
+		-- art area: real art when it exists, otherwise a gradient tile with slowly turning golden rays and a big icon
+		local art = UI.mk("Frame", { Name = "Art", BackgroundColor3 = C.white, BorderSizePixel = 0, Position = UDim2.fromOffset(10, 10), Size = UDim2.new(0.4, -10, 1, -20), ZIndex = 8, ClipsDescendants = true }, card)
+		UI.mk("UICorner", { CornerRadius = UDim.new(0, 6) }, art)
+		UI.mk("UIGradient", { Rotation = 90, Color = locked
+			and ColorSequence.new(Color3.fromHex("2a2f36"), Color3.fromHex("0b0d10"))
+			or ColorSequence.new({ ColorSequenceKeypoint.new(0, Color3.fromHex("f6d77a")), ColorSequenceKeypoint.new(0.45, Color3.fromHex("b5762a")), ColorSequenceKeypoint.new(1, Color3.fromHex("2a1a0c")) }) }, art)
+		UI.mk("UIStroke", { Color = locked and C.rule or C.gold, Thickness = 2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, art)
+		local rays = UI.img(art, "beams", { sz = UDim2.fromScale(1.6, 1.6), pos = UDim2.fromScale(0.5, 0.62), anchor = Vector2.new(0.5, 0.5), z = 9, slice = false, fit = true,
+			color = locked and C.dim or Color3.fromHex("fff1b8"), alpha = locked and 0.85 or 0.35 })
+		UI.mk("UIAspectRatioConstraint", { AspectRatio = 1 }, rays)
+		if not locked then TweenService:Create(rays, TweenInfo.new(24, Enum.EasingStyle.Linear, Enum.EasingDirection.In, -1), { Rotation = 360 }):Play() end
+		local key = "wonder_era" .. wEra
+		if UI.asset(key) ~= "" then
+			UI.img(art, key, { sz = UDim2.fromScale(0.94, 0.94), pos = UDim2.fromScale(0.5, 0.52), anchor = Vector2.new(0.5, 0.5), z = 10, slice = false, fit = true,
+				color = locked and Color3.fromHex("101215") or nil })
+		else
+			local glow = UI.img(art, "glow_soft", { sz = UDim2.fromScale(0.9, 0.9), pos = UDim2.fromScale(0.5, 0.55), anchor = Vector2.new(0.5, 0.5), z = 10, slice = false, fit = true, color = locked and C.dim or C.gold, alpha = locked and 0.8 or 0.3 })
+			UI.mk("UIAspectRatioConstraint", { AspectRatio = 1 }, glow)
+			local ic = UI.icon(art, WONDER_ICON[wEra] or "icon_landmark", 104, locked and Color3.fromHex("15171b") or C.white, UDim2.fromScale(0.5, 0.55), { anchor = Vector2.new(0.5, 0.5), z = 11 })
+			if not locked then
+				-- soft drop shadow so the white icon reads on the bright top of the gradient
+				UI.icon(art, WONDER_ICON[wEra] or "icon_landmark", 104, Color3.fromHex("3a2410"), UDim2.new(0.5, 3, 0.55, 4), { anchor = Vector2.new(0.5, 0.5), z = 10 }).ImageTransparency = 0.45
+				local bob = UI.mk("UIScale", {}, ic)
+				TweenService:Create(bob, TweenInfo.new(1.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Scale = 1.05 }):Play()
+			end
+		end
+		if locked then
+			UI.icon(art, "icon_lock", 34, C.muted, UDim2.new(0.5, 0, 1, -12), { anchor = Vector2.new(0.5, 1), z = 12 })
+		end
+		local flash = UI.mk("Frame", { Name = "Flash", BackgroundColor3 = C.gold, BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ZIndex = 14 }, art)
+		UI.mk("UICorner", { CornerRadius = UDim.new(0, 6) }, flash)
+
+		-- info column
+		local info = UI.mk("Frame", { Name = "Info", BackgroundTransparency = 1, Position = UDim2.new(0.4, 14, 0, 10), Size = UDim2.new(0.6, -28, 1, -20), ZIndex = 8 }, card)
+		text(info, "WONDER OF YOUR NATION", { font = "heavy", size = 13, color = C.muted, sz = UDim2.new(1, 0, 0, 16), z = 9 })
+		text(info, locked and "???" or R.WonderName(math.max(1, stage)), { font = "display", size = 28, color = locked and C.dim or C.gold, pos = UDim2.fromOffset(0, 16), sz = UDim2.new(1, 0, 0, 34), z = 9, truncate = true, stroke = (not locked) and 1 or nil })
+		if locked then
+			text(info, "Advance to the " .. D.Eras[2].name .. " Era (in LAWS) to unlock your Wonder", { font = "bold", size = 16, wrap = true, valign = Enum.TextYAlignment.Top, pos = UDim2.fromOffset(0, 56), sz = UDim2.new(1, 0, 0, 44), z = 9 })
+			text(info, "Every stage adds +" .. math.floor(R.WonderPct * 100 + 0.5) .. "% property income, forever.", { size = 14, color = C.muted, pos = UDim2.fromOffset(0, 102), sz = UDim2.new(1, 0, 0, 18), z = 9, truncate = true })
+			UI.button(info, "slate", "GO TO LAWS", function() App.open("laws") end, { pos = UDim2.new(1, 0, 1, 0), anchor = Vector2.new(1, 1), sz = UDim2.fromOffset(180, 44), z = 10, textSize = 15, icon = "icon_laws" })
+			return card
+		end
+		local bar = UI.bar(info, C.gold, { pos = UDim2.fromOffset(0, 56), sz = UDim2.new(1, 0, 0, 26), z = 9, textSize = 14 })
+		bar:Set(stage / math.max(1, maxS), "STAGE " .. stage .. " / " .. maxS, "")
+		local bonus = math.floor(R.WonderBonus(stage) * 100 + 0.5)
+		text(info, "<font color='#8fd07a'><b>+" .. bonus .. "% property income</b></font>  <font color='#9a9fa6'>· +" .. math.floor(R.WonderPct * 100 + 0.5) .. "% per stage</font>", { size = 16, rich = true, pos = UDim2.fromOffset(0, 88), sz = UDim2.new(1, 0, 0, 22), z = 9, truncate = true })
+		if full then
+			text(info, "Advance to the next era to keep building", { font = "bold", size = 15, color = C.manila, wrap = true, valign = Enum.TextYAlignment.Top, pos = UDim2.fromOffset(0, 114), sz = UDim2.new(1, -190, 0, 40), z = 9 })
+			UI.button(info, "slate", "GO TO LAWS", function() App.open("laws") end, { pos = UDim2.new(1, 0, 1, 0), anchor = Vector2.new(1, 1), sz = UDim2.fromOffset(180, 44), z = 10, textSize = 15, icon = "icon_laws" })
+			return card
+		end
+		local nextK = stage + 1
+		local cost = R.WonderCost(nextK)
+		local nextName = R.WonderName(nextK)
+		local note = "Next stage <b>" .. R.Money(cost) .. "</b>"
+		if nextName ~= R.WonderName(math.max(1, stage)) or stage == 0 then note ..= "<br/><font color='#9a9fa6'>Begins the " .. nextName .. "</font>" end
+		text(info, note, { size = 15, rich = true, wrap = true, valign = Enum.TextYAlignment.Top, pos = UDim2.fromOffset(0, 114), sz = UDim2.new(1, -200, 0, 40), z = 9 })
+		local btn = UI.button(info, (st.cash or 0) >= cost and "gold" or "slate", "BUILD STAGE", function(b)
+			local res = App.req("wonderBuild", {}, b)
+			if not res.ok then return end
+			obj.wonderSeen = math.max(obj.wonderSeen or 0, tonumber(res.wonder) or nextK)
+			obj.wonderCeleb = os.clock()
+			if App.sfx then pcall(App.sfx, "build_done") end
+			-- golden burst over the art, parented to the screen so a full sync rebuilding the list cannot cut it off
+			local sc = (App.root:FindFirstChildOfClass("UIScale") or { Scale = 1 }).Scale
+			local center = (art.AbsolutePosition + art.AbsoluteSize / 2 - host.AbsolutePosition) / math.max(0.01, sc)
+			local burst = UI.img(host, "fx_burst", { sz = UDim2.fromOffset(80, 80), pos = UDim2.fromOffset(center.X, center.Y), anchor = Vector2.new(0.5, 0.5), z = 30, slice = false, fit = true, color = C.gold })
+			local ray = UI.img(host, "beams", { sz = UDim2.fromOffset(120, 120), pos = UDim2.fromOffset(center.X, center.Y), anchor = Vector2.new(0.5, 0.5), z = 29, slice = false, fit = true, color = C.gold, alpha = 0.2 })
+			tw(burst, 0.6, { Size = UDim2.fromOffset(320, 320), ImageTransparency = 1 })
+			tw(ray, 0.9, { Size = UDim2.fromOffset(380, 380), Rotation = 60, ImageTransparency = 1 })
+			task.delay(1, function() burst:Destroy(); ray:Destroy() end)
+			App.big("level")
+			App.toast(string.upper(R.WonderName(obj.wonderSeen)) .. " · STAGE " .. obj.wonderSeen, "+" .. math.floor(R.WonderBonus(obj.wonderSeen) * 100 + 0.5) .. "% property income", "gold")
+			obj:Refresh(App.state)
+		end, { pos = UDim2.new(1, 0, 1, 0), anchor = Vector2.new(1, 1), sz = UDim2.fromOffset(190, 46), z = 10, textSize = 17, icon = "icon_hammer" })
+		-- celebration right after a build: the card is rebuilt by the refresh, so the pop plays once on the new card
+		if obj.wonderCeleb and os.clock() - obj.wonderCeleb < 0.6 then
+			obj.wonderCeleb = nil
+			cscale.Scale = 1.06
+			tw(cscale, 0.45, { Scale = 1 }, Enum.EasingStyle.Back)
+			flash.BackgroundTransparency = 0.15
+			tw(flash, 0.7, { BackgroundTransparency = 1 })
+			task.defer(function() if btn.Inst.Parent then App.float(btn.Inst, "+" .. math.floor(R.WonderPct * 100 + 0.5) .. "% PROPERTY INCOME", C.gold) end end)
+		end
+		return card
+	end
+
 	local function buildList(st)
 		local counts = R.CountProps(st.lots)
 		local free = 0
@@ -564,7 +666,7 @@ S.properties = { build = function(host, App)
 		local used = 0
 		for k = 1, st.lotsMax do if st.lots[k] and st.lots[k] > 0 then used += 1 end end
 		sub.Text = "Lots <b>" .. used .. "/" .. st.lotsMax .. "</b> · Income <font color='#8fd07a'><b>" .. R.Money(st.incHr) .. "/hr</b></font>"
-		if obj.tab == 1 then lotGrid(st) else buildList(st) end
+		if obj.tab == 1 then wonderCard(st); lotGrid(st) else buildList(st) end
 		task.defer(function() list.CanvasPosition = Vector2.new(0, y) end)
 	end
 	return obj

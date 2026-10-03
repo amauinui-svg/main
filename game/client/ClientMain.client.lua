@@ -245,7 +245,7 @@ App.content = content
 local defs = {}
 local inits = {} -- modules can return entries without a build field: { init = function(App) end }
 -- later modules override earlier ones (Warfare's raids replace War's battle, Contracts replaces Economy's tasks)
-for _, modName in ipairs({ "Sound", "Map", "Economy", "War", "Social", "Warfare", "Cabinet", "Country", "Contracts", "Settings", "Shop" }) do
+for _, modName in ipairs({ "Sound", "Map", "Economy", "War", "Social", "Warfare", "Cabinet", "Country", "Contracts", "Settings", "Shop", "Tester" }) do
 	local okReq, mod = pcall(require, ClientMods:WaitForChild(modName, 5))
 	if okReq and type(mod) == "table" then
 		for k, def in pairs(mod) do
@@ -483,8 +483,9 @@ Remotes.Sync.OnClientEvent:Connect(function(kind, data)
 		App.tickClock = os.clock()
 		drawTop(); badges()
 		if not data.onboarded then
-			if not onboardShown then
+			if not onboardShown or App.reonboard then
 				onboardShown = true
+				App.reonboard = nil
 				local okO, Onboard = pcall(require, ClientMods:WaitForChild("Onboard"))
 				if okO then Onboard.show(App) else warn(Onboard) end
 			end

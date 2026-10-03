@@ -11,6 +11,7 @@ local T = require(Shared.Trade)
 local W = require(Shared.World)
 local M = require(Shared.Military)
 local Config = require(Shared.Config)
+local Events = require(Shared.Events)
 
 local Map = {}
 local OCEAN = Color3.fromRGB(24, 32, 42)
@@ -18,6 +19,8 @@ local PERK_TEXT = { law = "law cash", props = "property income", convoy = "convo
 local TIER_NAME = { "CITY", "CAPITAL", "MAJOR CAPITAL", "GLOBAL CITY" }
 local TIER_PIN = { 20, 24, 28, 32 }
 local PERK_SIZE = { 3, 5, 8, 12 }
+-- 2.5 -> "2.5", 3 -> "3", 2.75 -> "2.75"
+local function multText(m) return (string.format("%.2f", m or 1):gsub("0+$", ""):gsub("%.$", "")) end
 
 -- parse territory runs once
 local RUNS = {}
@@ -138,6 +141,17 @@ function Map.build(host, App)
 		obj.labels()
 	end
 
+	---------------------------------------------------------------- world events (Kash 2 Oct)
+	-- every 30 to 60 minutes one capital opens a 15 minute event; the first convoy you send there pays mult x profit.
+	-- A pulsing gold marker sits on the city and a chip under the era chip counts down (tap it to jump to the city).
+	local function evIcon(key) return UI.asset(key or "") ~= "" and key or "icon_gold" end
+	local evMark = mk("Frame", { Name = "WorldEvent", BackgroundTransparency = 1, Size = UDim2.fromOffset(0, 0), ZIndex = 6, Visible = false }, pinLayer)
+	local evGlow = UI.img(evMark, "glow_soft", { name = "Glow", sz = UDim2.fromOffset(84, 84), anchor = Vector2.new(0.5, 0.5), z = 6, slice = false, color = C.gold, alpha = 0.35 })
+	local evRing = UI.img(evMark, "ring", { name = "Ring", sz = UDim2.fromOffset(52, 52), anchor = Vector2.new(0.5, 0.5), z = 6, slice = false, color = C.gold })
+	local evBadge = UI.img(evMark, "circle", { name = "Badge", sz = UDim2.fromOffset(30, 30), anchor = Vector2.new(0.5, 0.5), pos = UDim2.fromOffset(24, -26), z = 9, slice = false, color = C.gold })
+	local evBadgeIcon = UI.icon(evBadge, "icon_gold", 18, C.manilaInk, UDim2.fromScale(0.5, 0.5), { anchor = Vector2.new(0.5, 0.5), z = 10 })
+	local evLabel = text(evMark, "", { font = "heavy", size = 13, color = C.gold, align = Enum.TextXAlignment.Center, anchor = Vector2.new(0.5, 1), pos = UDim2.fromOffset(0, -56), sz = UDim2.fromOffset(220, 16), z = 10, stroke = 1.6 })
+
 	---------------------------------------------------------------- convoys on the map
 	local era = function() return App.state and R.PlayerEra(App.state) or 1 end
 	local convoyIcons, routeDots = {}, {}
@@ -249,6 +263,14 @@ function Map.build(host, App)
 		if selected then
 			ring.Rotation = (os.clock() * 30) % 360
 		end
+		if evMark.Visible then
+			local k = 0.5 + 0.5 * math.sin(now * 4)
+			local s = 46 + 14 * k
+			evRing.Size = UDim2.fromOffset(s, s)
+			evRing.Rotation = (now * 50) % 360
+			evRing.ImageTransparency = 0.05 + 0.35 * k
+			evGlow.ImageTransparency = 0.2 + 0.4 * k
+		end
 	end
 	RunService.RenderStepped:Connect(function() if host.Visible then animate() end end)
 
@@ -320,6 +342,7 @@ function Map.build(host, App)
 
 	-- era + legend chip (top centre)
 	local eraChip, eraLbl = UI.chip(view, "", { pos = UDim2.new(0.5, 0, 0, 10), anchor = Vector2.new(0.5, 0), z = 20, icon = "icon_globe", h = 28, size = 15 })
+
 
 	---------------------------------------------------------------- convoy dock
 	local dock = UI.list(view, { name = "Dock", horizontal = true, pos = UDim2.new(0, 10, 1, -96), sz = UDim2.new(1, -20, 0, 92), gap = 8, z = 20 })
@@ -412,18 +435,27 @@ function Map.build(host, App)
 		local st = App.state
 		local cs = App.world and App.world.cities[b]
 		local taxPct = (cs and cs.owner and cs.owner ~= st.alliance) and (cs.tax or 0) or 0
-		return { lv = st.lv, era = R.PlayerEra(st), incHr = st.incHr, day = R.Day(math.floor(App.now())), convoyMult = st.mods.convoy, taxPct = taxPct }
+		local ctx = { lv = st.lv, era = R.PlayerEra(st), incHr = st.incHr, day = R.Day(math.floor(App.now())), convoyMult = st.mods.convoy, taxPct = taxPct }
+		-- world event: the first convoy sent to the event city pays mult x profit, so the shown prices match the server
+		local ev = Events.Active(App.now())
+		if ev and ev.city == b and st.wev ~= ev.id then ctx.event = ev end
+		return ctx
 	end
 
 	local function loadRow(order, c, ci, b, L, kind)
 		local st = App.state
 		local secs = T.TripSeconds(c.at, b, R.PlayerEra(st), st.gp and st.gp.FastConvoys)
-		local card = UI.card(plist, { sz = UDim2.new(1, 0, 0, 96), z = 27, order = order, hot = L.hot })
-		UI.icon(card, L.icon, 26, L.hot and C.gold or C.manila, UDim2.fromOffset(10, 10), { z = 28 })
+		local card = UI.card(plist, { sz = UDim2.new(1, 0, 0, 96), z = 27, order = order, hot = L.hot or L.ev ~= nil })
+		UI.icon(card, L.icon, 26, (L.hot or L.ev) and C.gold or C.manila, UDim2.fromOffset(10, 10), { z = 28 })
+		if L.ev then
+			-- event loads get a gold edge so they stand out in the list
+			mk("Frame", { Name = "EventEdge", BorderSizePixel = 0, BackgroundColor3 = C.gold, Position = UDim2.fromOffset(3, 8), Size = UDim2.new(0, 4, 1, -16), ZIndex = 28 }, card)
+		end
 		text(card, L.name, { font = "heavy", size = 17, pos = UDim2.fromOffset(44, 6), sz = UDim2.new(1, -150, 0, 20), z = 28, truncate = true })
 		local tags = {}
 		if L.demand then table.insert(tags, "<font color='#8fd07a'>WANTED +30%</font>") end
 		if L.hot then table.insert(tags, "<font color='#f0c75a'>HOT TODAY +25%</font>") end
+		if L.ev then table.insert(tags, "<font color='#f0c75a'><b>EVENT x" .. multText(Events.Window(L.ev).mult) .. "</b></font>") end
 		table.insert(tags, L.tons .. " t")
 		text(card, table.concat(tags, "  "), { font = "bold", size = 12, rich = true, color = C.muted, pos = UDim2.fromOffset(44, 26), sz = UDim2.new(1, -150, 0, 16), z = 28 })
 		local lines = string.format("Cost <b>%s</b>   Pay <b>%s</b>%s", R.Money(L.cost), R.Money(L.pay), L.tax > 0 and string.format("   Tax <font color='#e2696f'>-%s</font>", R.Money(L.tax)) or "")
@@ -648,6 +680,87 @@ function Map.build(host, App)
 		drawDock()
 	end
 
+	---------------------------------------------------------------- world event chip (map HUD)
+	local evChip = UI.card(view, { button = true, name = "EventChip", sz = UDim2.fromOffset(320, 54), pos = UDim2.new(0.5, 0, 0, 44), anchor = Vector2.new(0.5, 0), z = 20 })
+	local evChipScale = mk("UIScale", {}, evChip)
+	local evChipIconBg = UI.img(evChip, "circle", { sz = UDim2.fromOffset(36, 36), pos = UDim2.fromOffset(9, 9), z = 21, slice = false, color = C.gold })
+	local evChipIcon = UI.icon(evChipIconBg, "icon_gold", 20, C.manilaInk, UDim2.fromScale(0.5, 0.5), { anchor = Vector2.new(0.5, 0.5), z = 22 })
+	local evLine1 = text(evChip, "", { font = "heavy", size = 14, color = C.gold, pos = UDim2.fromOffset(54, 7), sz = UDim2.new(1, -62, 0, 18), z = 22, truncate = true })
+	local evLine2 = text(evChip, "", { font = "bold", size = 13, rich = true, pos = UDim2.fromOffset(54, 27), sz = UDim2.new(1, -62, 0, 18), z = 22, truncate = true })
+	evChip.MouseEnter:Connect(function() TweenService:Create(evChipScale, TweenInfo.new(0.12), { Scale = 1.04 }):Play() end)
+	evChip.MouseLeave:Connect(function() TweenService:Create(evChipScale, TweenInfo.new(0.12), { Scale = 1 }):Play() end)
+	-- keep the chip clear of the city dossier panel (right side) when it is open
+	local function layoutEventChip()
+		evChip.Position = panel.Visible and UDim2.new(0.5, -190, 0, 44) or UDim2.new(0.5, 0, 0, 44)
+	end
+	panel:GetPropertyChangedSignal("Visible"):Connect(layoutEventChip)
+	local evShown, lastEvKey -- evShown = the event the marker and chip describe
+	local function updateEvent()
+		local st = App.state
+		if not st then return end
+		local now = App.now()
+		local act = Events.Active(now)
+		local ev = act or Events.Next(now)
+		local used = act and st.wev == act.id
+		local key = (act and ("open" .. act.id) or ("next" .. ev.id)) .. ":" .. tostring(st.wev)
+		if key ~= lastEvKey then
+			local first = lastEvKey == nil
+			lastEvKey = key
+			evShown = ev
+			local city = W.Cities[ev.city]
+			evMark.Visible = act ~= nil and city ~= nil
+			if city then evMark.Position = at(city.px, city.py) end
+			evBadgeIcon.Image = UI.asset(evIcon(ev.icon)); evChipIcon.Image = UI.asset(evIcon(ev.icon))
+			evRing.ImageColor3 = used and C.muted or C.gold
+			evBadge.ImageColor3 = used and C.muted or C.gold
+			evChipIconBg.ImageColor3 = act and (used and C.muted or C.gold) or C.slate
+			evChipIcon.ImageColor3 = act and C.manilaInk or C.muted
+			evChip.Image = UI.asset(act and not used and "card_hot" or "card")
+			-- between events the chip shrinks to one quiet line
+			evChip.Size = act and UDim2.fromOffset(320, 54) or UDim2.fromOffset(240, 36)
+			evChipIconBg.Size = act and UDim2.fromOffset(36, 36) or UDim2.fromOffset(24, 24)
+			evChipIconBg.Position = UDim2.fromOffset(act and 9 or 7, act and 9 or 6)
+			evChipIcon.Size = act and UDim2.fromOffset(20, 20) or UDim2.fromOffset(14, 14)
+			evLine1.Position = UDim2.fromOffset(act and 54 or 38, act and 7 or 8)
+			evLine1.Size = UDim2.new(1, act and -62 or -46, 0, 18)
+			evLine2.Visible = act ~= nil
+			-- the event opening, closing or being claimed changes the loads' pay: redraw an open dossier
+			if not first and selected and host.Visible then drawPanel() end
+		end
+		if act then
+			local left = R.Clock(act.ends - now)
+			local cname = W.Cities[act.city] and W.Cities[act.city].name or "?"
+			evLabel.Text = string.upper(act.name) .. " x" .. multText(act.mult) .. " · " .. left
+			evLine1.Text = "WORLD EVENT: " .. act.name .. " in " .. cname
+			if used then
+				evLine1.TextColor3 = C.muted
+				evLine2.Text = "<font color='#8fd07a'>Bonus claimed</font> · ends in " .. left
+			else
+				evLine1.TextColor3 = C.gold
+				evLine2.Text = "x" .. multText(act.mult) .. " pay · " .. left .. " · <font color='#f0c75a'>SEND CONVOY</font>"
+			end
+		else
+			evLine1.TextColor3 = C.muted
+			evLine1.Text = "Next world event in " .. R.Clock(ev.starts - now)
+		end
+	end
+	evChip.Activated:Connect(function()
+		local now = App.now()
+		local act = Events.Active(now)
+		if act then
+			if App.state and App.state.wev == act.id then
+				App.toast("BONUS CLAIMED", "You already sent your event convoy. Watch for the next one!", "info")
+			else
+				App.toast(string.upper(act.name) .. " IN " .. string.upper(W.Cities[act.city].name), act.desc .. " Your first convoy there pays x" .. multText(act.mult) .. ".", "gold")
+			end
+			obj.focus(act.city)
+		else
+			local nx = Events.Next(now)
+			App.toast("NEXT WORLD EVENT IN " .. R.Clock(nx.starts - now), "For 15 minutes the first convoy you send to the event city pays big.", "info")
+		end
+	end)
+	App.on("tick", function() updateEvent() end)
+
 	---------------------------------------------------------------- refresh hooks
 	local lastConvoyKey
 	local function convoyKey(st)
@@ -664,6 +777,7 @@ function Map.build(host, App)
 		drawPanel()
 		drawPins()
 		drawTerritory()
+		updateEvent()
 	end
 	function obj:Tick() tickDock(); tickPanel() end
 	App.on("world", function()
@@ -695,6 +809,7 @@ function Map.build(host, App)
 			if px then b.Position = UDim2.new(wrapX(px) / 768, b.Position.X.Offset, b.Position.Y.Scale, b.Position.Y.Offset) end
 		end
 		if selected then local c = W.Cities[selected]; ring.Position = at(c.px, c.py) end
+		if evShown and W.Cities[evShown.city] then local c = W.Cities[evShown.city]; evMark.Position = at(c.px, c.py) end
 	end
 	place()
 	return obj
