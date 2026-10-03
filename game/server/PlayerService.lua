@@ -303,7 +303,7 @@ end
 function PS.Arrive(p, c, when, quiet)
 	local d = p.data
 	local load = c.load
-	c.at = c.to; c.to = nil; c.t0 = nil; c.t1 = nil; c.load = nil; c.empty = nil
+	c.at = c.to; c.to = nil; c.t0 = nil; c.t1 = nil; c.load = nil; c.empty = nil; c.recall = nil
 	if load then
 		local got = PS.Earn(p, load.pay - load.tax, "convoy")
 		if load.owner and load.tax > 0 then WS.Credit(load.owner, load.tax) end
@@ -324,7 +324,7 @@ function PS.Dispatch(p, c, b, load, startAt)
 	local era = R.PlayerEra(d)
 	local fast = PS.Has(p, "FastConvoys")
 	local secs = T.TripSeconds(c.at, b, era, fast)
-	c.from = c.at; c.to = b; c.t0 = startAt or now(); c.t1 = c.t0 + secs; c.load = load; c.empty = load == nil or nil
+	c.from = c.at; c.to = b; c.t0 = startAt or now(); c.t1 = c.t0 + secs; c.load = load; c.empty = load == nil or nil; c.recall = nil
 	c.kind = T.RouteKind(c.from, b)
 	if load and load.good and (not startAt or startAt >= now() - 5) then WS.TickWant(b, load.good) end -- live sends only, not offline catch-up
 	return true

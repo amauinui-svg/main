@@ -327,10 +327,38 @@ function act.move(plr, p, a)
 	if c.to then return no("That convoy is on the road") end
 	if c.at == b then return no("The convoy is already here") end
 	local fee = T.MoveFee(c.at, b, d.lv, PS.IncHr(p))
+	if b == d.home then fee = 0 end -- recalling home is free (Kash 3 Oct)
 	if d.cash < fee then return no("Not enough cash for the trip") end
 	d.cash -= fee
 	PS.Dispatch(p, c, b, nil)
 	return ok({ fee = fee })
+end
+
+-- RECALL (Kash 3 Oct): turn a travelling convoy around for free. The way back takes half the time it has
+-- already been on the road, the cargo is unloaded and its cost refunded, and it can't be recalled twice.
+A.RecallSpeed = 0.5
+function act.recall(plr, p, a)
+	local d = p.data
+	local c = getConvoy(p, a)
+	if not c or not c.to then return no("That convoy is not travelling") end
+	if c.recall then return no("That convoy is already coming back") end
+	local t = now()
+	local total = math.max(1, c.t1 - c.t0)
+	local f = math.clamp((t - c.t0) / total, 0.01, 0.99)
+	local back = math.max(3, (t - c.t0) * A.RecallSpeed)
+	local refund = 0
+	if c.load then
+		refund = math.floor(c.load.cost or 0)
+		if refund > 0 then d.cash += refund end
+		if c.load.ev and d.wev == c.load.ev then d.wev = nil end
+	end
+	-- reverse the route; t0 is set so the convoy keeps its spot on the map and heads back at the faster pace
+	c.from, c.to = c.to, c.from
+	c.t1 = t + back
+	c.t0 = c.t1 - back / f -- now sits at 1 - f along the reversed route, f still to go
+	c.load = nil; c.empty = true; c.recall = true
+	c.kind = T.RouteKind(c.from, c.to)
+	return ok({ back = back, refund = refund })
 end
 
 function A.FinishGold(c) return Config.FinishGold(c.t1 - now()) end

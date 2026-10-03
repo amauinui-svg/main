@@ -22,12 +22,18 @@ local PERK_SIZE = { 3, 5, 8, 12 }
 -- 2.5 -> "2.5", 3 -> "3", 2.75 -> "2.75"
 local function multText(m) return (string.format("%.2f", m or 1):gsub("0+$", ""):gsub("%.$", "")) end
 
--- parse territory runs once
+-- parse territory runs once (territories cover all land and follow real country borders since 3 Oct)
 local RUNS = {}
+local EDGES
 for i, c in ipairs(W.Cities) do
 	local list = {}
 	for y, x0, x1 in string.gmatch(c.runs, "(%d+),(%d+),(%d+)") do table.insert(list, { tonumber(y), tonumber(x0), tonumber(x1) }) end
 	RUNS[i] = list
+	-- border cells of the territory (Kash 3 Oct): drawn solid in the alliance colour so its borders read on the map
+	local e = {}
+	for y, x0, x1 in string.gmatch(c.edge or "", "(%d+),(%d+),(%d+)") do table.insert(e, { tonumber(y), tonumber(x0), tonumber(x1) }) end
+	EDGES = EDGES or {}
+	EDGES[i] = e
 end
 
 function Map.build(host, App)
@@ -100,6 +106,11 @@ function Map.build(host, App)
 				holder.Position = UDim2.fromScale((wrapX(W.Cities[i].px) - W.Cities[i].px) / MW, 0)
 				for _, r in ipairs(RUNS[i]) do
 					mk("Frame", { BorderSizePixel = 0, BackgroundColor3 = color, BackgroundTransparency = alpha, Position = UDim2.fromScale(r[2] / 768, r[1] / 292), Size = UDim2.fromScale((r[3] - r[2] + 1) / 768, 1 / 292), ZIndex = 4 }, holder)
+				end
+				-- solid border in the owner's colour (terrain stays visible through the tint inside)
+				local ec = color:Lerp(Color3.new(0, 0, 0), 0.2)
+				for _, r in ipairs(EDGES[i] or {}) do
+					mk("Frame", { BorderSizePixel = 0, BackgroundColor3 = ec, BackgroundTransparency = 0.08, Position = UDim2.fromScale(r[2] / 768, r[1] / 292), Size = UDim2.fromScale((r[3] - r[2] + 1) / 768, 1 / 292), ZIndex = 5 }, holder)
 				end
 			end
 		end
@@ -512,12 +523,12 @@ function Map.build(host, App)
 
 	local function moveRow(order, c, ci, b, label, icon)
 		local st = App.state
-		local fee = T.MoveFee(c.at, b, st.lv, st.incHr)
+		local fee = b == st.home and 0 or T.MoveFee(c.at, b, st.lv, st.incHr) -- recalling home is free (Kash 3 Oct)
 		local secs = T.TripSeconds(c.at, b, R.PlayerEra(st), st.gp and st.gp.FastConvoys)
 		local card = UI.card(plist, { sz = UDim2.new(1, 0, 0, 60), z = 27, order = order })
 		UI.icon(card, icon, 22, C.muted, UDim2.fromOffset(10, 10), { z = 28 })
 		text(card, label, { font = "heavy", size = 15, pos = UDim2.fromOffset(40, 6), sz = UDim2.new(1, -150, 0, 20), z = 28 })
-		text(card, "No cargo · fee " .. R.Money(fee) .. " · " .. R.Duration(secs), { size = 13, color = C.muted, pos = UDim2.fromOffset(40, 28), sz = UDim2.new(1, -150, 0, 18), z = 28 })
+		text(card, "No cargo · " .. (fee > 0 and ("fee " .. R.Money(fee)) or "free") .. " · " .. R.Duration(secs), { size = 13, color = C.muted, pos = UDim2.fromOffset(40, 28), sz = UDim2.new(1, -150, 0, 18), z = 28 })
 		UI.button(card, st.cash >= fee and "slate" or "locked", "MOVE", function(btn)
 			local res = App.req("move", { c = ci, b = b }, btn)
 			if res.ok then App.toast("CONVOY " .. ci .. " ON THE MOVE", "Empty to " .. W.Cities[b].name, "info") end
@@ -604,10 +615,19 @@ function Map.build(host, App)
 		if c then
 			if c.to then
 				local info = row(44, nx())
-				text(info, (c.load and (T.GoodName(c.load.good) .. " for " .. R.Money(c.load.pay - c.load.tax)) or "Travelling empty") .. "\n" .. W.Cities[c.from].name .. " → " .. W.Cities[c.to].name, { size = 14, sz = UDim2.fromScale(1, 1), z = 28, wrap = true })
+				text(info, (c.load and (T.GoodName(c.load.good) .. " for " .. R.Money(c.load.pay - c.load.tax)) or (c.recall and "Recalled, heading back" or "Travelling empty")) .. "\n" .. W.Cities[c.from].name .. " → " .. W.Cities[c.to].name, { size = 14, sz = UDim2.fromScale(1, 1), z = 28, wrap = true })
 				local brow = row(24, nx())
 				local bar = UI.bar(brow, C.good, { sz = UDim2.new(1, 0, 1, 0), z = 28, textSize = 13 })
 				obj.panelBars.trip = { bar = bar, c = c }
+				-- RECALL (Kash 3 Oct): free, the way back takes half the time already travelled, cargo cost refunded
+				if not c.recall then
+					local back = math.max(3, (App.now() - c.t0) * 0.5)
+					local rr = row(40, nx())
+					UI.button(rr, "slate", "RECALL TO " .. string.upper(W.Cities[c.from].name) .. " · FREE · " .. R.Duration(back), function(btn)
+						local res = App.req("recall", { c = selConvoy }, btn)
+						if res.ok then App.toast("CONVOY " .. selConvoy .. " RECALLED", "Back in " .. R.Duration(res.back or back) .. ((res.refund or 0) > 0 and (" · cargo refunded " .. R.Money(res.refund)) or ""), "info") end
+					end, { sz = UDim2.fromScale(1, 1), z = 29, textSize = 14, icon = "icon_home" })
+				end
 				local fin = row(40, nx())
 				local gold = Config.FinishGold(c.t1 - App.now())
 				UI.button(fin, st.gold >= gold and "gold" or "locked", "FINISH · " .. gold .. " GOLD", function(btn) App.req("finishGold", { c = selConvoy }, btn) end, { sz = UDim2.new(0.5, -4, 1, 0), z = 29, textSize = 14, icon = "icon_gold" })

@@ -455,3 +455,9 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 
 ## 3 Oct 10:28 (Kash)
 - New alliance perk HEADQUARTERS: +6 member slots per level, 10 levels, so up to 100 members (level 10 alliance + HQ 10). Cost 4M, x2.6 a level (about 35B for all 10). Asked for more perk ideas: suggested in chat.
+
+## 3 Oct 10:31 (Kash)
+- Territories now cover 100% of the land and follow real country borders (Natural Earth 1:50m). A country with several cities is split between them (nearest city); a country with no city joins the city nearest its centre as a whole (north Canada -> Toronto, most of Africa -> Lagos / Cairo / Nairobi / Johannesburg, Siberia -> Moscow). New map image draws country borders lightly and territory borders darker. Alliance-held territory is tinted in the alliance colour (terrain still visible) with a solid border in that colour. Generator: game/assets/mkmap2.py + countries_raster.py.
+
+## 3 Oct 10:33 (Kash)
+- Convoy RECALL: a travelling convoy can be turned around for free. The way back takes half the time it already travelled, cargo cost is refunded, one recall per trip. RECALL HOME for parked convoys is now free too.
