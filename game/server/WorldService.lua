@@ -128,7 +128,7 @@ end
 ---------------------------------------------------------------- alliances
 local function summary(a)
 	return { name = a.name, tag = a.tag, color = a.color, members = a.count or 0, level = a.level or 1, cap = WS.MemberCap(a), open = a.open ~= false, leader = a.leaderName,
-		fee = a.joinFee or 0, dues = a.dues and a.dues.pct or 0, style = a.dues and a.dues.style or "flat" }
+		fee = a.joinFee or 0, dues = a.dues and a.dues.pct or 0, style = a.dues and a.dues.style or "flat", minLv = a.minLv or 0 }
 end
 -- returns record, readOk (readOk=false means the DataStore could not be reached: do not act on a missing record)
 function WS.LoadAlliance(id)
@@ -301,6 +301,7 @@ function WS.Join(plr, id, who, maxFee, lv)
 		if a.disbanded then return nil, "That alliance has disbanded" end
 		if n >= WS.MemberCap(a) then return nil, "That alliance is full" end
 		if a.open == false then return nil, "That alliance is invite only" end
+		if (a.minLv or 0) > (lv or 1) then return nil, "That alliance needs level " .. a.minLv .. " to join" end
 		a.members[key] = { name = who or plr.Name, role = "member", joined = now(), active = now(), lv = lv, wk = 0, tot = 0 }
 		if fee > 0 then a.treasury = (a.treasury or 0) + fee end
 		charged = fee

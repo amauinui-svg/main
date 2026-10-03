@@ -924,6 +924,7 @@ function act.allyUpgrade(plr, p, a)
 	local rec2, err = WS.MutateAlliance(id, function(x)
 		local r = WS.Role(x, plr.UserId)
 		if r ~= "leader" and r ~= "officer" then return nil, "Only the leader and officers can upgrade" end
+		if r == "officer" and x.perms and x.perms.upgrade == false then return nil, "Your leader has not allowed officers to buy upgrades" end
 		local lvl = x.up[up.key] or 0
 		if lvl >= up.max then return nil, "Already at max level" end
 		local cost = WS.UpgradeCost(lvl)
@@ -973,6 +974,7 @@ function act.allyKick(plr, p, a)
 		if m.role == "leader" or (m.role == "officer" and myRole ~= "leader") or (myRole ~= "leader" and myRole ~= "officer") then
 			return nil, "You cannot remove that member"
 		end
+		if myRole == "officer" and x.perms and x.perms.kick == false then return nil, "Your leader has not allowed officers to remove members" end
 		x.members[target] = nil
 		WS.AddLog(x, m.name .. " was removed")
 		return x, true
@@ -987,6 +989,49 @@ function act.allyOpen(plr, p, a)
 	local rec2, err = WS.MutateAlliance(id, function(x)
 		if WS.Role(x, plr.UserId) ~= "leader" then return nil, "Only the leader can change this" end
 		x.open = a.open and true or false
+		return x, true
+	end)
+	if not rec2 then return no(err) end
+	return ok()
+end
+
+-- MANAGE tab (Kash 3 Oct): announcement (leader + officers), colour, minimum level and officer permissions (leader)
+function act.allyManage(plr, p, a)
+	do local cd = allyCd(p, "manage", 2); if cd then return no(cd) end end
+	local rec, id = myAlliance(p)
+	if not id then return no("You are not in an alliance") end
+	local kind = a.kind
+	local val
+	if kind == "motd" then
+		local raw = tostring(a.text or ""):sub(1, 140)
+		if raw:match("^%s*$") then val = ""
+		else
+			local okF, res = pcall(function()
+				return game:GetService("TextService"):FilterStringAsync(raw, plr.UserId):GetNonChatStringForBroadcastAsync()
+			end)
+			if not okF then return no("Could not post that right now. Try again.") end
+			val = res
+		end
+	elseif kind == "color" then
+		for _, c in ipairs(AC.Colors) do if c == a.color then val = c end end
+		if not val then return no("Pick one of the colours") end
+	elseif kind == "minLv" then
+		val = math.clamp(math.floor(tonumber(a.lv) or 0), 0, 500)
+	elseif kind == "perms" then
+		val = { upgrade = a.upgrade ~= false, kick = a.kick ~= false }
+	else return no("Unknown setting") end
+	local rec2, err = WS.MutateAlliance(id, function(x)
+		local r = WS.Role(x, plr.UserId)
+		if kind == "motd" then
+			if r ~= "leader" and r ~= "officer" then return nil, "Only the leader and officers can post announcements" end
+			x.motd = val; x.motdBy = p.data.name; x.motdT = os.time()
+			if val ~= "" then WS.AddLog(x, (p.data.name or "?") .. " posted an announcement") end
+		else
+			if r ~= "leader" then return nil, "Only the leader can change this" end
+			if kind == "color" then x.color = val; WS.AddLog(x, "Alliance colour changed")
+			elseif kind == "minLv" then x.minLv = val; WS.AddLog(x, val > 0 and ("New members need level " .. val) or "Any level can join")
+			else x.perms = val; WS.AddLog(x, "Officer permissions updated") end
+		end
 		return x, true
 	end)
 	if not rec2 then return no(err) end

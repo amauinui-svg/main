@@ -359,6 +359,14 @@ S.alliance = { build = function(host, App)
 		text(head, "TREASURY", { font = "heavy", size = 13, color = C.muted, pos = UDim2.new(0.62, 0, 0, 14), sz = UDim2.new(0.38, -16, 0, 18), z = 9, align = Enum.TextXAlignment.Right })
 		text(head, R.Money(a.treasury or 0), { font = "display", size = 30, color = C.gold, pos = UDim2.new(0.62, 0, 0, 34), sz = UDim2.new(0.38, -16, 0, 36), z = 9, align = Enum.TextXAlignment.Right })
 
+		-- announcement from the leader / officers (MANAGE tab)
+		if type(a.motd) == "string" and a.motd ~= "" then
+			local mc = UI.card(list, { sz = UDim2.new(1, 0, 0, 64), z = 8, order = 1, hot = true })
+			UI.icon(mc, "icon_alliance", 26, C.gold, UDim2.fromOffset(16, 19), { z = 9 })
+			text(mc, "ANNOUNCEMENT" .. (a.motdBy and (" · " .. tostring(a.motdBy)) or ""), { font = "heavy", size = 12, color = C.gold, pos = UDim2.fromOffset(56, 6), sz = UDim2.new(1, -72, 0, 16), z = 9, truncate = true })
+			text(mc, a.motd, { size = 15, wrap = true, pos = UDim2.fromOffset(56, 22), sz = UDim2.new(1, -72, 0, 38), z = 9, valign = Enum.TextYAlignment.Top })
+		end
+
 		-- level + XP + claim
 		if info then
 			local n = claimCount(info)
@@ -411,7 +419,7 @@ S.alliance = { build = function(host, App)
 			card.Activated:Connect(function() if App.showProfile then App.showProfile(tonumber(r.uid)) end end)
 			-- management buttons first so we know how much room the text gets
 			local btnW = 10
-			if r.uid ~= me then
+			if false and r.uid ~= me then -- member management lives in the MANAGE tab now
 				local function act(label, kind, fn)
 					btnW += 96
 					UI.button(card, kind, label, fn, { sz = UDim2.fromOffset(90, 36), pos = UDim2.new(1, -btnW, 0, 10), z = 9, textSize = 13 })
@@ -436,8 +444,54 @@ S.alliance = { build = function(host, App)
 			text(card, R.Commas(m.tot or 0) .. " XP total · " .. R.Money(m.donated or 0) .. " donated", { size = 13, color = C.muted, pos = UDim2.new(0.5, left - half, 0, 29), sz = UDim2.new(0.5, -half, 0, 18), z = 9, truncate = true })
 		end
 
+		-- perks summary (the full list is on the PERKS tab)
+		do
+			local pc = UI.card(list, { sz = UDim2.new(1, 0, 0, 60), z = 8, order = 200 })
+			UI.icon(pc, "icon_sparkles", 28, C.xp, UDim2.fromOffset(16, 16), { z = 9 })
+			text(pc, "PERKS", { font = "display", size = 19, pos = UDim2.fromOffset(60, 6), sz = UDim2.new(1, -260, 0, 24), z = 9 })
+			text(pc, "+" .. pct(info and info.bonus) .. "% law, property and convoy cash, plus city perks and upgrades", { size = 13, color = C.muted, pos = UDim2.fromOffset(60, 32), sz = UDim2.new(1, -260, 0, 18), z = 9, truncate = true })
+			UI.button(pc, "manila", "VIEW PERKS", function() obj.tab = 2; obj:Refresh(App.state) end, { sz = UDim2.fromOffset(170, 40), pos = UDim2.new(1, -184, 0, 10), z = 9, icon = "icon_sparkles", textSize = 14 })
+		end
+
+		-- activity log
+		local logs = a.log or {}
+		if #logs > 0 then
+			section(list, "ALLIANCE LOG", 300)
+			local box = UI.card(list, { sz = UDim2.new(1, 0, 0, 0), z = 8, order = 301 })
+			box.AutomaticSize = Enum.AutomaticSize.Y
+			UI.mk("UIListLayout", { Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder }, box)
+			UI.mk("UIPadding", { PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 8), PaddingLeft = UDim.new(0, 16), PaddingRight = UDim.new(0, 16) }, box)
+			for k, e in ipairs(logs) do
+				if k > 15 then break end
+				local row = UI.mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 22), ZIndex = 9, LayoutOrder = k }, box)
+				text(row, e.t and os.date("!%d %b %H:%M", e.t) or "", { size = 13, color = C.muted, sz = UDim2.fromOffset(104, 22), z = 10 })
+				text(row, e.m or "", { size = 14, pos = UDim2.fromOffset(108, 0), sz = UDim2.new(1, -108, 1, 0), z = 10, truncate = true })
+			end
+		end
+
+		-- manage
+		section(list, "LEAVE", 400)
+		local manage = UI.mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 48), ZIndex = 8, LayoutOrder = 401 }, list)
+		UI.button(manage, "red", "LEAVE ALLIANCE", function(btn)
+			App.confirm("LEAVE " .. a.name .. "?", "You will lose the alliance perks and stipend." .. (myRole == "leader" and " An officer will take over as leader." or ""), "LEAVE", "red", function()
+				App.req("allyLeave", {}, btn); obj.list = nil
+			end)
+		end, { sz = UDim2.fromOffset(200, 42), z = 9 })
+	end
+
+	---------------------------------------------------------------- PERKS (Kash 3 Oct): members see what they get, leaders and officers also spend
+	local function perks(st, a, myRole, info)
+		local list = tabList(8)
+		local manager = myRole == "leader" or myRole == "officer"
+		local officerBlocked = myRole == "officer" and a.perms and a.perms.upgrade == false
+		local top = UI.card(list, { sz = UDim2.new(1, 0, 0, 70), z = 8, order = 1 })
+		UI.icon(top, "icon_coins", 30, C.gold, UDim2.fromOffset(16, 20), { z = 9 })
+		text(top, "TREASURY", { font = "heavy", size = 13, color = C.muted, pos = UDim2.fromOffset(60, 10), sz = UDim2.fromOffset(200, 16), z = 9 })
+		text(top, R.Money(a.treasury or 0), { font = "display", size = 26, color = C.gold, pos = UDim2.fromOffset(60, 26), sz = UDim2.fromOffset(260, 34), z = 9 })
+		text(top, manager and (officerBlocked and "Your leader buys upgrades. Officers can't spend the treasury right now." or "Spend the treasury on upgrades below. Every member gets them.")
+			or "These perks are active for you right now. Donate on OVERVIEW so your leader can buy more.", { size = 14, color = C.muted, wrap = true, pos = UDim2.fromOffset(330, 0), sz = UDim2.new(1, -346, 1, 0), z = 9 })
 		-- perks: alliance level, cities, upgrades
-		section(list, "PERKS", 200, "Upgrades are paid from the treasury by the leader and officers")
+		section(list, "ACTIVE PERKS", 200, manager and "Paid from the treasury" or "Your leader buys these from the treasury")
 		if info then
 			local lc = UI.card(list, { sz = UDim2.new(1, 0, 0, 60), z = 8, order = 201 })
 			UI.icon(lc, "icon_sparkles", 28, C.xp, UDim2.fromOffset(16, 16), { z = 9 })
@@ -474,37 +528,153 @@ S.alliance = { build = function(host, App)
 				UI.button(card, "locked", "MAXED", nil, { sz = UDim2.fromOffset(196, 44), pos = UDim2.new(1, -208, 0, 14), z = 9 })
 			else
 				local cost = upCost(lvl)
-				local can = (myRole == "leader" or myRole == "officer") and (a.treasury or 0) >= cost
-				UI.button(card, can and "gold" or "locked", "UPGRADE · " .. R.Money(cost), function(btn) App.req("allyUpgrade", { key = u.key }, btn) end, { sz = UDim2.fromOffset(196, 44), pos = UDim2.new(1, -208, 0, 14), z = 9, textSize = 15 })
+				if manager and not officerBlocked then
+					local can = (a.treasury or 0) >= cost
+					UI.button(card, can and "gold" or "locked", "UPGRADE · " .. R.Money(cost), function(btn) App.req("allyUpgrade", { key = u.key }, btn) end, { sz = UDim2.fromOffset(196, 44), pos = UDim2.new(1, -208, 0, 14), z = 9, textSize = 15 })
+				else
+					-- members: what the next level gives and how close the treasury is
+					text(card, "NEXT: " .. u.desc(lvl + 1), { font = "bold", size = 13, color = C.good, pos = UDim2.new(1, -258, 0, 10), sz = UDim2.fromOffset(246, 32), z = 9, wrap = true, align = Enum.TextXAlignment.Right })
+					text(card, R.Money(a.treasury or 0) .. " / " .. R.Money(cost), { size = 13, color = C.muted, pos = UDim2.new(1, -258, 0, 44), sz = UDim2.fromOffset(246, 18), z = 9, align = Enum.TextXAlignment.Right, truncate = true })
+				end
 			end
 		end
 
-		-- activity log
-		local logs = a.log or {}
-		if #logs > 0 then
-			section(list, "ALLIANCE LOG", 300)
-			local box = UI.card(list, { sz = UDim2.new(1, 0, 0, 0), z = 8, order = 301 })
-			box.AutomaticSize = Enum.AutomaticSize.Y
-			UI.mk("UIListLayout", { Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder }, box)
-			UI.mk("UIPadding", { PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 8), PaddingLeft = UDim.new(0, 16), PaddingRight = UDim.new(0, 16) }, box)
-			for k, e in ipairs(logs) do
-				if k > 15 then break end
-				local row = UI.mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 22), ZIndex = 9, LayoutOrder = k }, box)
-				text(row, e.t and os.date("!%d %b %H:%M", e.t) or "", { size = 13, color = C.muted, sz = UDim2.fromOffset(104, 22), z = 10 })
-				text(row, e.m or "", { size = 14, pos = UDim2.fromOffset(108, 0), sz = UDim2.new(1, -108, 1, 0), z = 10, truncate = true })
-			end
+	end
+
+	---------------------------------------------------------------- MANAGE (Kash 3 Oct): leader settings; officers get announcements and members
+	local function manage(st, a, myRole)
+		local list = tabList(8)
+		local isLeader = myRole == "leader"
+		local order = 0
+		local function nextOrder() order += 1; return order end
+		local function row(h) return UI.card(list, { sz = UDim2.new(1, 0, 0, h), z = 8, order = nextOrder() }) end
+		local function label(card, title, sub)
+			text(card, title, { font = "display", size = 18, pos = UDim2.fromOffset(16, 8), sz = UDim2.new(0.45, -16, 0, 24), z = 9, truncate = true })
+			if sub then text(card, sub, { size = 13, color = C.muted, wrap = true, pos = UDim2.fromOffset(16, 34), sz = UDim2.new(0.45, -16, 0, 34), z = 9, valign = Enum.TextYAlignment.Top }) end
 		end
 
-		-- manage
-		section(list, "MANAGE", 400)
-		local manage = UI.mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 48), ZIndex = 8, LayoutOrder = 401 }, list)
-		UI.button(manage, "red", "LEAVE ALLIANCE", function(btn)
-			App.confirm("LEAVE " .. a.name .. "?", "You will lose the alliance perks and stipend." .. (myRole == "leader" and " An officer will take over as leader." or ""), "LEAVE", "red", function()
-				App.req("allyLeave", {}, btn); obj.list = nil
-			end)
-		end, { sz = UDim2.fromOffset(200, 42), z = 9 })
-		if myRole == "leader" then
-			UI.button(manage, "slate", a.open == false and "INVITE ONLY: ON" or "OPEN TO ALL", function(btn) App.req("allyOpen", { open = a.open == false }, btn) end, { sz = UDim2.fromOffset(200, 42), pos = UDim2.fromOffset(210, 0), z = 9 })
+		-- announcement
+		section(list, "ANNOUNCEMENT", nextOrder(), "Shown at the top of OVERVIEW for every member")
+		do
+			local c = row(64)
+			local box = input(UI, c, "Write a message for your alliance (140 letters)", { pos = UDim2.fromOffset(12, 11), sz = UDim2.new(1, -250, 0, 42), z = 9, text = a.motd or "" })
+			box.TextTruncate = Enum.TextTruncate.AtEnd
+			box:GetPropertyChangedSignal("Text"):Connect(function() if #box.Text > 140 then box.Text = box.Text:sub(1, 140) end end)
+			UI.button(c, "gold", "POST", function(btn)
+				local res = App.req("allyManage", { kind = "motd", text = box.Text }, btn)
+				if res.ok then App.toast("ANNOUNCEMENT POSTED", nil, "good") end
+			end, { sz = UDim2.fromOffset(110, 42), pos = UDim2.new(1, -230, 0, 11), z = 9, textSize = 15 })
+			UI.button(c, "slate", "CLEAR", function(btn) App.req("allyManage", { kind = "motd", text = "" }, btn) end, { sz = UDim2.fromOffset(100, 42), pos = UDim2.new(1, -112, 0, 11), z = 9, textSize = 14 })
+		end
+
+		if isLeader then
+			-- recruitment
+			section(list, "RECRUITMENT", nextOrder())
+			do
+				local c = row(72)
+				label(c, "WHO CAN JOIN", a.open == false and "Invite only: nobody can join from the list." or "Open: anyone who meets the level can join.")
+				UI.button(c, a.open == false and "slate" or "green", a.open == false and "INVITE ONLY" or "OPEN TO ALL", function(btn) App.req("allyOpen", { open = a.open == false }, btn) end,
+					{ sz = UDim2.fromOffset(200, 44), pos = UDim2.new(1, -214, 0, 14), z = 9, textSize = 15 })
+			end
+			do
+				local c = row(72)
+				local mn = a.minLv or 0
+				label(c, "MINIMUM LEVEL", mn > 0 and ("New members need level " .. mn .. ".") or "Any level can join.")
+				local steps = { 0, 5, 10, 15, 20, 30, 50, 75, 100 }
+				local idx = 1
+				for k, v in ipairs(steps) do if v <= mn then idx = k end end
+				UI.button(c, "slate", "-", function(btn) App.req("allyManage", { kind = "minLv", lv = steps[math.max(1, idx - 1)] }, btn) end, { sz = UDim2.fromOffset(44, 44), pos = UDim2.new(1, -214, 0, 14), z = 9, textSize = 20 })
+				text(c, mn > 0 and ("LV " .. mn) or "ANY", { font = "display", size = 20, align = Enum.TextXAlignment.Center, pos = UDim2.new(1, -166, 0, 14), sz = UDim2.fromOffset(104, 44), z = 9 })
+				UI.button(c, "slate", "+", function(btn) App.req("allyManage", { kind = "minLv", lv = steps[math.min(#steps, idx + 1)] }, btn) end, { sz = UDim2.fromOffset(44, 44), pos = UDim2.new(1, -58, 0, 14), z = 9, textSize = 20 })
+			end
+			-- fees and dues (once a day)
+			section(list, "JOIN FEE AND DUES", nextOrder(), "Can change once a day · paid into the treasury")
+			do
+				local c = row(150)
+				obj.fee = obj.fee or { fee = a.joinFee or 0, pct = (a.dues and a.dues.pct) or 0, style = (a.dues and a.dues.style) or "flat" }
+				local f = obj.fee
+				text(c, "JOIN FEE", { font = "heavy", size = 13, color = C.muted, pos = UDim2.fromOffset(16, 10), sz = UDim2.fromOffset(120, 18), z = 9 })
+				local fees = { 0, 10e3, 100e3, 1e6, 10e6, 100e6, 1e9 }
+				for k, v in ipairs(fees) do
+					UI.button(c, f.fee == v and "gold" or "slate", v == 0 and "FREE" or R.Money(v), function() f.fee = v; obj:Refresh(App.state) end,
+						{ sz = UDim2.new(1 / #fees, -6, 0, 34), pos = UDim2.new((k - 1) / #fees, 12, 0, 30), z = 9, textSize = 13 })
+				end
+				text(c, "DUES (share of members' earnings)", { font = "heavy", size = 13, color = C.muted, pos = UDim2.fromOffset(16, 74), sz = UDim2.fromOffset(300, 18), z = 9 })
+				UI.button(c, "slate", "-", function() f.pct = math.max(0, f.pct - 1); obj:Refresh(App.state) end, { sz = UDim2.fromOffset(40, 40), pos = UDim2.fromOffset(12, 96), z = 9, textSize = 20 })
+				text(c, f.pct .. "%", { font = "display", size = 20, align = Enum.TextXAlignment.Center, pos = UDim2.fromOffset(56, 96), sz = UDim2.fromOffset(70, 40), z = 9 })
+				UI.button(c, "slate", "+", function() f.pct = math.min(AC.DuesMax or 10, f.pct + 1); obj:Refresh(App.state) end, { sz = UDim2.fromOffset(40, 40), pos = UDim2.fromOffset(130, 96), z = 9, textSize = 20 })
+				local styles = { { "flat", "SAME FOR ALL" }, { "prog", "HIGH LEVELS PAY MORE" }, { "regr", "LOW LEVELS PAY MORE" } }
+				for k, sdef in ipairs(styles) do
+					UI.button(c, f.style == sdef[1] and "manila" or "slate", sdef[2], function() f.style = sdef[1]; obj:Refresh(App.state) end,
+						{ sz = UDim2.fromOffset(170, 40), pos = UDim2.fromOffset(186 + (k - 1) * 176, 96), z = 9, textSize = 12 })
+				end
+				UI.button(c, "gold", "SAVE", function(btn)
+					local res = App.req("allySettings", { fee = f.fee, pct = f.pct, style = f.style }, btn)
+					if res.ok then App.toast("FEES AND DUES SAVED", nil, "good") end
+				end, { sz = UDim2.fromOffset(120, 40), pos = UDim2.new(1, -132, 0, 96), z = 9, textSize = 15 })
+			end
+			-- colour
+			section(list, "ALLIANCE COLOUR", nextOrder(), "Your cities and tag on the world map")
+			do
+				local c = row(64)
+				for k, col in ipairs(AC.Colors) do
+					local sw = UI.mk("TextButton", { Text = "", AutoButtonColor = true, BackgroundColor3 = Color3.fromHex(col), BorderSizePixel = 0, Position = UDim2.fromOffset(16 + (k - 1) * 52, 12), Size = UDim2.fromOffset(40, 40), ZIndex = 9 }, c)
+					UI.mk("UICorner", { CornerRadius = UDim.new(0, 8) }, sw)
+					if (a.color or "") == col then UI.mk("UIStroke", { Color = C.white, Thickness = 3, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, sw) end
+					sw.Activated:Connect(function() App.req("allyManage", { kind = "color", color = col }) end)
+				end
+			end
+			-- officer permissions
+			section(list, "OFFICER PERMISSIONS", nextOrder())
+			do
+				local perms = a.perms or {}
+				local function toggle(title, sub, key)
+					local c = row(72)
+					label(c, title, sub)
+					local on = perms[key] ~= false
+					UI.button(c, on and "green" or "slate", on and "ALLOWED" or "NOT ALLOWED", function(btn)
+						local nextP = { upgrade = perms.upgrade ~= false, kick = perms.kick ~= false }
+						nextP[key] = not on
+						App.req("allyManage", { kind = "perms", upgrade = nextP.upgrade, kick = nextP.kick }, btn)
+					end, { sz = UDim2.fromOffset(200, 44), pos = UDim2.new(1, -214, 0, 14), z = 9, textSize = 14 })
+				end
+				toggle("BUY UPGRADES", "Officers can spend the treasury on PERKS upgrades.", "upgrade")
+				toggle("REMOVE MEMBERS", "Officers can remove members (never other officers).", "kick")
+			end
+		else
+			local c = row(64)
+			UI.icon(c, "icon_crown", 26, C.gold, UDim2.fromOffset(16, 19), { z = 9 })
+			text(c, "Recruitment, fees, colour and officer permissions are set by your leader, " .. tostring(a.leaderName or "?") .. ".", { size = 14, color = C.muted, wrap = true, pos = UDim2.fromOffset(56, 0), sz = UDim2.new(1, -72, 1, 0), z = 9 })
+		end
+
+		-- members
+		section(list, "MEMBERS", nextOrder(), isLeader and "Promote, demote, remove or hand over leadership" or "You can remove members")
+		local rows = {}
+		for uid, m in pairs(a.members or {}) do table.insert(rows, { uid = uid, m = m }) end
+		local rank = { leader = 1, officer = 2, member = 3 }
+		table.sort(rows, function(x, y) return (rank[x.m.role] or 4) < (rank[y.m.role] or 4) end)
+		local canKick = isLeader or not (a.perms and a.perms.kick == false)
+		for _, r in ipairs(rows) do
+			local m = r.m
+			local card = row(56)
+			local btnW = 10
+			if r.uid ~= me then
+				local function act(lbl, kind, fn)
+					btnW += 116
+					UI.button(card, kind, lbl, fn, { sz = UDim2.fromOffset(110, 36), pos = UDim2.new(1, -btnW, 0, 10), z = 9, textSize = 13 })
+				end
+				if isLeader then
+					act("REMOVE", "red", function(btn) App.confirm("REMOVE " .. (m.name or "?") .. "?", "They leave the alliance right away.", "REMOVE", "red", function() App.req("allyKick", { uid = r.uid }, btn) end) end)
+					if m.role == "member" then act("PROMOTE", "slate", function(btn) App.req("allyRole", { uid = r.uid, role = "officer" }, btn) end)
+					else act("DEMOTE", "slate", function(btn) App.req("allyRole", { uid = r.uid, role = "member" }, btn) end) end
+					act("MAKE LEADER", "gold", function(btn) App.confirm("HAND OVER LEADERSHIP?", (m.name or "?") .. " becomes leader and you become an officer.", "HAND OVER", "gold", function() App.req("allyRole", { uid = r.uid, role = "leader" }, btn) end) end)
+				elseif m.role == "member" and canKick then
+					act("REMOVE", "red", function(btn) App.confirm("REMOVE " .. (m.name or "?") .. "?", "They leave the alliance right away.", "REMOVE", "red", function() App.req("allyKick", { uid = r.uid }, btn) end) end)
+				end
+			end
+			UI.icon(card, m.role == "leader" and "icon_crown" or (m.role == "officer" and "icon_defense" or "icon_users"), 22, m.role == "leader" and C.gold or C.manila, UDim2.fromOffset(14, 17), { z = 9 })
+			text(card, (m.name or "?") .. (r.uid == me and " (you)" or ""), { font = "heavy", size = 16, pos = UDim2.fromOffset(46, 7), sz = UDim2.new(1, -46 - btnW, 0, 22), z = 9, truncate = true })
+			text(card, string.upper(m.role or "member") .. (m.lv and (" · LV " .. m.lv) or ""), { size = 13, color = C.muted, pos = UDim2.fromOffset(46, 29), sz = UDim2.new(1, -46 - btnW, 0, 18), z = 9, truncate = true })
 		end
 	end
 
@@ -614,17 +784,23 @@ S.alliance = { build = function(host, App)
 		local myRole = a.members[me] and a.members[me].role
 		local info = st.allyInfo
 		sub.Text = "[" .. a.tag .. "] " .. a.name .. (info and (" · level " .. (info.level or 1)) or "")
-		obj.tabs = UI.tabs(area, { "OVERVIEW", "CITIES", "QUESTS", "WAR" }, function(i) obj.tab = i; obj:Refresh(App.state) end, { w = 130, z = 8 })
-		if obj.tab > 4 then obj.tab = 1 end
+		-- MANAGE only for the leader and officers (Kash 3 Oct)
+		local manager = myRole == "leader" or myRole == "officer"
+		local names = { "OVERVIEW", "PERKS", "CITIES", "QUESTS", "WAR" }
+		if manager then table.insert(names, "MANAGE") end
+		obj.tabs = UI.tabs(area, names, function(i) obj.tab = i; obj.fee = nil; obj:Refresh(App.state) end, { w = 124, z = 8 })
+		if obj.tab > #names then obj.tab = 1 end
 		obj.tabs:Set(obj.tab)
 		local n = claimCount(info)
 		if n > 0 then obj.tabs:Label(1, "OVERVIEW (" .. n .. ")") end
 		local qn = info and type(info.claim) == "table" and type(info.claim.quests) == "table" and #info.claim.quests or 0
-		if qn > 0 then obj.tabs:Label(3, "QUESTS (" .. qn .. ")") end
+		if qn > 0 then obj.tabs:Label(4, "QUESTS (" .. qn .. ")") end
 		if obj.tab == 1 then overview(st, a, myRole, info)
-		elseif obj.tab == 2 then cities(st, a)
-		elseif obj.tab == 3 then quests(st, a, info)
-		else war() end
+		elseif obj.tab == 2 then perks(st, a, myRole, info)
+		elseif obj.tab == 3 then cities(st, a)
+		elseif obj.tab == 4 then quests(st, a, info)
+		elseif obj.tab == 5 then war()
+		else manage(st, a, myRole) end
 	end
 	function obj:Tick()
 		if obj.timer and obj.timer.Parent and obj.weekEnds then obj.timer.Text = "NEW QUESTS IN " .. timeLeft(obj.weekEnds - App.now()) end

@@ -417,3 +417,14 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 
 ## 3 Oct 08:57 (Kash)
 - PASS LAWS thumbnail has very high CTR: make more in that style, plus a better convoy thumbnail with a map, in Google Flow.
+
+## 3 Oct 09:00 (Kash)
+- Alliance leaders need a MANAGE tab with lots of settings; perks need their own tab, and members and leaders see different things.
+  - New tabs: OVERVIEW · PERKS · CITIES · QUESTS · WAR · MANAGE (MANAGE only for leader and officers).
+  - PERKS: treasury, alliance level bonus, city perks, upgrades. Leaders/officers get UPGRADE buttons; members see what the next level gives and how close the treasury is. Overview keeps a one-line perks summary with VIEW PERKS.
+  - MANAGE (leader): announcement (filtered, shown at the top of OVERVIEW), open / invite only, minimum level to join (enforced on join), join fee and dues with style (once a day, the server rule already existed but had no buttons), alliance colour, officer permissions (buy upgrades, remove members, enforced on the server), member management (promote, demote, remove, make leader, moved out of OVERVIEW). Officers get the announcement and can remove members if allowed.
+- Thumbnails are for the game, not with his avatar; competitor style. Never use his Roblox avatar.
+
+## 3 Oct 09:03 (Kash)
+- Asked whether the group reward still works if the game isn't owned by the group: yes, it checks membership of the configured group, ownership doesn't matter.
+- Nano Banana Pro hit its usage limit: switched Flow to Nano Banana 2.
