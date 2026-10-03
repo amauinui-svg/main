@@ -54,21 +54,26 @@ S._tutorial = { init = function(App)
 		spot = {}
 	end
 	local function findTarget(S1)
-		if S1.tab then
-			local nb = App.navButtons and App.navButtons[S1.tab]
+		local tab, find = S1.tab, S1.find
+		-- cannot afford the step yet: point at LAWS (where the cash comes from), then at a PASS button there
+		if S1.alt and App.state and S1.alt(App.state) then
+			if App.current == "laws" then find = "pass" else tab = "laws" end
+		end
+		if tab then
+			local nb = App.navButtons and App.navButtons[tab]
 			return nb and nb.Inst.Visible and nb.Inst or nil
 		end
 		local scr
-		if S1.find == "pass" then scr = App.screens and App.screens.laws
-		elseif S1.find == "lot" then scr = App.screens and App.screens.properties end
+		if find == "pass" then scr = App.screens and App.screens.laws
+		elseif find == "lot" then scr = App.screens and App.screens.properties end
 		if not scr or not scr.host or not scr.host.Visible then return nil end
-		local want = S1.find == "pass" and "PASS" or "FOR SALE"
+		local want = find == "pass" and "PASS" or "FOR SALE"
 		-- on the building list, point at the cheapest BUILD button instead of the lots
 		local function onScreen(b)
 			local sf = b:FindFirstAncestorWhichIsA("ScrollingFrame")
 			return not sf or (b.AbsolutePosition.Y >= sf.AbsolutePosition.Y and b.AbsolutePosition.Y + b.AbsoluteSize.Y <= sf.AbsolutePosition.Y + sf.AbsoluteSize.Y)
 		end
-		if S1.find == "lot" then
+		if find == "lot" then
 			local best, bestCost
 			for _, d in ipairs(scr.host:GetDescendants()) do
 				if d:IsA("TextLabel") and d.Visible and d.Text:sub(1, 7) == "BUILD $" then

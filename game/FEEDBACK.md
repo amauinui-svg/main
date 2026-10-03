@@ -360,3 +360,7 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 
 ## 3 Oct 00:36 (Kash)
 - 2x convoy speed pass at R$499, shown where the convoys are (like Auto Dispatch). Reused the existing 2x pass (id 2005160720), renamed "2x Convoy Speed", R$499. Convoy dock now shows a 2X CONVOY SPEED buy button (or 2X SPEED ACTIVE when owned) and an AUTO DISPATCH buy button when not owned.
+
+## 3 Oct 00:37 (Kash)
+- Level 3 was too hard to reach: first levels are gentler (level 2 needs 1.4 Influence bars of XP, level 3 needs 2.2, normal climb from level 4).
+- Army training (MILITARY) and attacking other players (RAIDS) now unlock at level 3, together with the shop. AI nations still leave players alone until level 5.

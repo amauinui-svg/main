@@ -981,8 +981,9 @@ C.PopularMinPlayers = 30
 
 -- Tabs unlock by level (Kash 2 Oct): new players see only WORLD and LAWS, the rest open up as they level.
 -- 2 Oct 23:38: lowered so every tab is open by level 9
-C.NavUnlock = { map = 1, laws = 1, properties = 2, shop = 3, country = 3, tasks = 4, military = 4, inventory = 5, bank = 5,
-	battle = 6, bosses = 7, rankings = 8, alliance = 9 }
+-- 3 Oct 00:37 (Kash): army training and attacking other players arrive together with the shop, at level 3
+C.NavUnlock = { map = 1, laws = 1, properties = 2, shop = 3, country = 3, military = 3, battle = 3, tasks = 4, inventory = 5, bank = 5,
+	bosses = 7, rankings = 8, alliance = 9 }
 
 -- BADGES (Kash 2 Oct): one easy welcome badge, the rest are very hard goals. id 0 = not created yet (skipped).
 C.Badges = {
@@ -1227,7 +1228,9 @@ function R.BestCashPerInfluence(lv)
 	return best
 end
 function R.XpReq(lv)
-	local mult = lv == 1 and R.XpFirst or math.min(R.XpCap, R.XpBase + R.XpStep * (lv - 2))
+	-- 3 Oct 00:37 (Kash: level 3 was too hard to reach): gentle first levels, then the normal climb from level 4
+	local early = { [1] = R.XpFirst, [2] = 1.4, [3] = 2.2 }
+	local mult = early[lv] or math.min(R.XpCap, R.XpBase + R.XpStep * (lv - 2))
 	return math.floor(R.BestXpPerInfluence(lv) * R.MaxInfluence(lv) * mult + 0.5)
 end
 -- Value of one minute of Influence regen at this level: the yardstick convoys, battles and bosses pay against,
@@ -16101,21 +16104,26 @@ S._tutorial = { init = function(App)
 		spot = {}
 	end
 	local function findTarget(S1)
-		if S1.tab then
-			local nb = App.navButtons and App.navButtons[S1.tab]
+		local tab, find = S1.tab, S1.find
+		-- cannot afford the step yet: point at LAWS (where the cash comes from), then at a PASS button there
+		if S1.alt and App.state and S1.alt(App.state) then
+			if App.current == "laws" then find = "pass" else tab = "laws" end
+		end
+		if tab then
+			local nb = App.navButtons and App.navButtons[tab]
 			return nb and nb.Inst.Visible and nb.Inst or nil
 		end
 		local scr
-		if S1.find == "pass" then scr = App.screens and App.screens.laws
-		elseif S1.find == "lot" then scr = App.screens and App.screens.properties end
+		if find == "pass" then scr = App.screens and App.screens.laws
+		elseif find == "lot" then scr = App.screens and App.screens.properties end
 		if not scr or not scr.host or not scr.host.Visible then return nil end
-		local want = S1.find == "pass" and "PASS" or "FOR SALE"
+		local want = find == "pass" and "PASS" or "FOR SALE"
 		-- on the building list, point at the cheapest BUILD button instead of the lots
 		local function onScreen(b)
 			local sf = b:FindFirstAncestorWhichIsA("ScrollingFrame")
 			return not sf or (b.AbsolutePosition.Y >= sf.AbsolutePosition.Y and b.AbsolutePosition.Y + b.AbsoluteSize.Y <= sf.AbsolutePosition.Y + sf.AbsoluteSize.Y)
 		end
-		if S1.find == "lot" then
+		if find == "lot" then
 			local best, bestCost
 			for _, d in ipairs(scr.host:GetDescendants()) do
 				if d:IsA("TextLabel") and d.Visible and d.Text:sub(1, 7) == "BUILD $" then

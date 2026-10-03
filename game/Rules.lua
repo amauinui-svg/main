@@ -85,7 +85,9 @@ function R.BestCashPerInfluence(lv)
 	return best
 end
 function R.XpReq(lv)
-	local mult = lv == 1 and R.XpFirst or math.min(R.XpCap, R.XpBase + R.XpStep * (lv - 2))
+	-- 3 Oct 00:37 (Kash: level 3 was too hard to reach): gentle first levels, then the normal climb from level 4
+	local early = { [1] = R.XpFirst, [2] = 1.4, [3] = 2.2 }
+	local mult = early[lv] or math.min(R.XpCap, R.XpBase + R.XpStep * (lv - 2))
 	return math.floor(R.BestXpPerInfluence(lv) * R.MaxInfluence(lv) * mult + 0.5)
 end
 -- Value of one minute of Influence regen at this level: the yardstick convoys, battles and bosses pay against,
