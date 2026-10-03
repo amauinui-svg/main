@@ -287,6 +287,12 @@ local function setCompact(on)
 	top.compact = on
 	idSlot.Visible = on
 	local fs = top.flagHost:FindFirstChildOfClass("UIScale") or mk("UIScale", {}, top.flagHost)
+	-- phones: bigger numbers in the energy bars and timers so they stay readable after the HUD scale
+	local function barText(bar, size)
+		for _, t in ipairs(bar.Inst:GetChildren()) do if t:IsA("TextLabel") then t.TextSize = size end end
+	end
+	barText(top.inf, on and 18 or 14); barText(top.sup, on and 18 or 14); barText(top.xp, on and 15 or 13)
+	top.infT.TextSize = on and 14 or 12; top.supT.TextSize = on and 14 or 12
 	if on then
 		top.id.Parent = idSlot
 		scaleOf(top.id).Scale = 1
