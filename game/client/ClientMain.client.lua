@@ -483,17 +483,21 @@ Remotes.Sync.OnClientEvent:Connect(function(kind, data)
 		App.tickClock = os.clock()
 		drawTop(); badges()
 		if not data.onboarded then
-			if not onboardShown or App.reonboard then
+			-- shown on first join, and again after the tester panel's /reset (App.onboarding guards repeats)
+			if not onboardShown or not App.onboarding then
 				onboardShown = true
+				App.onboarding = true
 				App.reonboard = nil
 				local okO, Onboard = pcall(require, ClientMods:WaitForChild("Onboard"))
 				if okO then Onboard.show(App) else warn(Onboard) end
 			end
 		elseif not App.current then
+			App.onboarding = nil
 			App.open("map")
 			runInits()
 			if data.loginReady and App.showLogin then task.delay(1.5, function() pcall(App.showLogin) end) end
 		else
+			App.onboarding = nil
 			refreshCurrent()
 		end
 		App.emit("full", data)
