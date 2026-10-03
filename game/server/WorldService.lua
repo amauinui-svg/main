@@ -516,7 +516,12 @@ function WS.Attack(i, aid, dmg, plrName)
 	publish("c", i)
 	if result.captured then
 		local cityName = World.Cities[i].name
-		if result.winner then WS.MutateAlliance(result.winner, function(x) addLog(x, "Captured " .. cityName .. "!"); return x, true end) end
+		if result.winner then WS.MutateAlliance(result.winner, function(x)
+			addLog(x, "Captured " .. cityName .. "!")
+			-- target taken: clear it so the leader picks the next one (Kash 3 Oct alliance target)
+			if type(x.target) == "table" and x.target.city == i then x.target = nil; addLog(x, "Target " .. cityName .. " taken!") end
+			return x, true
+		end) end
 		if result.prevOwner then WS.MutateAlliance(result.prevOwner, function(x) addLog(x, "Lost " .. cityName); return x, true end) end
 		backupCities()
 	end

@@ -152,6 +152,25 @@ function Map.build(host, App)
 	local evBadgeIcon = UI.icon(evBadge, "icon_gold", 18, C.manilaInk, UDim2.fromScale(0.5, 0.5), { anchor = Vector2.new(0.5, 0.5), z = 10 })
 	local evLabel = text(evMark, "", { font = "heavy", size = 13, color = C.gold, align = Enum.TextXAlignment.Center, anchor = Vector2.new(0.5, 1), pos = UDim2.fromOffset(0, -56), sz = UDim2.fromOffset(220, 16), z = 10, stroke = 1.6 })
 
+	-- alliance target capital (Kash 3 Oct): a red pulsing ring with a crosshair badge on the city your alliance is attacking
+	local tgMark = mk("Frame", { Name = "AllyTarget", BackgroundTransparency = 1, Size = UDim2.fromOffset(0, 0), ZIndex = 6, Visible = false }, pinLayer)
+	local tgRing = UI.img(tgMark, "ring", { name = "Ring", sz = UDim2.fromOffset(54, 54), anchor = Vector2.new(0.5, 0.5), z = 6, slice = false, color = C.bad })
+	local tgBadge = UI.img(tgMark, "circle", { name = "Badge", sz = UDim2.fromOffset(28, 28), anchor = Vector2.new(0.5, 0.5), pos = UDim2.fromOffset(-24, -26), z = 9, slice = false, color = C.bad })
+	UI.icon(tgBadge, "icon_battle", 16, C.white, UDim2.fromScale(0.5, 0.5), { anchor = Vector2.new(0.5, 0.5), z = 10 })
+	local tgLabel = text(tgMark, "ALLIANCE TARGET", { font = "heavy", size = 12, color = C.bad, align = Enum.TextXAlignment.Center, anchor = Vector2.new(0.5, 1), pos = UDim2.fromOffset(0, -42), sz = UDim2.fromOffset(200, 15), z = 10, stroke = 1.6 })
+	local tgCity
+	local function allyTarget()
+		local st = App.state
+		local rec = st and st.alliance and st.alliance_rec
+		local tg = rec and type(rec.target) == "table" and rec.target
+		return tg and W.Cities[tg.city] and tg.city or nil
+	end
+	local function drawTarget()
+		tgCity = allyTarget()
+		tgMark.Visible = tgCity ~= nil
+		if tgCity then local c = W.Cities[tgCity]; tgMark.Position = at(c.px, c.py) end
+	end
+
 	---------------------------------------------------------------- convoys on the map
 	local era = function() return App.state and R.PlayerEra(App.state) or 1 end
 	local convoyIcons, routeDots = {}, {}
@@ -262,6 +281,13 @@ function Map.build(host, App)
 		end
 		if selected then
 			ring.Rotation = (os.clock() * 30) % 360
+		end
+		if tgMark.Visible then
+			local k = 0.5 + 0.5 * math.sin(now * 3)
+			local s = 48 + 12 * k
+			tgRing.Size = UDim2.fromOffset(s, s)
+			tgRing.Rotation = -(now * 40) % 360
+			tgRing.ImageTransparency = 0.05 + 0.3 * k
 		end
 		if evMark.Visible then
 			local k = 0.5 + 0.5 * math.sin(now * 4)
@@ -657,6 +683,20 @@ function Map.build(host, App)
 			UI.button(war, protected and "locked" or "red", "MAX", function(btn) local r = App.req("siege", { city = b, n = 50 }, btn); if r.ok then App.float(btn.Inst, "-" .. R.Short(r.dmg), C.bad) end end, { sz = UDim2.new(0.25, -4, 1, 0), pos = UDim2.new(0.75, 4, 0, 0), z = 29, textSize = 14 })
 			local note = row(34, nx())
 			text(note, "1 Supply per hit. Break the garrison to capture the city!", { size = 12, color = C.muted, sz = UDim2.fromScale(1, 1), z = 28, wrap = true })
+			-- alliance target (Kash 3 Oct): leader and officers mark the city every member should attack
+			local rec = st.alliance_rec
+			local me = rec and rec.members and rec.members[tostring(game:GetService("Players").LocalPlayer.UserId)]
+			local isTarget = allyTarget() == b
+			if me and (me.role == "leader" or me.role == "officer") then
+				local tr = row(40, nx())
+				UI.button(tr, isTarget and "slate" or "red", isTarget and "CLEAR ALLIANCE TARGET" or "SET AS ALLIANCE TARGET", function(btn)
+					local r = App.req("allyManage", { kind = "target", city = isTarget and 0 or b }, btn)
+					if r.ok then App.toast(isTarget and "ALLIANCE TARGET CLEARED" or ("ALLIANCE TARGET: " .. string.upper(city.name)), not isTarget and "Every member sees it on the map and the alliance screen" or nil, "good") end
+				end, { sz = UDim2.fromScale(1, 1), z = 29, textSize = 14, icon = "icon_battle" })
+			elseif isTarget then
+				local tr = row(22, nx())
+				text(tr, "YOUR ALLIANCE IS ATTACKING THIS CITY", { font = "heavy", size = 13, color = C.bad, sz = UDim2.fromScale(1, 1), z = 28, truncate = true })
+			end
 		end
 
 		if b ~= st.home then
@@ -794,6 +834,7 @@ function Map.build(host, App)
 		drawPanel()
 		drawPins()
 		drawTerritory()
+		drawTarget()
 		updateEvent()
 	end
 	function obj:Tick() tickDock(); tickPanel() end
@@ -827,6 +868,7 @@ function Map.build(host, App)
 		end
 		if selected then local c = W.Cities[selected]; ring.Position = at(c.px, c.py) end
 		if evShown and W.Cities[evShown.city] then local c = W.Cities[evShown.city]; evMark.Position = at(c.px, c.py) end
+		if tgCity then local c = W.Cities[tgCity]; tgMark.Position = at(c.px, c.py) end
 	end
 	place()
 	return obj

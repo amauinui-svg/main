@@ -1019,10 +1019,19 @@ function act.allyManage(plr, p, a)
 		val = math.clamp(math.floor(tonumber(a.lv) or 0), 0, 500)
 	elseif kind == "perms" then
 		val = { upgrade = a.upgrade ~= false, kick = a.kick ~= false }
+	elseif kind == "target" then
+		-- alliance target capital (Kash 3 Oct): every member sees which city the alliance is attacking
+		local i = math.floor(tonumber(a.city) or 0)
+		if i ~= 0 and not World.Cities[i] then return no("Unknown city") end
+		val = i
 	else return no("Unknown setting") end
 	local rec2, err = WS.MutateAlliance(id, function(x)
 		local r = WS.Role(x, plr.UserId)
-		if kind == "motd" then
+		if kind == "target" then
+			if r ~= "leader" and r ~= "officer" then return nil, "Only the leader and officers can set the target" end
+			if val == 0 then x.target = nil; WS.AddLog(x, (p.data.name or "?") .. " cleared the target")
+			else x.target = { city = val, by = p.data.name, t = os.time() }; WS.AddLog(x, (p.data.name or "?") .. " set the target: " .. World.Cities[val].name) end
+		elseif kind == "motd" then
 			if r ~= "leader" and r ~= "officer" then return nil, "Only the leader and officers can post announcements" end
 			x.motd = val; x.motdBy = p.data.name; x.motdT = os.time()
 			if val ~= "" then WS.AddLog(x, (p.data.name or "?") .. " posted an announcement") end

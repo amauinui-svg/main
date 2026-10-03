@@ -709,11 +709,19 @@ M._settings = { init = function(App)
 		local firstTime = (meta.favShown or 0) == 0 and not meta.favorited
 		if firstTime and os.clock() - sessionStart < 120 then return end
 		if favPending then return end
-		if not favRolled and not meta.favorited then
+		-- Kash 3 Oct: the favorite popup shows at most ONCE per player, ever, and never if they already favorited the game
+		if not favRolled and not meta.favorited and (meta.favShown or 0) == 0 then
 			favRolled = true -- only the first eligible moment of a session can show it
 			if math.random() < 0.6 then
 				favPending = true
 				task.delay(0.8, function()
+					local okF, already = pcall(function() return AvatarEditorService:GetFavoriteAsync(game.PlaceId, Enum.AvatarItemType.Asset) end)
+					if okF and already then
+						favPending = false
+						if App.state and App.state.meta then App.state.meta.favorited = true end
+						task.spawn(function() App.req("favResult", { favorited = true }) end)
+						return
+					end
 					local ok = pcall(function() AvatarEditorService:PromptSetFavorite(game.PlaceId, Enum.AvatarItemType.Asset, true) end)
 					if not ok then
 						favPending = false

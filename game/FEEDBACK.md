@@ -440,3 +440,15 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 
 ## 3 Oct 09:53 (Kash)
 - Nano Banana 2 has no limit (Pro was the limited one). Use the references from yesterday / the live thumbnails, not the image I used last (he dislikes its style). Uploaded the live thumbnails (art/ads/v2 N04-N10) to Flow as thumbref_* and made 16 concepts x2 in that style (art/ads/v5). trade_world_a has a typo ("VORLD"): do not use.
+
+## 3 Oct 10:20 (Kash)
+- Alliance target capital: leader/officers tap SET AS ALLIANCE TARGET on a city's map panel; every member sees a red banner on OVERVIEW (ATTACK IT jumps to the city) and a pulsing red ring on the map. Clears itself when the alliance captures it.
+- New MEMBERS tab (everyone): strongest member card, sort by strength / XP this week / all time / last active, avatar, online dot, level, power (attack + defense), contribution, donations. Leader promotes, demotes, removes, hands over leadership; officers remove members if allowed. Moved out of OVERVIEW and MANAGE.
+- Favorite popup: only shows if the game isn't already favorited (GetFavoriteAsync), and at most once per player.
+- Boss images for all 8 bosses (in progress).
+
+## 3 Oct 10:21 (Kash)
+- Chat tips label "[Tip]" instead of "[Kash]".
+
+## 3 Oct 10:25 (Kash)
+- Tapping your flag at the top left opens your profile.

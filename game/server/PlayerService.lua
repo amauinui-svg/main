@@ -538,12 +538,15 @@ function PS.MemberLevel(p)
 	if not d.alliance or (p.lvPush or 0) > os.clock() - 300 then return end
 	p.lvPush = os.clock()
 	local uid = tostring(p.userId)
+	-- MEMBERS tab (Kash 3 Oct): also the member's strength (attack + defense) and when they were last active
+	local okP, atk, def = pcall(PS.Power, p)
+	local pw = okP and math.floor((atk or 0) + (def or 0)) or nil
 	task.spawn(function()
 		WS.MutateAlliance(d.alliance, function(x)
 			local m = x.members[uid]
 			if not m then return nil, "Not a member" end
-			if m.lv == d.lv then return nil, "same" end
 			m.lv = d.lv; m.active = os.time()
+			if pw then m.pw = pw end
 			return x, true
 		end)
 	end)
@@ -772,6 +775,7 @@ end
 ---------------------------------------------------------------- one-second heartbeat
 function PS.Step(plr, p)
 	local d = p.data
+	if d.alliance then PS.MemberLevel(p) end -- throttled to once every 5 minutes inside
 	local mods = PS.Mods(p)
 	p.xpMult = mods.xp
 	PS.TaskProgress(p, "online", 1 / 60) -- playtime orders (minutes)

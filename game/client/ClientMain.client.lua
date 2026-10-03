@@ -178,6 +178,15 @@ do
 	local id = mk("Frame", { Name = "Identity", BackgroundTransparency = 1, Size = UDim2.fromOffset(330, TOP), ZIndex = 21 }, topBar)
 	top.id = id
 	top.flagHost = mk("Frame", { Name = "FlagHost", BackgroundTransparency = 1, Position = UDim2.fromOffset(0, 12), Size = UDim2.fromOffset(60, 40), ZIndex = 21 }, id)
+	-- tap your flag to open your profile (Kash 3 Oct)
+	-- (re-added after every flag redraw because UI.clear empties flagHost)
+	function top.flagButton()
+		local fb = mk("TextButton", { Name = "FlagButton", BackgroundTransparency = 1, Text = "", Size = UDim2.fromScale(1, 1), ZIndex = 30, AutoButtonColor = false }, top.flagHost)
+		fb.Activated:Connect(function()
+			if App.showProfile then App.showProfile(Players.LocalPlayer.UserId) else App.open("rankings") end
+		end)
+	end
+	top.flagButton()
 	top.name = text(id, "", { font = "display", size = 19, pos = UDim2.fromOffset(68, 6), sz = UDim2.fromOffset(250, 24), truncate = true, z = 22 })
 	top.xp = UI.bar(id, C.xp, { pos = UDim2.fromOffset(68, 34), sz = UDim2.fromOffset(250, 22), z = 22, textSize = 13 })
 
@@ -556,7 +565,7 @@ do
 					pcall(function()
 						local TCS = game:GetService("TextChatService")
 						local ch = TCS:FindFirstChild("TextChannels") and TCS.TextChannels:FindFirstChild("RBXGeneral")
-						if ch then ch:DisplaySystemMessage("<font color='#f0c75a'><b>[Kash]</b></font> " .. esc(tip.t)) end
+						if ch then ch:DisplaySystemMessage("<font color='#f0c75a'><b>[Tip]</b></font> " .. esc(tip.t)) end
 					end)
 				end
 			end
@@ -689,6 +698,7 @@ local function drawTop()
 		lastFlag = fk
 		UI.clear(top.flagHost)
 		UI.flag(top.flagHost, st.flag, 56, { z = 22 })
+		top.flagButton()
 	end
 end
 local function drawTimers()
