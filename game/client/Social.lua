@@ -117,7 +117,12 @@ local function showProfile(App, uid)
 		local home = pf.home and W.Cities[pf.home]
 		if home then table.insert(bits, "Capital: " .. home.name) end
 		if pf.since then table.insert(bits, "Since " .. os.date("!%d %b %Y", pf.since)) end
-		text(head, table.concat(bits, " · "), { size = 13, color = C.muted, pos = UDim2.fromOffset(86, 60), sz = UDim2.new(1, -236, 0, 20), z = 74, rich = true, truncate = true })
+		local bitsL = text(head, table.concat(bits, " · "), { size = 13, color = C.muted, pos = UDim2.fromOffset(86, 60), sz = UDim2.new(1, -236, 0, 20), z = 74, rich = true, truncate = true })
+		-- the Roblox player behind the country (rankings show the player, the profile ties it to their nation)
+		task.spawn(function()
+			local okN, un = pcall(Players.GetNameFromUserIdAsync, Players, uid)
+			if okN and un and bitsL.Parent then bitsL.Text = "<font color='#e2cfa3'><b>@" .. un .. "</b></font>" .. (bitsL.Text ~= "" and (" · " .. bitsL.Text) or "") end
+		end)
 		local era = pf.era and D.Eras[pf.era]
 		text(head, "LEVEL", { font = "heavy", size = 12, color = C.muted, pos = UDim2.new(1, -140, 0, 2), sz = UDim2.fromOffset(140, 16), z = 74, align = Enum.TextXAlignment.Right })
 		text(head, tostring(pf.lv or "?"), { font = "display", size = 34, color = C.xp, pos = UDim2.new(1, -140, 0, 18), sz = UDim2.fromOffset(140, 38), z = 74, align = Enum.TextXAlignment.Right })
@@ -655,16 +660,21 @@ S.rankings = { build = function(host, App)
 				text(card, "[" .. e.tag .. "] " .. e.name, { font = "heavy", size = 17, pos = UDim2.fromOffset(100, 0), sz = UDim2.new(0.6, -100, 1, 0), z = 8, truncate = true })
 				text(card, e.value .. " cities · " .. (e.members or 0) .. " members", { font = "heavy", size = 16, color = C.manila, pos = UDim2.new(0.6, 0, 0, 0), sz = UDim2.new(0.4, -16, 1, 0), z = 8, align = Enum.TextXAlignment.Right })
 			else
-				if e.flag then UI.flag(card, e.flag, 36, { pos = UDim2.fromOffset(70, 10), z = 8 }) end
+				-- Roblox avatar headshot instead of the flag (Kash 3 Oct); flag and country live on the profile
+				local av = UI.mk("ImageLabel", { BackgroundColor3 = C.black, BackgroundTransparency = 0.3, BorderSizePixel = 0, Position = UDim2.fromOffset(68, 4), Size = UDim2.fromOffset(36, 36), ZIndex = 8,
+					Image = e.uid and e.uid > 0 and ("rbxthumb://type=AvatarHeadShot&id=" .. e.uid .. "&w=150&h=150") or "" }, card)
+				UI.mk("UICorner", { CornerRadius = UDim.new(1, 0) }, av)
 				local isMe = e.uid == myUid
 				-- Kash 2 Oct: anyone on the board can be spied on or attacked, whatever server they are in (or offline)
 				local canHit = e.uid and not isMe
 				local right = canHit and 196 or 16
 				-- columns: [#] [flag] [name ... truncated] [value, 140 px] [SPY] [ATTACK]
-				text(card, (e.tag and ("[" .. e.tag .. "] ") or "") .. (e.name or "?") .. (isMe and "  <font color='#9a9fa6'>(you)</font>" or ""), { font = "heavy", size = 17, rich = true, pos = UDim2.fromOffset(116, 0), sz = UDim2.new(1, -116 - right - 150, 1, 0), z = 8, truncate = true })
+				local dn = e.dn or e.un or e.name or "?"
+				local un = e.un and ("  <font color='#9a9fa6'>@" .. e.un .. "</font>") or ""
+				text(card, dn .. un .. (isMe and "  <font color='#f0c75a'>(you)</font>" or ""), { font = "heavy", size = 17, rich = true, pos = UDim2.fromOffset(116, 0), sz = UDim2.new(1, -116 - right - 150, 1, 0), z = 8, truncate = true })
 				text(card, obj.kind == "level" and ("Level " .. e.value) or R.Money(e.value), { font = "heavy", size = 17, color = obj.kind == "level" and C.xp or C.good, pos = UDim2.new(1, -right - 140, 0, 0), sz = UDim2.new(0, 140, 1, 0), z = 8, align = Enum.TextXAlignment.Right, truncate = true })
 				if canHit then
-					local id, nm = "u" .. e.uid, e.name or "?"
+					local id, nm = "u" .. e.uid, e.dn or e.un or e.name or "?"
 					UI.button(card, "slate", "SPY", function(btn)
 						local r = App.req("spy", { id = id }, btn)
 						if r.ok and r.intel then

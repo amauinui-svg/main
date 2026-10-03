@@ -389,3 +389,6 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 ## 3 Oct 01:01 (Kash)
 - Didn't know how to get gold bars; Game Guide was missing info. Added guide sections: GOLD BARS (every free source with amounts, what to spend it on), LEVELS & ERAS (when tabs open, era advance), GOVERNMENT, BOSSES, ALLIANCES, AFK CHAMBER; plus Wonder (Properties), pity and Gear Shop (Crates), world events and convoy passes (Convoys). Values read from Config so they stay correct.
 - Update the in-game changelog: added Alpha 0.4 (3 Oct) with everything since Alpha 0.3; version shown is now Alpha 0.4.
+
+## 3 Oct 08:14 (Kash)
+- Rankings show players, not countries: Roblox avatar headshot + display name and @username (fetched in one batch on the server, cached). Country, flag and the rest stay on the profile, which now also shows the @username.

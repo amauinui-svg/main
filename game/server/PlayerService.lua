@@ -856,6 +856,7 @@ function PS.Rank(plr, p)
 		Store.DS("IC_Names"):SetAsync(tostring(plr.UserId), { n = d.name, f = d.flag, a = d.alliance and WS.Index[d.alliance] and WS.Index[d.alliance].tag })
 	end)
 end
+local robloxNames = {} -- [userId] = { dn, un }, kept for the server's life (names rarely change)
 function PS.Rankings(kind)
 	local c = rankCache[kind]
 	if c and os.clock() - c.t < 60 then return c.list end
@@ -897,6 +898,22 @@ function PS.Rankings(kind)
 			end
 		end
 		table.sort(list, function(a, b) return a.value > b.value end)
+		-- Kash 3 Oct: the boards show Roblox names (display name + @username) and avatars; the country is on the profile
+		local need = {}
+		for _, e in ipairs(list) do
+			local c = e.uid and robloxNames[e.uid]
+			if c then e.dn, e.un = c.dn, c.un elseif e.uid and e.uid > 0 then table.insert(need, e.uid) end
+		end
+		if #need > 0 then
+			local okU, infos = pcall(function() return game:GetService("UserService"):GetUserInfosByUserIdsAsync(need) end)
+			if okU and type(infos) == "table" then
+				for _, info in ipairs(infos) do robloxNames[info.Id] = { dn = info.DisplayName, un = info.Username } end
+			end
+			for _, e in ipairs(list) do
+				local c = e.uid and robloxNames[e.uid]
+				if c then e.dn, e.un = c.dn, c.un end
+			end
+		end
 	end
 	rankCache[kind] = { t = os.clock(), list = list }
 	return list
