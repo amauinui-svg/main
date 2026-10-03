@@ -241,7 +241,7 @@ function act.bossHit(plr, p, a)
 	end
 	if boss.hp <= 0 then
 		local e = boss.era
-		local gold = M.BossGold[e]
+		local gold = boss.skipped and 0 or M.BossGold[e]
 		local cash = PS.Earn(p, R.MinuteValue(d.lv) * 20, "boss")
 		local xp = math.floor(R.MinuteXp(d.lv) * 5 + 0.5)
 		d.gold += gold
@@ -278,7 +278,12 @@ function act.bossSkip(plr, p)
 	local boss = PS.EnsureBoss(p)
 	if (boss.next or 0) <= now() then return no("The boss is already here") end
 	if d.gold < A.GoldPrices.boss then return no("Not enough gold") end
-	d.gold -= A.GoldPrices.boss; boss.next = 0
+	-- Kash 3 Oct (beat, skip, repeat): 3 skips a day, and a boss you skipped to pays no gold
+	local day = math.floor(now() / 86400)
+	if d.bossSkipDay ~= day then d.bossSkipDay = day; d.bossSkips = 0 end
+	if (d.bossSkips or 0) >= 3 then return no("You can skip the boss wait 3 times a day") end
+	d.bossSkips = (d.bossSkips or 0) + 1
+	d.gold -= A.GoldPrices.boss; boss.next = 0; boss.skipped = true
 	return ok()
 end
 

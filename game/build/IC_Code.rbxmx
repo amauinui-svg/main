@@ -5599,7 +5599,7 @@ function act.bossHit(plr, p, a)
 	end
 	if boss.hp <= 0 then
 		local e = boss.era
-		local gold = M.BossGold[e]
+		local gold = boss.skipped and 0 or M.BossGold[e]
 		local cash = PS.Earn(p, R.MinuteValue(d.lv) * 20, "boss")
 		local xp = math.floor(R.MinuteXp(d.lv) * 5 + 0.5)
 		d.gold += gold
@@ -5636,7 +5636,12 @@ function act.bossSkip(plr, p)
 	local boss = PS.EnsureBoss(p)
 	if (boss.next or 0) <= now() then return no("The boss is already here") end
 	if d.gold < A.GoldPrices.boss then return no("Not enough gold") end
-	d.gold -= A.GoldPrices.boss; boss.next = 0
+	-- Kash 3 Oct (beat, skip, repeat): 3 skips a day, and a boss you skipped to pays no gold
+	local day = math.floor(now() / 86400)
+	if d.bossSkipDay ~= day then d.bossSkipDay = day; d.bossSkips = 0 end
+	if (d.bossSkips or 0) >= 3 then return no("You can skip the boss wait 3 times a day") end
+	d.bossSkips = (d.bossSkips or 0) + 1
+	d.gold -= A.GoldPrices.boss; boss.next = 0; boss.skipped = true
 	return ok()
 end
 
@@ -9500,7 +9505,7 @@ S.bosses = { build = function(host, App)
 		hp:Set(boss.hp / max, R.Short(boss.hp) .. " / " .. R.Short(max) .. " HP", "")
 		local per = M.BossDamage(st.atk)
 		info.Text = string.format("Each hit deals about <b>%s</b>. Reward: <font color='#f0c75a'><b>%d gold</b></font>, <font color='#8fd07a'><b>%s</b></font> and XP.",
-			R.Short(per), M.BossGold[boss.era], R.Money(R.MinuteValue(st.lv) * 20))
+			R.Short(per), boss.skipped and 0 or M.BossGold[boss.era], R.Money(R.MinuteValue(st.lv) * 20))
 		sub.Text = "Supply <font color='#6fb3c8'><b>" .. st.sup .. "/" .. st.supMax .. "</b></font> · Bosses defeated <b>" .. st.stats.bosses .. "</b>"
 		UI.clear(list)
 		for e, Bx in ipairs(M.Bosses) do
@@ -9518,7 +9523,8 @@ S.bosses = { build = function(host, App)
 		local resting = wait > 0
 		skip.Inst.Visible = resting
 		b1.Inst.Visible = not resting; b5.Inst.Visible = not resting; bm.Inst.Visible = not resting
-		if resting then skip:Set(st.gold >= 3 and "gold" or "locked", "NEXT BOSS IN " .. R.Clock(wait) .. " · SKIP 3 GOLD") end
+		local price = require(game:GetService("ReplicatedStorage").Shared.Config).GoldPrices.boss
+		if resting then skip:Set(st.gold >= price and "gold" or "locked", "NEXT BOSS IN " .. R.Clock(wait) .. " · SKIP " .. price .. " GOLD") end
 		local k = st.sup > 0 and "red" or "locked"
 		b1:Set(k); b5:Set(k); bm:Set(k)
 	end

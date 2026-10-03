@@ -406,3 +406,7 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 
 ## 3 Oct 08:45 (Kash)
 - SHOP moved up the nav (right after PROPERTIES). Every GEAR SHOP restock (5 min) puts a red ! on SHOP and on the GEAR SHOP tab until the player opens the Gear Shop.
+
+## 3 Oct 08:49 (Kash)
+- Could spam beat the Bandit King and skip the wait: skip is now 3 times a day max, and a boss you skipped to pays no gold (still cash and XP). Skip button showed "3 GOLD" but charged 9: label now reads the real price.
+- Wants occasional chat tips (every 5 to 10 min) that sound typed by him. Draft list sent for approval before building.

@@ -154,7 +154,7 @@ S.bosses = { build = function(host, App)
 		hp:Set(boss.hp / max, R.Short(boss.hp) .. " / " .. R.Short(max) .. " HP", "")
 		local per = M.BossDamage(st.atk)
 		info.Text = string.format("Each hit deals about <b>%s</b>. Reward: <font color='#f0c75a'><b>%d gold</b></font>, <font color='#8fd07a'><b>%s</b></font> and XP.",
-			R.Short(per), M.BossGold[boss.era], R.Money(R.MinuteValue(st.lv) * 20))
+			R.Short(per), boss.skipped and 0 or M.BossGold[boss.era], R.Money(R.MinuteValue(st.lv) * 20))
 		sub.Text = "Supply <font color='#6fb3c8'><b>" .. st.sup .. "/" .. st.supMax .. "</b></font> · Bosses defeated <b>" .. st.stats.bosses .. "</b>"
 		UI.clear(list)
 		for e, Bx in ipairs(M.Bosses) do
@@ -172,7 +172,8 @@ S.bosses = { build = function(host, App)
 		local resting = wait > 0
 		skip.Inst.Visible = resting
 		b1.Inst.Visible = not resting; b5.Inst.Visible = not resting; bm.Inst.Visible = not resting
-		if resting then skip:Set(st.gold >= 3 and "gold" or "locked", "NEXT BOSS IN " .. R.Clock(wait) .. " · SKIP 3 GOLD") end
+		local price = require(game:GetService("ReplicatedStorage").Shared.Config).GoldPrices.boss
+		if resting then skip:Set(st.gold >= price and "gold" or "locked", "NEXT BOSS IN " .. R.Clock(wait) .. " · SKIP " .. price .. " GOLD") end
 		local k = st.sup > 0 and "red" or "locked"
 		b1:Set(k); b5:Set(k); bm:Set(k)
 	end
