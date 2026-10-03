@@ -41,19 +41,14 @@ function act.onboard(plr, p, a)
 	if name:find("[^%w %-'%.]") then return no("Use letters, numbers, spaces, - ' . only") end
 	local f = WS.Filter(name, plr.UserId)
 	if not f or f ~= name then return no("That name is not allowed. Try another.") end
-	local flag = type(a.flag) == "table" and a.flag or {}
-	local layout = table.find(R.FlagLayouts, flag.l) and flag.l or "h3"
-	local cols = {}
-	for i = 1, 3 do
-		local c = type(flag.c) == "table" and flag.c[i]
-		cols[i] = table.find(R.FlagColors, c) and c or R.FlagColors[i]
-	end
+	local cleanFlag, ferr = A.CleanFlag(p, a.flag)
+	if not cleanFlag then cleanFlag = { l = "h3", c = { R.FlagColors[1], R.FlagColors[2], R.FlagColors[3] } } end
 	local ideo = R.IdeologyByKey[a.ideo] and a.ideo or "republic"
 	local home = int(a.home, 1, #World.Cities)
 	if not home then return no("Pick a home capital") end
 	WS.HomeMoved(nil, home)
 	if PS.AN then PS.AN.Step(p, "Founded country") end
-	d.name, d.flag, d.ideo, d.home, d.onboarded = name, { l = layout, c = cols }, ideo, home, true
+	d.name, d.flag, d.ideo, d.home, d.onboarded = name, cleanFlag, ideo, home, true
 	for _, c in ipairs(d.convoys) do if not c.to then c.at = home end end
 	PS.EnsureConvoys(p)
 	PS.GrantVipOfficer(p)
@@ -553,7 +548,15 @@ end
 -- flags: everyone can pick the basic layouts/colours; the Custom Flag pass adds more layouts, colours, an emblem
 -- and your own image (an asset id; Roblox moderates every uploaded image)
 function act.setFlag(plr, p, a)
-	local f = type(a.flag) == "table" and a.flag or {}
+	local flag, err = A.CleanFlag(p, a.flag)
+	if not flag then return no(err) end
+	p.data.flag = flag
+	return ok({ flag = flag })
+end
+-- shared flag validation (setFlag and onboarding). Returns flag or nil, message
+function A.CleanFlag(p, f)
+	local function no(m) return nil, m end
+	f = type(f) == "table" and f or {}
 	local pass = PS.Has(p, "CustomFlag")
 	local layouts = pass and R.FlagLayoutsAll or R.FlagLayouts
 	local colors = pass and R.FlagColorsAll or R.FlagColors
@@ -576,8 +579,7 @@ function act.setFlag(plr, p, a)
 		if not id or id < 1 or id > 1e15 or id ~= math.floor(id) then return no("Paste an image or decal id (numbers only)") end
 		flag.img = string.format("%d", id)
 	end
-	p.data.flag = flag
-	return ok({ flag = flag })
+	return flag
 end
 function act.revengeStrike(plr, p, a)
 	local r = p.data.revenge
@@ -1116,6 +1118,51 @@ function act.adRefill(plr, p)
 	return ok()
 end
 
+-- GEAR SHOP: a stock of 3 items per rarity, rolled from the 5 minute window and the player id (same for the whole
+-- window, new every restock). d.gshop = { w = window, b = { [index] = true } } remembers what was bought this window.
+local function gearStock(p, w)
+	local GS = Config.GearShop
+	local list = {}
+	for r = 1, #GS.Levels do
+		for k = 1, GS.PerRarity do
+			local rng = Random.new((w * 7919 + (p.userId % 1000003) * 104729 + r * 131 + k * 17) % 2147483647)
+			local g = O.NewGear(rng, r, k == 1 and "weapon" or (k == 2 and "armor" or nil))
+			g.id = nil
+			table.insert(list, { g = g, r = r, lvl = GS.Levels[r], cost = math.floor(R.MinuteValue(math.max(p.data.lv, GS.Levels[r])) * GS.Minutes[r] / 10 + 0.5) * 10 })
+		end
+	end
+	return list
+end
+function act.gearShop(plr, p)
+	local w = os.time() // Config.GearShop.Restock
+	local d = p.data
+	if type(d.gshop) ~= "table" or d.gshop.w ~= w then d.gshop = { w = w, b = {} } end
+	local out = {}
+	for i, e in ipairs(gearStock(p, w)) do
+		table.insert(out, { i = i, gear = e.g, lvl = e.lvl, cost = e.cost, bought = d.gshop.b[tostring(i)] == true })
+	end
+	return ok({ w = w, ends = (w + 1) * Config.GearShop.Restock, items = out })
+end
+function act.gearBuy(plr, p, a)
+	local d = p.data
+	local w = os.time() // Config.GearShop.Restock
+	if tonumber(a.w) ~= w then return no("The shop just restocked. Take a look at the new items!") end
+	local i = int(a.i, 1, #Config.GearShop.Levels * Config.GearShop.PerRarity)
+	if not i then return no("Unknown item") end
+	if type(d.gshop) ~= "table" or d.gshop.w ~= w then d.gshop = { w = w, b = {} } end
+	if d.gshop.b[tostring(i)] then return no("You already bought this one. More in the next restock.") end
+	local e = gearStock(p, w)[i]
+	if d.lv < e.lvl then return no("Unlocks at level " .. e.lvl) end
+	if invFull(d, 1) then return no("Inventory full. Discard some gear first.") end
+	if not PS.Spend(p, e.cost) then return no("Need " .. R.Money(e.cost)) end
+	local g = e.g
+	g.id = string.format("g%x%06x", os.time(), math.random(0, 16777215))
+	PS.AddGear(p, g)
+	d.gshop.b[tostring(i)] = true
+	if PS.AN then PS.AN.Custom(p, "GearShopBuy", e.r) end
+	return ok({ gear = g })
+end
+
 -- onboarding funnel steps reported by the onboarding screens (analytics only)
 local FUNNEL_UI = { name = "Named country", flag = "Designed flag", gov = "Chose government" }
 function act.funnel(plr, p, a)
@@ -1162,7 +1209,7 @@ function act.adminList(plr, p)
 	return ok({ list = AD.List() })
 end
 
-A.NoSync = { funnel = true, tutorial = true, adRefill = true, allyList = true, rankings = true, profile = true, adminList = true }
+A.NoSync = { gearShop = true, funnel = true, tutorial = true, adRefill = true, allyList = true, rankings = true, profile = true, adminList = true }
 -- requests allowed before onboarding finishes
-A.PreOnboard = { sync = true, onboard = true, rankings = true, admin = true, adminList = true, funnel = true }
+A.PreOnboard = { buyPass = true, sync = true, onboard = true, rankings = true, admin = true, adminList = true, funnel = true }
 return A

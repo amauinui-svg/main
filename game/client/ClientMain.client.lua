@@ -310,11 +310,12 @@ App.content = content
 local defs = {}
 local inits = {} -- modules can return entries without a build field: { init = function(App) end }
 -- later modules override earlier ones (Warfare's raids replace War's battle, Contracts replaces Economy's tasks)
-for _, modName in ipairs({ "Sound", "Map", "Economy", "War", "Social", "Warfare", "Cabinet", "Country", "Contracts", "Settings", "Shop", "Tester", "Tutorial" }) do
+for _, modName in ipairs({ "Sound", "Map", "Economy", "War", "Social", "Warfare", "Cabinet", "Country", "Contracts", "Settings", "Shop", "GearShop", "Tester", "Tutorial" }) do
 	local okReq, mod = pcall(require, ClientMods:WaitForChild(modName, 5))
 	if okReq and type(mod) == "table" then
 		for k, def in pairs(mod) do
 			if type(def) == "table" and def.build then defs[k] = def
+			elseif type(def) == "table" and def.init and k == "_sound" then App.soundInit = def.init -- runs before onboarding (music + click sounds)
 			elseif type(def) == "table" and def.init then table.insert(inits, def.init) end
 		end
 	else warn("[Idle Country] " .. modName .. ": " .. tostring(mod)) end
@@ -323,8 +324,9 @@ end
 -- The child screen's own title is replaced by two tab buttons in the same spot.
 local COMPOSITE = {
 	military = { { key = "military", label = "ARMY", title = "MILITARY" }, { key = "officers", label = "OFFICERS", title = "OFFICERS" } },
+	shop = { { key = "shop", label = "STORE", title = "SHOP" }, { key = "gearshop", label = "GEAR SHOP", title = "GEAR SHOP" } },
 }
-local ROUTE = { officers = { "military", 2 } }
+local ROUTE = { officers = { "military", 2 }, gearshop = { "shop", 2 } }
 for parentKey, kids in pairs(COMPOSITE) do
 	local childDefs = {}
 	for i, k in ipairs(kids) do childDefs[i] = defs[k.key] end
@@ -550,6 +552,7 @@ Remotes.Sync.OnClientEvent:Connect(function(kind, data)
 	if kind == "full" then
 		App.state = data
 		App.tickClock = os.clock()
+		if App.soundInit then local f = App.soundInit; App.soundInit = nil; task.spawn(function() local okS, e = pcall(f, App); if not okS then warn("[Idle Country] sound: " .. tostring(e)) end end) end
 		updateNav(data)
 		drawTop(); badges()
 		if not data.onboarded then

@@ -41,6 +41,15 @@ C.Badges = {
 	{ key = "forbidden", id = 0, name = "Forbidden Power", desc = "Own a FORBIDDEN officer." },
 }
 
+-- GEAR SHOP (Kash 2 Oct 23:26): restocks every 5 minutes with 3 random items of every rarity; 1 of each per player.
+-- Higher rarities need high levels. Price = minutes of law income at your level (never below the unlock level).
+C.GearShop = {
+	Restock = 300,
+	PerRarity = 3,
+	Levels = { 1, 10, 25, 50, 80, 110, 140, 170 },        -- common .. forbidden
+	Minutes = { 4, 10, 25, 60, 150, 360, 900, 2400 },    -- price in minutes of law income
+}
+
 C.Products = {
 	-- Founder's Crate: 49 R$ each (Kash 2 Oct), bulk cheaper per crate
 	Crate1 = { id = 3716173429, robux = 49, crates = 1 },

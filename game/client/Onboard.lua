@@ -23,6 +23,7 @@ function O.show(App)
 	local nav = UI.mk("Frame", { Name = "NavRow", BackgroundTransparency = 1, Position = UDim2.new(0, 0, 1, -52), Size = UDim2.new(1, 0, 0, 52), ZIndex = 62 }, body)
 	local step = 1
 	local draw
+	local obPassSeen = false
 
 	local back = UI.button(nav, "slate", "BACK", function() if step > 1 then step -= 1; draw() end end, { sz = UDim2.fromOffset(140, 46), z = 63 })
 	local nextB = UI.button(nav, "manila", "NEXT", nil, { name = "NextBtn", sz = UDim2.fromOffset(220, 46), pos = UDim2.new(1, -220, 0, 0), z = 63 })
@@ -55,33 +56,77 @@ function O.show(App)
 		end
 	end
 	steps[2] = function()
-		text(area, "Design your flag", { font = "display", size = 24, pos = UDim2.fromOffset(4, 10), sz = UDim2.new(1, 0, 0, 30), z = 63 })
-		local prev = preview(area, UDim2.new(1, -210, 0, 50))
-		local function redraw() prev:Destroy(); prev = preview(area, UDim2.new(1, -210, 0, 50)) end
-		local lay = UI.mk("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(4, 50), Size = UDim2.new(1, -230, 0, 46), ZIndex = 63 }, area)
-		UI.mk("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }, lay)
-		for li, l in ipairs(R.FlagLayouts) do
-			local b = UI.mk("TextButton", { LayoutOrder = li, Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.fromOffset(54, 40), ZIndex = 63 }, lay)
-			UI.flag(b, { l = l, c = form.flag.c }, 52, { z = 64, pos = UDim2.fromOffset(1, 3) })
-			if form.flag.l == l then UI.mk("Frame", { BackgroundColor3 = C.manila, BorderSizePixel = 0, Position = UDim2.new(0, 0, 1, 2), Size = UDim2.new(1, 0, 0, 4), ZIndex = 64 }, b) end
-			b.Activated:Connect(function() form.flag.l = l; draw() end)
+		-- Kash 2 Oct 23:23: the Custom Flag pass is offered right here, with its extra options shown (locked until owned)
+		local owned = App.state and App.state.gp and App.state.gp.CustomFlag
+		local passInfo = Config.Passes.CustomFlag or { price = 99 }
+		local basicL, basicC = {}, {}
+		for _, l in ipairs(R.FlagLayouts) do basicL[l] = true end
+		for _, c in ipairs(R.FlagColors) do basicC[c] = true end
+		local function buyPass() task.spawn(function() App.req("buyPass", { key = "CustomFlag" }) end) end
+		local function lockMark(parent, z)
+			local lk = UI.mk("Frame", { BackgroundColor3 = C.black, BackgroundTransparency = 0.45, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ZIndex = z }, parent)
+			UI.icon(lk, "icon_lock", 14, C.gold, UDim2.fromScale(0.5, 0.5), { z = z + 1, anchor = Vector2.new(0.5, 0.5) })
 		end
+		text(area, "Design your flag", { font = "display", size = 24, pos = UDim2.fromOffset(4, 6), sz = UDim2.new(1, 0, 0, 30), z = 63 })
+		local prev = preview(area, UDim2.new(1, -210, 0, 46))
+		local lay = UI.mk("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(4, 42), Size = UDim2.new(1, -230, 0, 84), ZIndex = 63 }, area)
+		UI.mk("UIGridLayout", { CellSize = UDim2.fromOffset(52, 38), CellPadding = UDim2.fromOffset(5, 6), SortOrder = Enum.SortOrder.LayoutOrder }, lay)
+		for li, l in ipairs(R.FlagLayoutsAll or R.FlagLayouts) do
+			local locked = not basicL[l] and not owned
+			local b = UI.mk("TextButton", { LayoutOrder = li, Text = "", AutoButtonColor = false, BackgroundTransparency = 1, ZIndex = 63 }, lay)
+			UI.flag(b, { l = l, c = form.flag.c }, 50, { z = 64, pos = UDim2.fromOffset(1, 2) })
+			if locked then lockMark(b, 66) end
+			if form.flag.l == l then UI.mk("Frame", { BackgroundColor3 = C.manila, BorderSizePixel = 0, Position = UDim2.new(0, 0, 1, 0), Size = UDim2.new(1, 0, 0, 3), ZIndex = 64 }, b) end
+			b.Activated:Connect(function() if locked then buyPass() else form.flag.l = l; draw() end end)
+		end
+		local cols = R.FlagColorsAll or R.FlagColors
 		for row = 1, 3 do
-			text(area, ({ "MAIN", "SECOND", "THIRD" })[row], { font = "heavy", size = 13, color = C.muted, pos = UDim2.fromOffset(4, 108 + (row - 1) * 52), sz = UDim2.fromOffset(70, 40), z = 63 })
-			local sw = UI.mk("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(76, 108 + (row - 1) * 52), Size = UDim2.new(1, -310, 0, 40), ZIndex = 63 }, area)
-			UI.mk("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder }, sw)
-			for ci, col in ipairs(R.FlagColors) do
-				local s = UI.mk("TextButton", { LayoutOrder = ci, Text = "", AutoButtonColor = false, BackgroundColor3 = Color3.fromHex(col), Size = UDim2.fromOffset(30, 36), ZIndex = 64, BorderSizePixel = 0 }, sw)
-				UI.mk("UIStroke", { Color = C.black, Thickness = 1 }, s)
-				if form.flag.c[row] == col then UI.icon(s, "icon_check", 22, (col == "ecf0f1" or col == "f1c40f") and C.black or C.white, UDim2.fromScale(0.5, 0.5), { anchor = Vector2.new(0.5, 0.5), z = 65 }) end
-				s.Activated:Connect(function() form.flag.c[row] = col; draw() end)
+			local y = 134 + (row - 1) * 40
+			text(area, ({ "MAIN", "SECOND", "THIRD" })[row], { font = "heavy", size = 13, color = C.muted, pos = UDim2.fromOffset(4, y), sz = UDim2.fromOffset(62, 34), z = 63 })
+			local sw = UI.mk("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(66, y), Size = UDim2.new(1, -296, 0, 34), ZIndex = 63 }, area)
+			UI.mk("UIGridLayout", { CellSize = UDim2.new(1 / #cols, -2, 1, 0), CellPadding = UDim2.fromOffset(2, 0), SortOrder = Enum.SortOrder.LayoutOrder }, sw)
+			for ci, col in ipairs(cols) do
+				local locked = not basicC[col] and not owned
+				local s2 = UI.mk("TextButton", { LayoutOrder = ci, Text = "", AutoButtonColor = false, BackgroundColor3 = Color3.fromHex(col), ZIndex = 64, BorderSizePixel = 0 }, sw)
+				UI.mk("UIStroke", { Color = C.black, Thickness = 1 }, s2)
+				if locked then lockMark(s2, 65) end
+				if form.flag.c[row] == col then UI.icon(s2, "icon_check", 14, (col == "ecf0f1" or col == "f1c40f" or col == "f5deb3" or col == "c0c0c0") and C.black or C.white, UDim2.fromScale(0.5, 0.5), { anchor = Vector2.new(0.5, 0.5), z = 66 }) end
+				s2.Activated:Connect(function() if locked then buyPass() else form.flag.c[row] = col; draw() end end)
 			end
 		end
+		-- emblems (pass)
+		local ey = 258
+		text(area, "EMBLEM", { font = "heavy", size = 13, color = C.muted, pos = UDim2.fromOffset(4, ey), sz = UDim2.fromOffset(62, 34), z = 63 })
+		local em = UI.mk("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(66, ey), Size = UDim2.new(1, -296, 0, 34), ZIndex = 63 }, area)
+		UI.mk("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder }, em)
+		local emblems = { false }
+		for _, e in ipairs(R.FlagEmblems or {}) do table.insert(emblems, e) end
+		for ei, e in ipairs(emblems) do
+			local b = UI.mk("TextButton", { LayoutOrder = ei, Text = e and "" or "NONE", FontFace = UI.Font.heavy, TextSize = 10, TextColor3 = C.muted, AutoButtonColor = false, BackgroundColor3 = C.slate, BorderSizePixel = 0, Size = UDim2.fromOffset(34, 34), ZIndex = 64 }, em)
+			UI.mk("UICorner", { CornerRadius = UDim.new(0, 6) }, b)
+			if (form.flag.e or false) == e then UI.mk("UIStroke", { Color = C.manila, Thickness = 2 }, b) end
+			if e then UI.icon(b, e, 22, C.ink, UDim2.fromScale(0.5, 0.5), { z = 65, anchor = Vector2.new(0.5, 0.5) }) end
+			local locked = e and not owned
+			if locked then lockMark(b, 66) end
+			b.Activated:Connect(function() if locked then buyPass() else form.flag.e = e or nil; draw() end end)
+		end
 		UI.button(area, "slate", "RANDOM", function()
-			form.flag.l = R.FlagLayouts[math.random(1, #R.FlagLayouts)]
-			for k = 1, 3 do form.flag.c[k] = R.FlagColors[math.random(1, #R.FlagColors)] end
+			local L = owned and (R.FlagLayoutsAll or R.FlagLayouts) or R.FlagLayouts
+			local Cc = owned and (R.FlagColorsAll or R.FlagColors) or R.FlagColors
+			form.flag.l = L[math.random(1, #L)]
+			for k = 1, 3 do form.flag.c[k] = Cc[math.random(1, #Cc)] end
 			draw()
-		end, { sz = UDim2.fromOffset(200, 44), pos = UDim2.new(1, -210, 0, 196), z = 63, icon = "icon_sparkles", textSize = 15 })
+		end, { sz = UDim2.fromOffset(200, 40), pos = UDim2.new(1, -210, 0, 186), z = 63, icon = "icon_sparkles", textSize = 15 })
+		-- the pass offer
+		local offer = UI.card(area, { pos = UDim2.fromOffset(4, 306), sz = UDim2.new(1, -8, 0, 64), z = 63, hot = true })
+		UI.icon(offer, "icon_flag", 30, C.gold, UDim2.new(0, 14, 0.5, 0), { z = 64, anchor = Vector2.new(0, 0.5) })
+		if owned then
+			text(offer, "<b>CUSTOM FLAG</b> unlocked: every layout, colour and emblem is yours.", { size = 16, rich = true, pos = UDim2.fromOffset(56, 0), sz = UDim2.new(1, -70, 1, 0), z = 64 })
+		else
+			text(offer, "<font color='#f0c75a'><b>CUSTOM FLAG</b></font>: 6 more layouts, 12 more colours, emblems, or your own image.", { size = 15, rich = true, wrap = true, pos = UDim2.fromOffset(56, 0), sz = UDim2.new(1, -250, 1, 0), z = 64 })
+			UI.button(offer, "gold", "UNLOCK · R$ " .. (passInfo.price or 99), function() buyPass() end, { pos = UDim2.new(1, -10, 0.5, 0), anchor = Vector2.new(1, 0.5), sz = UDim2.fromOffset(176, 44), z = 65, textSize = 15 })
+		end
+		local _ = prev
 		return function() return true end
 	end
 	steps[3] = function()
@@ -146,6 +191,7 @@ function O.show(App)
 		if res.ok then
 			cover:Destroy()
 			App.state.onboarded = true
+			App.play("level_up")
 			if App.updateNav then App.updateNav(App.state) end
 			App.open("laws")
 			-- run the screen inits now, then ask about the tutorial (Kash 2 Oct)
@@ -158,6 +204,9 @@ function O.show(App)
 	end)
 	draw()
 	-- finished elsewhere (another server, or a retry): close the cover
+	App.on("full", function(st)
+		if cover.Parent and step == 2 and st.gp and st.gp.CustomFlag and not obPassSeen then obPassSeen = true; draw() end
+	end)
 	App.on("full", function(st) if st.onboarded and cover.Parent then cover:Destroy(); App.open("laws") end end)
 end
 return O

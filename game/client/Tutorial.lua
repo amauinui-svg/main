@@ -15,10 +15,10 @@ end
 -- each step: text, the tab to point at (or nil), and when it is done
 local STEPS = {
 	{ title = "PASS LAWS", text = "Open <b>LAWS</b>. Laws are how your nation makes money.", tab = "laws", done = function(st, App) return App.current == "laws" end },
-	{ title = "YOUR FIRST LAW", text = "Tap <b>PASS</b> on a law. It costs Influence and pays cash and XP.", done = function(st) return (st.stats and st.stats.laws or 0) >= 1 end },
-	{ title = "LEVEL UP", text = "Keep passing laws to reach <b>level 2</b>. Influence refills over time and on every level up.", done = function(st) return (st.lv or 1) >= 2 end },
+	{ title = "YOUR FIRST LAW", text = "Tap <b>PASS</b> on a law. It costs Influence and pays cash and XP.", find = "pass", done = function(st) return (st.stats and st.stats.laws or 0) >= 1 end },
+	{ title = "LEVEL UP", text = "Keep passing laws to reach <b>level 2</b>. Influence refills over time and on every level up.", find = "pass", done = function(st) return (st.lv or 1) >= 2 end },
 	{ title = "PROPERTIES", text = "You unlocked <b>PROPERTIES</b>! Open it to earn money even while you are away.", tab = "properties", done = function(st, App) return App.current == "properties" end },
-	{ title = "BUILD", text = "Build your first property. It pays you every hour.", done = function(st) return built(st) end },
+	{ title = "BUILD", text = "Tap an empty lot (<b>FOR SALE</b>) and build your first property. It pays you every hour.", find = "lot", done = function(st) return built(st) end },
 	{ title = "THE WORLD", text = "Open the <b>WORLD</b> map. Your convoys trade between real capitals.", tab = "map", done = function(st, App) return App.current == "map" end },
 	{ title = "SEND A CONVOY", text = "Tap a city, pick a load and <b>SEND</b>. Cities that want your goods pay more.", done = function(st) return sending(st) end },
 	{ title = "YOU ARE READY", text = "New tabs unlock as you level up. Good luck, leader!", final = true },
@@ -38,19 +38,73 @@ S._tutorial = { init = function(App)
 		if App.state then App.state.tut = step end
 	end
 
+	-- SPOTLIGHT (Kash 23:23): darken everything except the thing to press, with a snug rounded gold frame around it
+	local spot = {}
+	local spotConn
 	local function clearRing()
-		if ringTw then ringTw:Cancel(); ringTw = nil end
-		if ring then ring:Destroy(); ring = nil end
+		if spotConn then spotConn:Disconnect(); spotConn = nil end
+		for _, f in pairs(spot) do f:Destroy() end
+		spot = {}
 	end
-	local function pointAt(tab)
+	local function findTarget(S1)
+		if S1.tab then
+			local nb = App.navButtons and App.navButtons[S1.tab]
+			return nb and nb.Inst.Visible and nb.Inst or nil
+		end
+		local scr
+		if S1.find == "pass" then scr = App.screens and App.screens.laws
+		elseif S1.find == "lot" then scr = App.screens and App.screens.properties end
+		if not scr or not scr.host or not scr.host.Visible then return nil end
+		local want = S1.find == "pass" and "PASS" or "FOR SALE"
+		for _, d in ipairs(scr.host:GetDescendants()) do
+			if d:IsA("TextLabel") and d.Text == want and d.Visible then
+				local b = d:FindFirstAncestorWhichIsA("GuiButton")
+				if b and b.Visible and b.AbsoluteSize.X > 0 then
+					-- only targets on screen (inside the scrolling list)
+					local sf = b:FindFirstAncestorWhichIsA("ScrollingFrame")
+					if not sf or (b.AbsolutePosition.Y >= sf.AbsolutePosition.Y and b.AbsolutePosition.Y + b.AbsoluteSize.Y <= sf.AbsolutePosition.Y + sf.AbsoluteSize.Y) then return b end
+				end
+			end
+		end
+		return nil
+	end
+	local function pointAt(S1)
 		clearRing()
-		local nb = tab and App.navButtons and App.navButtons[tab]
-		if not nb or not nb.Inst.Visible then return end
-		ring = mk("Frame", { Name = "TutorialRing", BackgroundTransparency = 1, Size = UDim2.new(1, 8, 1, 8), Position = UDim2.fromOffset(-4, -4), ZIndex = 30 }, nb.Inst)
-		local s = mk("UIStroke", { Color = C.gold, Thickness = 3, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, ring)
-		mk("UICorner", { CornerRadius = UDim.new(0, 8) }, ring)
-		ringTw = TweenService:Create(s, TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Transparency = 0.8, Thickness = 6 })
-		ringTw:Play()
+		if not S1.tab and not S1.find then return end
+		local host = App.sg
+		local function dim(name)
+			local f = mk("Frame", { Name = "TutDim" .. name, BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 0.45, BorderSizePixel = 0, ZIndex = 50, Visible = false }, host)
+			spot[name] = f
+			return f
+		end
+		local top, bottom, left, right = dim("T"), dim("B"), dim("L"), dim("R")
+		local ring = mk("Frame", { Name = "TutRing", BackgroundTransparency = 1, ZIndex = 51, Visible = false }, host)
+		mk("UICorner", { CornerRadius = UDim.new(0, 10) }, ring)
+		local st = mk("UIStroke", { Color = C.gold, Thickness = 3, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, ring)
+		spot.ring = ring
+		local t0 = os.clock()
+		spotConn = game:GetService("RunService").RenderStepped:Connect(function()
+			local target = findTarget(S1)
+			local vis = target ~= nil and card and card.Visible
+			for _, f in pairs(spot) do f.Visible = vis and true or false end
+			if not vis then return end
+			local pad = 6
+			local p0, sz = target.AbsolutePosition - Vector2.new(pad, pad), target.AbsoluteSize + Vector2.new(pad * 2, pad * 2)
+			local W, H = host.AbsoluteSize.X, host.AbsoluteSize.Y
+			top.Position = UDim2.fromOffset(0, 0); top.Size = UDim2.fromOffset(W, math.max(0, p0.Y))
+			bottom.Position = UDim2.fromOffset(0, p0.Y + sz.Y); bottom.Size = UDim2.fromOffset(W, math.max(0, H - p0.Y - sz.Y))
+			left.Position = UDim2.fromOffset(0, p0.Y); left.Size = UDim2.fromOffset(math.max(0, p0.X), sz.Y)
+			right.Position = UDim2.fromOffset(p0.X + sz.X, p0.Y); right.Size = UDim2.fromOffset(math.max(0, W - p0.X - sz.X), sz.Y)
+			ring.Position = UDim2.fromOffset(p0.X, p0.Y); ring.Size = UDim2.fromOffset(sz.X, sz.Y)
+			local k = (math.sin((os.clock() - t0) * 5) + 1) / 2
+			st.Thickness = 3 + 2 * k
+			st.Transparency = 0.15 * k
+			-- keep the guide card away from the target
+			local wantTop = p0.Y + sz.Y / 2 > H * 0.55
+			local cy = wantTop and UDim2.new(0, 96, 0, 0) or UDim2.new(1, -18, 0, 0)
+			card.AnchorPoint = Vector2.new(0.5, wantTop and 0 or 1)
+			card.Position = UDim2.new(0.5, (App.NAVW or 176) / 2, cy.X.Scale, cy.X.Offset)
+		end)
 	end
 
 	local function hide()
@@ -65,7 +119,7 @@ S._tutorial = { init = function(App)
 	end
 
 	local function build()
-		card = UI.img(App.root, "panel", { name = "Tutorial", sz = UDim2.fromOffset(520, 118), pos = UDim2.new(0.5, (App.NAVW or 176) / 2, 1, -18), anchor = Vector2.new(0.5, 1), z = 70 })
+		card = UI.img(App.sg or App.root, "panel", { name = "Tutorial", sz = UDim2.fromOffset(520, 118), pos = UDim2.new(0.5, (App.NAVW or 176) / 2, 1, -18), anchor = Vector2.new(0.5, 1), z = 70 })
 		mk("UIStroke", { Color = C.gold, Thickness = 2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, card)
 		UI.icon(card, "icon_sparkles", 26, C.gold, UDim2.fromOffset(16, 16), { z = 71 })
 		titleL = text(card, "", { font = "display", size = 20, color = C.manila, pos = UDim2.fromOffset(50, 12), sz = UDim2.new(1, -170, 0, 26), z = 71 })
@@ -95,9 +149,12 @@ S._tutorial = { init = function(App)
 		if skip then skip.Visible = not S1.final end
 		if shown ~= step then
 			shown = step
-			pointAt(S1.tab)
-			card.Position = UDim2.new(0.5, (App.NAVW or 176) / 2, 1, 120)
-			TweenService:Create(card, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Position = UDim2.new(0.5, (App.NAVW or 176) / 2, 1, -18) }):Play()
+			pointAt(S1)
+			card.AnchorPoint = Vector2.new(0.5, 1)
+			card.Position = UDim2.new(0.5, (App.NAVW or 176) / 2, 1, -18)
+			local sc = card:FindFirstChildOfClass("UIScale") or mk("UIScale", {}, card)
+			sc.Scale = 0.85
+			TweenService:Create(sc, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
 			if App.play and step > 1 then pcall(App.play, "tab_open") end
 		end
 	end

@@ -308,3 +308,17 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 
 ## 2 Oct 22:53 (Kash)
 - Game copied into a new experience owned by Kash's personal account (universe 10769117926, place 104255655483582) so his personal ad credit can be used; ownership transfers to Tabby Studios later. All 9 passes and 22 products recreated there with the same names, prices and pass art; Config ids switched to the new ones. Studio work now happens in the new place.
+
+## 2 Oct 23:03 (Kash) PUBLIC LAUNCH SETUP
+- Badges: one easy, the rest very hard; art made (Flow, game icon style; OpenAI credits ran out). Free quota is 5 a day: created Founding Father, Wonder of the World, To the Stars, Warlord, Trade Empire; the other 5 (Richest Nation on Earth, Supreme Lawgiver, Tyrant Slayer, Legendary Alliance, Forbidden Power) get created when the quota resets (scheduled).
+- Analytics: onboarding funnel (14 steps), level/era progression, gold + Merits economy, per-item shop funnels, custom events.
+- Description, name, 30 players per server, devices Computer/Phone/Tablet, 6 new thumbnails.
+
+## 2 Oct 23:23 (Kash)
+- Music and SFX did not play during onboarding: fixed (sound starts before onboarding).
+- Onboarding flag step offers the Custom Flag pass with its extra layouts, colours and emblems shown locked until bought.
+- Tutorial: darken everything except what to press, with a snug rounded gold frame (the old outline sat badly on the tab). Done with a spotlight that also points at the PASS button and an empty lot.
+
+## 2 Oct 23:26 (Kash)
+- Normal players must never see or use TEST: it only shows for the owner account (or anyone in Studio); every command is checked on the server.
+- SHOP gets a GEAR SHOP tab: restocks every 5 minutes, 3 random items of every rarity, 1 of each per player per restock, rarer gear needs high levels (Common 1, Uncommon 10, Rare 25, Epic 50, Legendary 80, Mythic 110, Secret 140, Forbidden 170). Cash prices scale with level.
