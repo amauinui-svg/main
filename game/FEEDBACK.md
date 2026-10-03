@@ -410,3 +410,10 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 ## 3 Oct 08:49 (Kash)
 - Could spam beat the Bandit King and skip the wait: skip is now 3 times a day max, and a boss you skipped to pays no gold (still cash and XP). Skip button showed "3 GOLD" but charged 9: label now reads the real price.
 - Wants occasional chat tips (every 5 to 10 min) that sound typed by him. Draft list sent for approval before building.
+
+## 3 Oct 08:56 (Kash)
+- Chat tips: his own 5 lines, word for word, shown as [Kash] in chat every 5 to 10 minutes, shuffled; the group tip stops after the FREE GIFT is claimed.
+- Asked for a detailed throne room image with his avatar sitting in a thinker pose (to see what it looks like).
+
+## 3 Oct 08:57 (Kash)
+- PASS LAWS thumbnail has very high CTR: make more in that style, plus a better convoy thumbnail with a map, in Google Flow.

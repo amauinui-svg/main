@@ -531,6 +531,38 @@ do
 		end
 	end)
 end
+-- CHAT TIPS (Kash 3 Oct): written by Kash, word for word. One every 5 to 10 minutes, shuffled so none repeats
+-- until all have shown. The group tip stops once the player has claimed the FREE GIFT.
+do
+	local TIPS = {
+		{ t = "tip: bank your cash before you log off. people CAN raid you so it might be a good idea idk i just work here" },
+		{ t = "if youre stuck on cash just build properties, they make bank" },
+		{ t = "convoys that go between different regions pay way more. europe to asia is a good one" },
+		{ t = "I will give you 100 gold if you join the group right now", group = true },
+		{ t = "if you enjoy the game then leave a like <3" },
+	}
+	local function esc(x) return (tostring(x or ""):gsub("&", "&amp;"):gsub("<", "&lt;"):gsub(">", "&gt;")) end
+	task.spawn(function()
+		local bag = {}
+		while true do
+			task.wait(math.random(300, 600))
+			local st = App.state
+			if st and st.onboarded then
+				if #bag == 0 then
+					for i = 1, #TIPS do table.insert(bag, math.random(1, #bag + 1), i) end
+				end
+				local tip = TIPS[table.remove(bag)]
+				if tip and not (tip.group and st.groupGift) then
+					pcall(function()
+						local TCS = game:GetService("TextChatService")
+						local ch = TCS:FindFirstChild("TextChannels") and TCS.TextChannels:FindFirstChild("RBXGeneral")
+						if ch then ch:DisplaySystemMessage("<font color='#f0c75a'><b>[Kash]</b></font> " .. esc(tip.t)) end
+					end)
+				end
+			end
+		end
+	end)
+end
 local initsDone = false
 local function runInits()
 	if initsDone or not (App.state and App.state.onboarded) then return end
