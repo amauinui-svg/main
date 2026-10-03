@@ -497,3 +497,6 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 
 ## 3 Oct 11:24 (Kash)
 - "They were just raided" blocked everyone once anyone raided a nation. Removed the shared cooldown: the whole lobby can raid the same nation, each attacker only has their own cooldown on it. (AI rivals still can't pile onto one player.)
+
+## 3 Oct 11:58 (Kash)
+- Likes the art style of the current set (v5 + live thumbnails); wants better concepts, layouts and variations. Made 16 new concepts x2 in art/ads/v6 (Nano Banana 2, refs: Rule the World, Steal Their Cash, Raise Your Army, Raid VS): plan your attack, biggest empire, capture capitals, defeat the boss, earn while AFK, evolve your nation, pass laws get rich, hut to empire, legendary officers, choose your government, protect your cash, send convoys, spy on rivals, be number 1, win the war, world events. Don't use: top_the_leaderboard_a (typo NUMRER), monarchy_democracy_a (seal on the podium looks like a real one), get_rich_laws_a ("ROBUX" printed on the cash).
