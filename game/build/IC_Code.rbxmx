@@ -997,6 +997,8 @@ C.Products = {
 	FinishConvoy4 = { id = 3715911519, robux = 49, maxMinutes = math.huge },
 	ChallengeRefresh = { id = 3715911521, robux = 19 },
 	MoveCapital = { id = 3715911522, robux = 99 },
+	-- Change Government (Kash 2 Oct): pick a different government later on. id 0 until the product is created.
+	ChangeGovernment = { id = 0, robux = 99 },
 	LimitedBundle = { id = 3715911526, robux = 999 },
 }
 
@@ -1254,11 +1256,15 @@ end
 function R.EraCost(e) local E = D.Eras[e]; if not E then return nil end; return math.floor(R.MinuteValue(E.start) * 120 / 1000 + 0.5) * 1000 end
 
 ---------------------------------------------------------------- ideologies (onboarding)
+-- Governments (Kash 2 Oct): picked in onboarding, changed later with the Change Government product.
+-- Keys stay the same as old saves ("republic" is shown as DEMOCRACY).
 R.Ideologies = {
-	{ key = "republic", name = "REPUBLIC", desc = "+10% property income", mod = { props = 0.10 } },
-	{ key = "monarchy", name = "MONARCHY", desc = "+10% law cash", mod = { law = 0.10 } },
-	{ key = "federation", name = "FEDERATION", desc = "+10% convoy pay", mod = { convoy = 0.10 } },
-	{ key = "junta", name = "MILITARY JUNTA", desc = "+10% attack and defense", mod = { attack = 0.10, defense = 0.10 } },
+	{ key = "republic", name = "DEMOCRACY", desc = "+10% property income", flavor = "The people build and the economy booms.", mod = { props = 0.10 } },
+	{ key = "monarchy", name = "MONARCHY", desc = "+10% law cash", flavor = "The crown's decrees fill the treasury.", mod = { law = 0.10 } },
+	{ key = "federation", name = "FEDERATION", desc = "+10% convoy pay", flavor = "Free states trading across the world.", mod = { convoy = 0.10 } },
+	{ key = "junta", name = "MILITARY JUNTA", desc = "+10% attack and defense", flavor = "Generals rule. Troops fight harder.", mod = { attack = 0.10, defense = 0.10 } },
+	{ key = "theocracy", name = "THEOCRACY", desc = "Influence and Supply refill 10% faster", flavor = "Faith moves the nation: less waiting, more ruling.", mod = { regen = 0.10 } },
+	{ key = "technocracy", name = "TECHNOCRACY", desc = "+10% XP from everything", flavor = "Experts in charge. Progress comes faster.", mod = { xp = 0.10 } },
 }
 R.IdeologyByKey = {}
 for _, d in ipairs(R.Ideologies) do R.IdeologyByKey[d.key] = d end
@@ -2876,8 +2882,8 @@ function PS.Mods(p)
 	local vipRegen = vt and vt.regen or 0
 	return {
 		law = 1 + (ideo.law or 0) + perks.law + b.law + vip, props = 1 + (ideo.props or 0) + perks.props + b.props + vip + R.WonderBonus(d.wonder),
-		convoy = 1 + (ideo.convoy or 0) + perks.convoy + b.convoy + vip, regen = 1 + perks.regen + b.regen + vipRegen,
-		xp = 1 + b.xp + vip,
+		convoy = 1 + (ideo.convoy or 0) + perks.convoy + b.convoy + vip, regen = 1 + (ideo.regen or 0) + perks.regen + b.regen + vipRegen,
+		xp = 1 + (ideo.xp or 0) + b.xp + vip,
 		attack = (ideo.attack or 0) + perks.attack + b.attack + b.gearAtk, defense = (ideo.defense or 0) + perks.defense + b.defense + b.gearDef,
 		siege = (ideo.attack or 0) + perks.attack + 0.05 * war + b.siege, boss = b.boss,
 		loot = b.loot, losses = b.losses, interest = b.interest,
@@ -3344,7 +3350,7 @@ function PS.Snapshot(p)
 		bank = d.bank, bankRate = Config.Bank.InterestPerHour * (1 + (mods.interest or 0)), bankCap = R.MinuteValue(d.lv) * R.BankCapMinutes, shield = d.shield, revenge = d.revenge,
 		inv = d.inv, cab = d.cab, officerSlots = PS.OfficerSlots(p), nextSlotCost = PS.NextSlotCost(p),
 		crates = d.crates, basicCratePrice = PS.BasicCratePrice(p), login = d.login, loginReady = PS.LoginReady(p),
-		weekly = d.weekly, refresh = d.refresh, bundle = d.bundle, starter = d.starter, wev = d.wev, wonder = d.wonder or 0, admin = PS.Admin and PS.Admin.IsAdmin(p.player) or nil, title = d.title, created = d.created, elite = d.elite, duesRate = PS.DuesRate(p),
+		weekly = d.weekly, refresh = d.refresh, bundle = d.bundle, starter = d.starter, wev = d.wev, wonder = d.wonder or 0, admin = PS.Admin and PS.Admin.IsAdmin(p.player) or nil, title = d.title, created = d.created, elite = d.elite, govCredit = d.govCredit, duesRate = PS.DuesRate(p),
 		targets = PS.Raids and PS.Raids.Targets(p) or {},
 		firstRefill = d.firstRefill or false, settings = d.settings or {}, meta = d.meta or {}, inGroup = p.inGroup or false, premium = p.premium or false, groupId = Config.Group.Id,
 		vip = (PS.VipTier(p) or {}).tag, version = Config.Version,
@@ -3772,6 +3778,18 @@ function grant.MoveCapital(p, city)
 	if type(city) ~= "number" or not require(RS.Shared.World).Cities[city] then return false end
 	p.data.home = city
 	PS.Note(p, { kind = "toast", text = "Your capital has moved.", tone = "good" })
+	return true
+end
+function grant.ChangeGovernment(p, ideo)
+	local R = require(RS.Shared.Rules)
+	if type(ideo) ~= "string" or not R.IdeologyByKey[ideo] then
+		p.data.govCredit = (p.data.govCredit or 0) + 1 -- no valid pick saved: keep it as a free change for later
+		PS.Note(p, { kind = "toast", text = "Government change saved. Pick your new government any time.", tone = "good" })
+		return true
+	end
+	p.data.ideo = ideo
+	p.xpMult = PS.Mods(p).xp
+	PS.Note(p, { kind = "toast", text = "Your nation is now a " .. R.IdeologyByKey[ideo].name .. "!", tone = "gold" })
 	return true
 end
 function grant.GoldSmall(p) p.data.gold += Config.Products.GoldSmall.gold; return true end
@@ -5464,6 +5482,19 @@ function act.revengeStrike(plr, p, a)
 	if not ai and not q and not RA.RemoteOk(r.id) then return no(r.name .. " can't be found right now") end
 	return MK.PromptProduct(plr, "RevengeStrike", r.id)
 end
+function act.changeGov(plr, p, a)
+	local key = a and a.ideo
+	if type(key) ~= "string" or not R.IdeologyByKey[key] then return no("Pick a government") end
+	if key == p.data.ideo then return no("That is already your government") end
+	if (p.data.govCredit or 0) > 0 then
+		p.data.govCredit -= 1
+		p.data.ideo = key
+		p.xpMult = PS.Mods(p).xp
+		return ok({ changed = true })
+	end
+	return MK.PromptProduct(plr, "ChangeGovernment", key)
+end
+
 function act.moveCapital(plr, p, a)
 	local b = int(a.city, 1, #World.Cities)
 	if not b then return no("Pick a city") end
@@ -9462,15 +9493,16 @@ function O.show(App)
 		return function() return true end
 	end
 	steps[3] = function()
-		text(area, "Choose your form of government", { font = "display", size = 24, pos = UDim2.fromOffset(4, 10), sz = UDim2.new(1, 0, 0, 30), z = 63 })
+		text(area, "Choose your form of government (you can change it later)", { font = "display", size = 24, pos = UDim2.fromOffset(4, 10), sz = UDim2.new(1, 0, 0, 30), z = 63 })
 		local grid = UI.mk("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(4, 54), Size = UDim2.new(1, -8, 1, -60), ZIndex = 63 }, area)
-		UI.mk("UIGridLayout", { CellSize = UDim2.new(0.5, -6, 0, 110), CellPadding = UDim2.fromOffset(12, 12), SortOrder = Enum.SortOrder.LayoutOrder }, grid)
-		local icons = { republic = "icon_landmark", monarchy = "icon_crown", federation = "icon_globe", junta = "icon_military" }
+		UI.mk("UIGridLayout", { CellSize = UDim2.new(1 / 3, -8, 0, 132), CellPadding = UDim2.fromOffset(12, 12), SortOrder = Enum.SortOrder.LayoutOrder }, grid)
+		local icons = { republic = "icon_landmark", monarchy = "icon_crown", federation = "icon_globe", junta = "icon_military", theocracy = "icon_sparkles", technocracy = "icon_rocket" }
 		for k, d in ipairs(R.Ideologies) do
 			local card = UI.card(grid, { button = true, z = 64, hot = form.ideo == d.key, order = k })
 			UI.icon(card, icons[d.key], 36, form.ideo == d.key and C.gold or C.manila, UDim2.fromOffset(16, 16), { z = 65 })
-			text(card, d.name, { font = "display", size = 22, pos = UDim2.fromOffset(64, 18), sz = UDim2.new(1, -72, 0, 28), z = 65 })
-			text(card, d.desc, { font = "heavy", size = 17, color = C.good, pos = UDim2.fromOffset(64, 54), sz = UDim2.new(1, -72, 0, 22), z = 65 })
+			text(card, d.name, { font = "display", size = 20, pos = UDim2.fromOffset(62, 14), sz = UDim2.new(1, -70, 0, 26), z = 65, scaled = true })
+			text(card, d.desc, { font = "heavy", size = 16, color = C.good, wrap = true, pos = UDim2.fromOffset(62, 44), sz = UDim2.new(1, -70, 0, 40), z = 65, valign = Enum.TextYAlignment.Top })
+			text(card, d.flavor or "", { size = 14, color = C.muted, wrap = true, pos = UDim2.fromOffset(14, 88), sz = UDim2.new(1, -24, 0, 36), z = 65, valign = Enum.TextYAlignment.Top })
 			card.Activated:Connect(function() form.ideo = d.key; draw() end)
 		end
 		return function() return true end
@@ -11902,6 +11934,7 @@ local TweenService = game:GetService("TweenService")
 local Shared = RS:WaitForChild("Shared")
 local D = require(Shared.GameData)
 local R = require(Shared.Rules)
+local Config = require(Shared.Config)
 local TK = require(Shared.Tasks)
 
 local S = {}
@@ -12466,6 +12499,37 @@ S.country = { build = function(host, App)
 	local ideoL = text(idRow, "", { size = 13, color = C.muted, pos = UDim2.fromOffset(70, 26), sz = UDim2.new(1, -184, 0, 16), z = 10, truncate = true })
 	-- EDIT FLAG (Kash 19:24): opens the flag editor; the Custom Flag pass unlocks the extra options
 	UI.button(idRow, "manila", "EDIT FLAG", function() showFlagEditor(App) end, { pos = UDim2.new(1, 0, 0.5, 0), anchor = Vector2.new(1, 0.5), sz = UDim2.fromOffset(108, 36), z = 11, textSize = 14, icon = "icon_flag", iconSize = 16 })
+	-- government: tap to change it (Change Government product, Kash 2 Oct)
+	local govClick = UI.mk("TextButton", { Text = "", BackgroundTransparency = 1, Position = UDim2.fromOffset(70, 24), Size = UDim2.new(1, -184, 0, 20), ZIndex = 12 }, idRow)
+	govClick.Activated:Connect(function()
+		local host = UI.mk("TextButton", { Name = "GovPicker", Text = "", AutoButtonColor = false, BackgroundColor3 = C.black, BackgroundTransparency = 0.35, Size = UDim2.fromScale(1, 1), ZIndex = 85 }, App.root)
+		local pnl, b = UI.panel(host, "CHANGE GOVERNMENT", { sz = UDim2.fromOffset(760, 470), pos = UDim2.fromScale(0.5, 0.5), anchor = Vector2.new(0.5, 0.5), z = 86 })
+		UI.button(pnl, "slate", "X", function() host:Destroy() end, { pos = UDim2.new(1, -54, 0, 10), sz = UDim2.fromOffset(40, 36), z = 90, textSize = 16 })
+		local st = App.state
+		local prod = Config.Products and Config.Products.ChangeGovernment
+		local free = (st.govCredit or 0) > 0
+		text(b, free and "You have a free change. Pick your new government." or ("Each change costs R$ " .. (prod and prod.robux or 99) .. ". Your current government is lit."), { size = 15, color = C.muted, sz = UDim2.new(1, 0, 0, 22), z = 87 })
+		local grid = UI.mk("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(0, 30), Size = UDim2.new(1, 0, 1, -30), ZIndex = 87 }, b)
+		UI.mk("UIGridLayout", { CellSize = UDim2.new(1 / 3, -8, 0, 170), CellPadding = UDim2.fromOffset(12, 12), SortOrder = Enum.SortOrder.LayoutOrder }, grid)
+		local icons = { republic = "icon_landmark", monarchy = "icon_crown", federation = "icon_globe", junta = "icon_military", theocracy = "icon_sparkles", technocracy = "icon_rocket" }
+		for k, g in ipairs(R.Ideologies) do
+			local cur = st.ideo == g.key
+			local card = UI.card(grid, { z = 88, hot = cur, order = k })
+			UI.icon(card, icons[g.key] or "icon_landmark", 30, cur and C.gold or C.manila, UDim2.fromOffset(12, 12), { z = 89 })
+			text(card, g.name, { font = "display", size = 18, pos = UDim2.fromOffset(50, 14), sz = UDim2.new(1, -58, 0, 24), z = 89, scaled = true })
+			text(card, g.desc, { font = "heavy", size = 15, color = C.good, wrap = true, pos = UDim2.fromOffset(12, 50), sz = UDim2.new(1, -24, 0, 38), z = 89, valign = Enum.TextYAlignment.Top })
+			text(card, g.flavor or "", { size = 13, color = C.muted, wrap = true, pos = UDim2.fromOffset(12, 88), sz = UDim2.new(1, -24, 0, 34), z = 89, valign = Enum.TextYAlignment.Top })
+			if cur then
+				UI.button(card, "locked", "CURRENT", nil, { pos = UDim2.new(0, 10, 1, -44), sz = UDim2.new(1, -20, 0, 36), z = 90, textSize = 14 })
+			else
+				UI.button(card, free and "green" or "gold", free and "SWITCH (FREE)" or ("SWITCH · R$ " .. (prod and prod.robux or 99)), function(btn)
+					local res = App.req("changeGov", { ideo = g.key }, btn)
+					if res.ok and res.changed then App.toast("YOUR NATION IS NOW A " .. g.name, g.desc, "gold"); host:Destroy()
+					elseif res.ok then host:Destroy() end
+				end, { pos = UDim2.new(0, 10, 1, -44), sz = UDim2.new(1, -20, 0, 36), z = 90, textSize = 14 })
+			end
+		end
+	end)
 	local flagClick = UI.mk("TextButton", { Text = "", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 12 }, flagHost)
 	flagClick.Activated:Connect(function() showFlagEditor(App) end)
 	local xpBar = UI.bar(statsB, C.xp, { pos = UDim2.fromOffset(0, 52), sz = UDim2.new(1, 0, 0, 26), z = 10, textSize = 14 })
@@ -12589,7 +12653,9 @@ S.country = { build = function(host, App)
 			UI.flag(flagHost, st.flag, 58, { z = 10 })
 		end
 		nameL.Text = string.upper((st.name and st.name ~= "") and st.name or Players.LocalPlayer.DisplayName)
-		ideoL.Text = (st.ideo and type(st.ideo) == "string" and (st.ideo .. " · ") or "") .. eraTitle(E.name)
+		local gov = R.IdeologyByKey[st.ideo or ""]
+		ideoL.Text = (gov and (gov.name .. " (" .. gov.desc .. ") · ") or "") .. eraTitle(E.name) .. "  <font color='#e2cfa3'><u>CHANGE</u></font>"
+		ideoL.RichText = true
 		xpBar:Set((st.xp or 0) / math.max(1, st.xpReq or 1), "LEVEL " .. st.lv, R.Short(math.floor(st.xp or 0)) .. " / " .. R.Short(st.xpReq or 0) .. " XP")
 		local officers = 0
 		for _ in pairs((st.inv and st.inv.officers) or {}) do officers += 1 end
@@ -15182,17 +15248,21 @@ Remotes.Sync.OnClientEvent:Connect(function(kind, data)
 		App.tickClock = os.clock()
 		drawTop(); badges()
 		if not data.onboarded then
-			if not onboardShown or App.reonboard then
+			-- shown on first join, and again after the tester panel's /reset (App.onboarding guards repeats)
+			if not onboardShown or not App.onboarding then
 				onboardShown = true
+				App.onboarding = true
 				App.reonboard = nil
 				local okO, Onboard = pcall(require, ClientMods:WaitForChild("Onboard"))
 				if okO then Onboard.show(App) else warn(Onboard) end
 			end
 		elseif not App.current then
+			App.onboarding = nil
 			App.open("map")
 			runInits()
 			if data.loginReady and App.showLogin then task.delay(1.5, function() pcall(App.showLogin) end) end
 		else
+			App.onboarding = nil
 			refreshCurrent()
 		end
 		App.emit("full", data)
