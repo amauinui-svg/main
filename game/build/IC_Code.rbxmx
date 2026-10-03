@@ -980,8 +980,9 @@ C.PopularCapitals = { 1, 12, 9, 2, 6, 33 }
 C.PopularMinPlayers = 30
 
 -- Tabs unlock by level (Kash 2 Oct): new players see only WORLD and LAWS, the rest open up as they level.
-C.NavUnlock = { map = 1, laws = 1, properties = 2, shop = 3, country = 4, tasks = 5, military = 6, inventory = 7, bank = 8,
-	battle = 10, bosses = 12, rankings = 12, alliance = 15 }
+-- 2 Oct 23:38: lowered so every tab is open by level 9
+C.NavUnlock = { map = 1, laws = 1, properties = 2, shop = 3, country = 3, tasks = 4, military = 4, inventory = 5, bank = 5,
+	battle = 6, bosses = 7, rankings = 8, alliance = 9 }
 
 -- BADGES (Kash 2 Oct): one easy welcome badge, the rest are very hard goals. id 0 = not created yet (skipped).
 C.Badges = {
@@ -4154,6 +4155,8 @@ local R = require(RS.Shared.Rules)
 local M = require(RS.Shared.Military)
 local Config = require(RS.Shared.Config)
 local RC = Config.Raid
+-- nobody (bots or players) can raid a country before it has the RAIDS tab itself (Kash 2 Oct 23:38)
+local function protectedLv() return math.max(RC.AIMinTargetLevel or 1, (Config.NavUnlock and Config.NavUnlock.battle) or 1) end
 
 local O = require(RS.Shared.Officers)
 local RA = {}
@@ -4308,7 +4311,7 @@ function RA.Targets(p)
 	local list = {}
 	local t = now()
 	for plr, q in pairs(PS.Profiles) do
-		if q ~= p and q.data.onboarded and not q.loading and not q.leaving then
+		if q ~= p and q.data.onboarded and not q.loading and not q.leaving and q.data.lv >= protectedLv() then
 			local _, def = PS.Power(q)
 			local id = "u" .. plr.UserId
 			table.insert(list, {
@@ -4530,6 +4533,7 @@ local function remoteAttack(plr, p, id, uid, guaranteed)
 	if not card or not card.def then return { ok = false, msg = "No war records for that nation yet" } end
 	local t = now()
 	if (card.sh or 0) > t then return { ok = false, msg = "They are under a raid shield" } end
+	if (card.lv or 0) < protectedLv() then return { ok = false, msg = "That nation is too new to be raided" } end
 	p.raidCd = p.raidCd or {}
 	if not guaranteed and (p.raidCd[id] or 0) + RC.Cooldown > t then return { ok = false, msg = "You just attacked them. Try again in " .. ((p.raidCd[id] or 0) + RC.Cooldown - t) .. "s" } end
 	if not guaranteed and d.sup < RC.Supply then return { ok = false, msg = "Not enough Supply (" .. RC.Supply .. " needed)" } end
@@ -4658,6 +4662,7 @@ function RA.Attack(plr, p, id, guaranteed)
 		return { ok = false, msg = "That nation is no longer in this server" }
 	end
 	if q == p then return { ok = false, msg = "You cannot raid yourself" } end
+	if q and q.data.lv < protectedLv() then return { ok = false, msg = "That nation is too new to be raided" } end
 	local t = now()
 	if (lastHit[id] or 0) + RC.Cooldown > t then return { ok = false, msg = "They were just raided. Try again in " .. ((lastHit[id] or 0) + RC.Cooldown - t) .. "s" } end
 	-- you can't hammer the same target: one attack per target per cooldown, win or lose (review #7)
@@ -4732,7 +4737,7 @@ local function aiRaid()
 	local t = now()
 	for plr, q in pairs(PS.Profiles) do
 		local d = q.data
-		if d.onboarded and not q.loading and not q.leaving and d.lv >= RC.AIMinTargetLevel and (d.shield or 0) <= t and (lastHit["u" .. plr.UserId] or 0) + RC.Cooldown <= t
+		if d.onboarded and not q.loading and not q.leaving and d.lv >= protectedLv() and (d.shield or 0) <= t and (lastHit["u" .. plr.UserId] or 0) + RC.Cooldown <= t
 			and d.cash > R.MinuteValue(d.lv) * 10 then
 			table.insert(candidates, { plr, q })
 		end
@@ -6758,6 +6763,7 @@ end
 ---------------------------------------------------------------- buttons
 local INK = { manila = UI.C.manilaInk, gold = UI.C.manilaInk, red = UI.C.white, green = UI.C.white, blue = UI.C.white, slate = UI.C.ink, locked = hex("b9bdc3") }
 -- button(parent, kind, label, onClick, p) -> obj { Inst, Label, Set(kind,label), Busy(bool) }
+-- p.static = true: a non-interactive plate in the button art (status labels like OWNED / LIMITED), no press animation
 function UI.button(parent, kind, label, onClick, p)
 	p = p or {}
 	local b = UI.img(parent, "btn_" .. kind, { button = true, name = p.name or "Button", pos = p.pos, sz = p.sz or UDim2.fromOffset(120, 40), anchor = p.anchor, z = p.z or 4, order = p.order })
@@ -6790,6 +6796,7 @@ function UI.button(parent, kind, label, onClick, p)
 		face.Position = UDim2.fromOffset(0, on and 2 or 0)
 		TweenService:Create(scale, TweenInfo.new(on and 0.05 or 0.12, on and Enum.EasingStyle.Quad or Enum.EasingStyle.Back), { Scale = on and 0.97 or 1 }):Play()
 	end
+	if p.static then b.Active = false; b.Selectable = false; return obj end
 	b.MouseButton1Down:Connect(function() press(true) end)
 	b.MouseButton1Up:Connect(function() press(false) end)
 	b.MouseLeave:Connect(function() press(false) end)
@@ -6836,16 +6843,66 @@ function UI.card(parent, p)
 	return UI.img(parent, p.hot and "card_hot" or "card", { name = p.name or "Card", pos = p.pos, sz = p.sz, z = p.z or 6, order = p.order, anchor = p.anchor, button = p.button })
 end
 
+-- chip(parent, text, p) -> chipImage, label. p.w = fixed width (content centred) instead of sizing to the text;
+-- p.button = true makes it an ImageButton (use UI.chipBtn for a clickable chip with press / hover feedback)
 function UI.chip(parent, s, p)
 	p = p or {}
-	local c = UI.img(parent, p.manila and "chip_manila" or "chip", { name = p.name or "Chip", pos = p.pos, sz = UDim2.fromOffset(0, p.h or 24), z = p.z or 7, order = p.order, anchor = p.anchor })
-	c.AutomaticSize = Enum.AutomaticSize.X
+	local c = UI.img(parent, p.manila and "chip_manila" or "chip", { name = p.name or "Chip", pos = p.pos, sz = UDim2.fromOffset(p.w or 0, p.h or 24), z = p.z or 7, order = p.order, anchor = p.anchor, button = p.button, visible = p.visible })
+	if not p.w then c.AutomaticSize = Enum.AutomaticSize.X end
 	mk("UIPadding", { PaddingLeft = UDim.new(0, p.icon and 4 or 8), PaddingRight = UDim.new(0, 8) }, c)
-	mk("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder }, c)
+	mk("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder,
+		HorizontalAlignment = p.w and Enum.HorizontalAlignment.Center or Enum.HorizontalAlignment.Left }, c)
 	if p.icon then UI.icon(c, p.icon, (p.h or 24) - 8, p.iconColor or p.color or (p.manila and UI.C.manilaInk or UI.C.ink), nil, { z = c.ZIndex + 1, order = 0 }) end
 	local l = UI.text(c, s, { size = p.size or 14, font = "bold", color = p.color or (p.manila and UI.C.manilaInk or UI.C.ink), sz = UDim2.new(0, 0, 1, 0), z = c.ZIndex + 1, order = 1, rich = p.rich })
 	l.AutomaticSize = Enum.AutomaticSize.X
 	return c, l
+end
+
+-- chipBtn(parent, text, onClick, p) -> chipButton, label: a compact clickable chip for small inline actions
+-- (DROP RATES on crate cards, "x3 OPEN" shortcuts). Same options as UI.chip.
+function UI.chipBtn(parent, s, onClick, p)
+	p = p or {}
+	local o = {}
+	for k, v in pairs(p) do o[k] = v end
+	o.button = true
+	local c, l = UI.chip(parent, s, o)
+	local sc = mk("UIScale", {}, c)
+	local function to(v, t) TweenService:Create(sc, TweenInfo.new(t or 0.12, Enum.EasingStyle.Back), { Scale = v }):Play() end
+	c.MouseEnter:Connect(function() to(1.06) end)
+	c.MouseLeave:Connect(function() to(1) end)
+	c.MouseButton1Down:Connect(function() to(0.94, 0.05) end)
+	c.MouseButton1Up:Connect(function() to(1.06) end)
+	if onClick then c.Activated:Connect(function() onClick(c, l) end) end
+	return c, l
+end
+
+-- tag(parent, text, color, p) -> plate, label: a solid label plate in the bar-fill art tinted with color (rarity bands,
+-- status tags like EQUIPPED / BEST VALUE). color = nil gives the dark chip plate instead. Sizes to its text unless p.sz.
+function UI.tag(parent, s, color, p)
+	p = p or {}
+	local h = p.h or 18
+	local key = color and "bar_fill" or "chip"
+	local t = UI.img(parent, key, { name = p.name or "Tag", pos = p.pos, sz = p.sz or UDim2.fromOffset(0, h), anchor = p.anchor, z = p.z or 9, order = p.order, color = color, visible = p.visible })
+	if p.rot then t.Rotation = p.rot end
+	local ink = p.textColor or (color and UI.C.manilaInk or UI.C.ink)
+	local l
+	if p.sz then
+		l = UI.text(t, s, { font = "heavy", size = p.size or math.max(10, h - 6), color = ink, align = Enum.TextXAlignment.Center, pos = UDim2.fromOffset(4, 0), sz = UDim2.new(1, -8, 1, 0),
+			z = t.ZIndex + 1, rich = p.rich, scaled = true })
+	else
+		t.AutomaticSize = Enum.AutomaticSize.X
+		mk("UIPadding", { PaddingLeft = UDim.new(0, p.pad or 7), PaddingRight = UDim.new(0, p.pad or 7) }, t)
+		l = UI.text(t, s, { font = "heavy", size = p.size or math.max(10, h - 6), color = ink, sz = UDim2.new(0, 0, 1, 0), z = t.ZIndex + 1, rich = p.rich })
+		l.AutomaticSize = Enum.AutomaticSize.X
+	end
+	return t, l
+end
+
+-- infoBtn(parent, pos, onClick, p) -> button obj: the small square "i" button on the slate button plate
+function UI.infoBtn(parent, pos, onClick, p)
+	p = p or {}
+	local s = p.size or 24
+	return UI.button(parent, p.kind or "slate", "i", onClick, { name = "Info", pos = pos, anchor = p.anchor, sz = UDim2.fromOffset(s, s), z = p.z or 8, order = p.order, textSize = 15, scaledText = false })
 end
 
 function UI.badge(parent, n, pos, z)
@@ -7701,7 +7758,7 @@ function Map.build(host, App)
 		if auto then
 			local b = UI.button(dock, st.autoOff and "slate" or "green", st.autoOff and "AUTO: OFF" or "AUTO: ON", function(btn)
 				App.req("toggleAuto", {}, btn)
-			end, { sz = UDim2.fromOffset(110, 80), z = 21, order = 0, icon = "icon_bot", textSize = 14 })
+			end, { sz = UDim2.fromOffset(110, 80), z = 21, order = 0, icon = "icon_bot", iconSize = 22, textSize = 14 })
 		end
 		for i, c in ipairs(st.convoys) do
 			local card = UI.card(dock, { button = true, sz = UDim2.fromOffset(214, 80), z = 21, order = i, hot = (selConvoy == i) })
@@ -7737,7 +7794,7 @@ function Map.build(host, App)
 			UI.button(dock, (st.cash or 0) >= cost and "green" or "slate", "NEW CONVOY\n" .. R.Money(cost), function(btn)
 				local res = App.req("buyConvoy", {}, btn)
 				if res.ok then App.toast("NEW CONVOY!", "Send it from your capital", "gold"); App.play("purchase", { volume = 0.45 }) end
-			end, { sz = UDim2.fromOffset(150, 80), z = 21, order = 50, icon = "icon_plus", textSize = 14 })
+			end, { sz = UDim2.fromOffset(150, 80), z = 21, order = 50, icon = "icon_plus", iconSize = 22, textSize = 14 })
 		elseif nextGate then
 			local card = UI.card(dock, { sz = UDim2.fromOffset(150, 80), z = 21, order = 50 })
 			UI.icon(card, "icon_lock", 22, C.dim, UDim2.fromOffset(10, 10), { z = 22 })
@@ -7745,7 +7802,7 @@ function Map.build(host, App)
 			text(card, "Buy it at level " .. nextGate, { size = 14, pos = UDim2.fromOffset(10, 40), sz = UDim2.new(1, -20, 0, 30), z = 22, wrap = true })
 		end
 		if not (st.gp and st.gp.ExtraConvoys) then
-			local b = UI.button(dock, "gold", "+2 CONVOYS", function(btn) App.req("buyPass", { key = "ExtraConvoys" }, btn) end, { sz = UDim2.fromOffset(140, 80), z = 21, order = 60, icon = "icon_plus", textSize = 14 })
+			local b = UI.button(dock, "gold", "+2 CONVOYS", function(btn) App.req("buyPass", { key = "ExtraConvoys" }, btn) end, { sz = UDim2.fromOffset(140, 80), z = 21, order = 60, icon = "icon_plus", iconSize = 22, textSize = 14 })
 		end
 	end
 	local function tickDock()
@@ -8045,6 +8102,7 @@ function Map.build(host, App)
 	-- keep the chip clear of the city dossier panel (right side) when it is open
 	local function layoutEventChip()
 		evChip.Position = panel.Visible and UDim2.new(0.5, -190, 0, 44) or UDim2.new(0.5, 0, 0, 44)
+		eraChip.Position = panel.Visible and UDim2.new(0.5, -190, 0, 10) or UDim2.new(0.5, 0, 0, 10)
 	end
 	panel:GetPropertyChangedSignal("Visible"):Connect(layoutEventChip)
 	local evShown, lastEvKey -- evShown = the event the marker and chip describe
@@ -8181,7 +8239,9 @@ local S = {}
 local function frame(host, App, title)
 	local UI = App.UI
 	local panel, body = UI.panel(host, title, { sz = UDim2.new(1, -20, 1, -20), pos = UDim2.fromOffset(10, 10), z = 5, titleSize = 26 })
-	local sub = UI.text(panel, "", { font = "bold", size = 15, color = UI.C.muted, pos = UDim2.new(0, 18, 0, 16), sz = UDim2.new(1, -36, 0, 22), z = 7, align = Enum.TextXAlignment.Right, rich = true })
+	-- the header line starts after the title (about 16 px per typewriter letter) so a long line can never run under it
+	local x0 = host:GetAttribute("TabsRight") or (18 + #title * 16 + 16)
+	local sub = UI.text(panel, "", { font = "bold", size = 15, color = UI.C.muted, pos = UDim2.new(0, x0, 0, 16), sz = UDim2.new(1, -x0 - 18, 0, 22), z = 7, align = Enum.TextXAlignment.Right, rich = true, truncate = true })
 	return panel, body, sub
 end
 
@@ -8255,13 +8315,8 @@ local function showRefill(App)
 	end, { pos = UDim2.new(0.5, 6, 0, 8), sz = UDim2.new(0.5, -6, 0, 50), z = 74, textSize = 16 })
 	if cheap then
 		-- "First refill only R$9!" ribbon over the Robux button, with a gentle pulse
-		local rib = UI.mk("Frame", { Name = "Ribbon", BackgroundColor3 = C.bad, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0, 0),
-			Size = UDim2.fromOffset(0, 20), AutomaticSize = Enum.AutomaticSize.X, ZIndex = 78, Rotation = -3 }, rb.Inst)
-		UI.mk("UICorner", { CornerRadius = UDim.new(0, 4) }, rib)
-		UI.mk("UIPadding", { PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8) }, rib)
-		UI.mk("UIStroke", { Color = C.black, Thickness = 1.5, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, rib)
-		local rl = text(rib, "FIRST REFILL ONLY R$" .. robux .. "!", { font = "heavy", size = 12, color = C.white, sz = UDim2.new(0, 0, 1, 0), z = 79 })
-		rl.AutomaticSize = Enum.AutomaticSize.X
+		local rib = UI.tag(rb.Inst, "FIRST REFILL ONLY R$" .. robux .. "!", C.bad, { name = "Ribbon", anchor = Vector2.new(0.5, 0.5), pos = UDim2.new(0.5, 0, 0, 0), h = 20, size = 12,
+			z = 78, rot = -3, pad = 8, textColor = C.white })
 		local rs = UI.mk("UIScale", {}, rib)
 		TweenService:Create(rs, TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Scale = 1.08 }):Play()
 	end
@@ -8313,7 +8368,11 @@ S.laws = { build = function(host, App)
 		local gs = UI.mk("UIScale", {}, giftBtn.Inst)
 		game:GetService("TweenService"):Create(gs, TweenInfo.new(0.7, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Scale = 1.07 }):Play()
 	end
-	local function giftVis(st) giftBtn.Inst.Visible = st and st.onboarded and not st.groupGift and (st.groupId or 0) ~= 0 or false end
+	local function giftVis(st)
+		giftBtn.Inst.Visible = st and st.onboarded and not st.groupGift and (st.groupId or 0) ~= 0 or false
+		-- the era tabs make room for the button: rebuild them when it appears or goes
+		if tabs and obj.tabsGift ~= nil and obj.tabsGift ~= giftBtn.Inst.Visible and host.Visible and st and obj.Refresh then obj:Refresh(st) end
+	end
 	App.on("full", giftVis)
 	giftVis(App.state)
 
@@ -8423,12 +8482,17 @@ S.laws = { build = function(host, App)
 	function obj:Refresh(st)
 		local cur = R.PlayerEra(st)
 		local maxTab = math.min(#D.Eras, cur + 1)
-		if not tabs or obj.maxTab ~= maxTab then
+		local giftOn = giftBtn.Inst.Visible
+		if not tabs or obj.maxTab ~= maxTab or obj.tabsGift ~= giftOn then
 			if tabs then tabs.Inst:Destroy() end
 			local labels = {}
 			for e = 1, maxTab do table.insert(labels, string.upper(D.Eras[e].name)) end
 			obj.maxTab = maxTab
-			tabs = UI.tabs(body, labels, function(i) obj.era = i; build(App.state) end, { w = 132, textSize = 13, z = 7 })
+			obj.tabsGift = giftOn
+			-- era tabs shrink to share the row with the FREE GIFT button instead of running under it
+			local avail = App.W() - (App.NAVW or 176) - 48 - (giftOn and 184 or 0)
+			local tabW = math.clamp(math.floor(avail / maxTab) - 6, 72, 132)
+			tabs = UI.tabs(body, labels, function(i) obj.era = i; build(App.state) end, { w = tabW, sz = UDim2.new(1, giftOn and -184 or 0, 0, 34), textSize = 13, z = 7 })
 			obj.era = obj.era or cur
 			tabs:Set(obj.era)
 			build(st)
@@ -8471,9 +8535,9 @@ S.properties = { build = function(host, App)
 			local any = false
 			for i = #obj.payTiles, 1, -1 do
 				local pt = obj.payTiles[i]
-				if not pt.fill.Parent then table.remove(obj.payTiles, i)
+				if not pt.bar.Inst.Parent then table.remove(obj.payTiles, i)
 				else
-					pt.fill.Size = UDim2.fromScale(frac, 1)
+					pt.bar:Set(frac)
 					if paid then any = true; obj.payOut(pt) end
 				end
 			end
@@ -8503,8 +8567,8 @@ S.properties = { build = function(host, App)
 		pt.scale.Scale = 1.14
 		tw(pt.scale, 0.35, { Scale = 1 }, Enum.EasingStyle.Back)
 		if pt.flash and pt.flash.Parent then
-			pt.flash.BackgroundTransparency = 0.25
-			tw(pt.flash, 0.45, { BackgroundTransparency = 1 })
+			pt.flash.ImageTransparency = 0.25
+			tw(pt.flash, 0.45, { ImageTransparency = 1 })
 		end
 		local f = text(tile, "+" .. R.Money(pt.amount), { font = "heavy", size = 18, color = C.good, align = Enum.TextXAlignment.Center, anchor = Vector2.new(0.5, 1),
 			pos = UDim2.new(0.5, 0, 1, -50), sz = UDim2.new(1, 0, 0, 22), z = 16, stroke = 1.4 })
@@ -8526,49 +8590,24 @@ S.properties = { build = function(host, App)
 		local P = D.Props[p]
 		return "lights_e" .. P.era .. "_t" .. P.tier
 	end
+	-- dark name / note plate on a tile or stat box: the kit chip
 	local function plate(parent, s, pos, anchor, z, color)
-		local f = UI.mk("Frame", { BackgroundColor3 = Color3.fromHex("121417"), BackgroundTransparency = 0.15, BorderSizePixel = 0, AutomaticSize = Enum.AutomaticSize.X,
-			Size = UDim2.fromOffset(0, 22), Position = pos, AnchorPoint = anchor, ZIndex = z }, parent)
-		UI.mk("UICorner", { CornerRadius = UDim.new(0, 4) }, f)
-		UI.mk("UIPadding", { PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8) }, f)
-		local l = text(f, s, { font = "bold", size = 13, color = color or C.ink, sz = UDim2.new(0, 0, 1, 0), z = z + 1, rich = true })
-		l.AutomaticSize = Enum.AutomaticSize.X
-		return f, l
+		return UI.chip(parent, s, { pos = pos, anchor = anchor, z = z, h = 22, size = 13, color = color or C.ink, rich = true })
 	end
-	-- hourly income pill on an owned tile: sized once to its text and never resized (the bar lives outside it)
-	local PAY_BAR_H, PAY_BAR_BOTTOM = 10, 10
+	-- hourly income chip on an owned tile: sized once to its text and never resized (the bar lives outside it)
+	local PAY_BAR_H, PAY_BAR_BOTTOM = 16, 8
 	local function incomePill(t, s)
-		local f = UI.mk("Frame", { Name = "IncomePill", BackgroundColor3 = Color3.fromHex("121417"), BackgroundTransparency = 0.08, BorderSizePixel = 0,
-			AutomaticSize = Enum.AutomaticSize.X, Size = UDim2.fromOffset(0, 24), AnchorPoint = Vector2.new(0.5, 1),
-			Position = UDim2.new(0.5, 0, 1, -(PAY_BAR_BOTTOM + PAY_BAR_H + 6)), ZIndex = 12 }, t)
-		UI.mk("UICorner", { CornerRadius = UDim.new(1, 0) }, f)
-		UI.mk("UIStroke", { Color = C.good, Thickness = 1, Transparency = 0.6, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, f)
-		UI.mk("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10) }, f)
-		local l = text(f, s, { font = "heavy", size = 14, color = C.good, sz = UDim2.new(0, 0, 1, 0), z = 13 })
-		l.AutomaticSize = Enum.AutomaticSize.X
+		local f = UI.chip(t, s, { name = "IncomePill", anchor = Vector2.new(0.5, 1), pos = UDim2.new(0.5, 0, 1, -(PAY_BAR_BOTTOM + PAY_BAR_H + 4)), h = 24, size = 14, color = C.good, z = 12 })
 		return f, UI.mk("UIScale", {}, f)
 	end
-	-- the income progress bar: its own rounded track (dark inset, subtle border) across the tile's inner width,
-	-- with a green gradient fill and a soft top highlight. Returns the fill frame and the payout flash frame.
+	-- the income progress bar: the kit bar across the tile's inner width, plus a green flash plate for the payout.
+	-- Returns the bar object and the flash image.
 	local function payBar(t)
-		local track = UI.mk("Frame", { Name = "PayBar", BackgroundColor3 = Color3.fromHex("0b0d10"), BackgroundTransparency = 0.05, BorderSizePixel = 0,
-			AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -PAY_BAR_BOTTOM), Size = UDim2.new(1, -28, 0, PAY_BAR_H), ZIndex = 12, ClipsDescendants = false }, t)
-		UI.mk("UICorner", { CornerRadius = UDim.new(1, 0) }, track)
-		UI.mk("UIStroke", { Color = Color3.fromHex("4a4f57"), Thickness = 1, Transparency = 0.25, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, track)
-		-- inset shading: darker at the top edge, like a groove
-		UI.mk("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.fromRGB(120, 120, 120), Color3.new(1, 1, 1)) }, track)
-		local inner = UI.mk("Frame", { Name = "Inner", BackgroundTransparency = 1, Position = UDim2.fromOffset(2, 2), Size = UDim2.new(1, -4, 1, -4), ZIndex = 13 }, track)
-		local fill = UI.mk("Frame", { Name = "Fill", BackgroundColor3 = C.white, BorderSizePixel = 0, Size = UDim2.fromScale((os.clock() % CYCLE) / CYCLE, 1), ZIndex = 13 }, inner)
-		UI.mk("UICorner", { CornerRadius = UDim.new(1, 0) }, fill)
-		UI.mk("UIGradient", { Rotation = 90, Color = ColorSequence.new({
-			ColorSequenceKeypoint.new(0, Color3.fromHex("b4f29c")), ColorSequenceKeypoint.new(0.5, Color3.fromHex("8fd07a")), ColorSequenceKeypoint.new(1, Color3.fromHex("4f9a45")) }) }, fill)
-		local hi = UI.mk("Frame", { Name = "Highlight", BackgroundColor3 = C.white, BackgroundTransparency = 0.7, BorderSizePixel = 0,
-			Position = UDim2.new(0, 2, 0, 1), Size = UDim2.new(1, -4, 0.38, 0), ZIndex = 14 }, fill)
-		UI.mk("UICorner", { CornerRadius = UDim.new(1, 0) }, hi)
+		local bar = UI.bar(t, C.good, { name = "PayBar", anchor = Vector2.new(0.5, 1), pos = UDim2.new(0.5, 0, 1, -PAY_BAR_BOTTOM), sz = UDim2.new(1, -28, 0, PAY_BAR_H), z = 12, textSize = 10 })
+		bar:Set((os.clock() % CYCLE) / CYCLE)
 		-- payout flash: the whole track glows green for a moment when the cycle pays
-		local flash = UI.mk("Frame", { Name = "Flash", BackgroundColor3 = C.good, BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ZIndex = 15 }, track)
-		UI.mk("UICorner", { CornerRadius = UDim.new(1, 0) }, flash)
-		return fill, flash
+		local flash = UI.img(bar.Inst, "bar_fill", { name = "Flash", color = C.good, alpha = 1, z = bar.Inst.ZIndex + 3 })
+		return bar, flash
 	end
 
 	-- one square tile. kind = "owned" | "sale" | "locked"
@@ -8586,13 +8625,13 @@ S.properties = { build = function(host, App)
 		-- bobbing scaffold, smoke puffs, BUILDING bar; then the building pops in on the next refresh
 		local site = UI.img(t, "construct", { sz = UDim2.fromScale(0.78, 0.78), pos = UDim2.fromScale(0.5, 0.5), anchor = Vector2.new(0.5, 0.5), z = 9, slice = false, fit = true })
 		local lbl = text(t, "BUILDING", { font = "heavy", size = 16, color = C.gold, align = Enum.TextXAlignment.Center, pos = UDim2.new(0, 0, 1, -44), sz = UDim2.new(1, 0, 0, 20), z = 11, stroke = 1.2 })
-		local track = UI.mk("Frame", { BackgroundColor3 = C.black, BorderSizePixel = 0, Position = UDim2.new(0.12, 0, 1, -20), Size = UDim2.new(0.76, 0, 0, 8), ZIndex = 11 }, t)
-		local fill = UI.mk("Frame", { BackgroundColor3 = C.gold, BorderSizePixel = 0, Size = UDim2.fromScale(0, 1), ZIndex = 12 }, track)
+		local bbar = UI.bar(t, C.gold, { pos = UDim2.new(0.12, 0, 1, -22), sz = UDim2.new(0.76, 0, 0, 14), z = 11, textSize = 10 })
 		local dur = 2.4
 		local started = obj.building[lot]
 		local left = math.max(0.2, dur - (os.clock() - started))
-		fill.Size = UDim2.fromScale(1 - left / dur, 1)
-		tw(fill, left, { Size = UDim2.fromScale(1, 1) }, Enum.EasingStyle.Linear)
+		bbar:Set(1 - left / dur)
+		bbar.Fill.Visible = true
+		tw(bbar.Fill, left, { Size = UDim2.new(1, -6, 1, -6) }, Enum.EasingStyle.Linear)
 		task.spawn(function()
 			local up = true
 			while site.Parent and os.clock() - started < dur do
@@ -8630,11 +8669,8 @@ S.properties = { build = function(host, App)
 		text(b2, used .. " / " .. st.lotsMax, { font = "display", size = 28, pos = UDim2.fromOffset(16, 26), sz = UDim2.new(0.5, 0, 0, 32), z = 8 })
 		local free = st.lotsMax - used
 		if free > 0 then plate(b2, free .. " OPEN", UDim2.new(1, -12, 0, 10), Vector2.new(1, 0), 9, C.good) end
-		local pips = UI.mk("Frame", { BackgroundTransparency = 1, Position = UDim2.new(0.45, 0, 0, 44), Size = UDim2.new(0.55, -14, 0, 12), ZIndex = 8 }, b2)
-		UI.mk("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 3), SortOrder = Enum.SortOrder.LayoutOrder }, pips)
-		for k = 1, st.lotsMax do
-			UI.mk("Frame", { BackgroundColor3 = k <= used and C.gold or C.slate, BorderSizePixel = 0, Size = UDim2.new(1 / st.lotsMax, -3, 1, 0), ZIndex = 9, LayoutOrder = k }, pips)
-		end
+		local lotsBar = UI.bar(b2, C.gold, { pos = UDim2.new(0.45, 0, 0, 40), sz = UDim2.new(0.55, -14, 0, 18), z = 8, textSize = 11 })
+		lotsBar:Set(used / math.max(1, st.lotsMax))
 
 		local grid = UI.mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, ZIndex = 6, LayoutOrder = 1 }, list)
 		UI.mk("UIGridLayout", { CellSize = UDim2.fromOffset(cell, cell), CellPadding = UDim2.fromOffset(10, 10), SortOrder = Enum.SortOrder.LayoutOrder }, grid)
@@ -8692,8 +8728,8 @@ S.properties = { build = function(host, App)
 				if not obj.building[k] then
 					local inc = P.inc * propMod
 					local pl, psc = incomePill(t, R.Money(inc) .. "/hr")
-					local fill, flash = payBar(t)
-					table.insert(obj.payTiles, { tile = t, fill = fill, flash = flash, scale = psc, amount = inc / 3600 * CYCLE })
+					local pbar, flash = payBar(t)
+					table.insert(obj.payTiles, { tile = t, bar = pbar, flash = flash, scale = psc, amount = inc / 3600 * CYCLE })
 					local _ = pl
 				end
 			else
@@ -8955,11 +8991,9 @@ S.bank = { build = function(host, App)
 		UI.clear(vault)
 		UI.icon(vault, "icon_bank", 30, C.gold, UDim2.fromOffset(16, 14), { z = 7 })
 		text(vault, "THE VAULT", { font = "display", size = 22, pos = UDim2.fromOffset(56, 14), sz = UDim2.new(1, -110, 0, 30), z = 7 })
-		local info = UI.img(vault, "chip", { button = true, sz = UDim2.fromOffset(28, 28), pos = UDim2.new(1, -40, 0, 14), z = 8 })
-		text(info, "i", { font = "heavy", size = 17, color = C.gold, align = Enum.TextXAlignment.Center, sz = UDim2.fromScale(1, 1), z = 9 })
-		info.Activated:Connect(function()
+		UI.infoBtn(vault, UDim2.new(1, -40, 0, 14), function()
 			App.confirm("HOW THE BANK WORKS", "• Banked cash <b>can't be stolen</b> in raids.\n• Depositing costs a <b>" .. math.floor(Config.Bank.DepositFee * 100) .. "% fee</b>. Withdrawing is free.\n• It earns <b>" .. (Config.Bank.InterestPerHour * 100) .. "% interest per hour</b> (half while you're offline), with no cap.\n• You can't buy things straight from the bank: withdraw first.", "GOT IT", "manila", function() end)
-		end)
+		end, { z = 8, size = 28 })
 		balance = text(vault, R.Money(st.bank or 0), { font = "display", size = 38, color = C.gold, pos = UDim2.fromOffset(16, 52), sz = UDim2.new(1, -32, 0, 44), z = 7 })
 		rateL = text(vault, "", { size = 15, color = C.muted, rich = true, pos = UDim2.fromOffset(16, 98), sz = UDim2.new(1, -32, 0, 20), z = 7 })
 		text(vault, "DEPOSIT  <font color='#9a9fa6'>(" .. math.floor(Config.Bank.DepositFee * 100) .. "% fee)</font>", { font = "heavy", size = 14, rich = true, pos = UDim2.fromOffset(16, 130), sz = UDim2.new(1, -32, 0, 18), z = 7 })
@@ -9089,7 +9123,9 @@ local S = {}
 local function frame(host, App, title)
 	local UI = App.UI
 	local panel, body = UI.panel(host, title, { sz = UDim2.new(1, -20, 1, -20), pos = UDim2.fromOffset(10, 10), z = 5, titleSize = 26 })
-	local sub = UI.text(panel, "", { font = "bold", size = 15, color = UI.C.muted, pos = UDim2.new(0, 18, 0, 16), sz = UDim2.new(1, -36, 0, 22), z = 7, align = Enum.TextXAlignment.Right, rich = true })
+	-- the header line sits right of the title (or right of the MILITARY / OFFICERS sub tabs when this screen is one of them)
+	local x0 = host:GetAttribute("TabsRight") or (18 + #title * 16 + 16)
+	local sub = UI.text(panel, "", { font = "bold", size = 15, color = UI.C.muted, pos = UDim2.new(0, x0, 0, 16), sz = UDim2.new(1, -x0 - 18, 0, 22), z = 7, align = Enum.TextXAlignment.Right, rich = true, truncate = true })
 	return panel, body, sub
 end
 
@@ -9138,7 +9174,7 @@ S.military = { build = function(host, App)
 			text(card, u.name .. (owned > 0 and ("  <font color='#9a9fa6'>x" .. owned .. "</font>") or ""), { font = "heavy", size = 18, rich = true, pos = UDim2.fromOffset(58, 8), sz = UDim2.new(0.38, -58, 0, 24), z = 8, truncate = true })
 			text(card, D.Eras[u.era].name .. (locked and (u.lvl > st.lv and (" · unlocks at level " .. u.lvl) or " · advance era in Laws") or ""), { size = 13, color = C.muted, pos = UDim2.fromOffset(58, 36), sz = UDim2.new(0.38, -58, 0, 18), z = 8 })
 			text(card, "<font color='#e2695f'>ATK " .. R.Short(u.atk) .. "</font>   <font color='#7fb0e6'>DEF " .. R.Short(u.def) .. "</font>", { font = "heavy", size = 16, rich = true, pos = UDim2.new(0.38, 0, 0, 10), sz = UDim2.new(0.22, 0, 0, 22), z = 8 })
-			text(card, "Each costs 6% more than the last", { size = 12, color = C.muted, pos = UDim2.new(0.38, 0, 0, 36), sz = UDim2.new(0.25, 0, 0, 18), z = 8 })
+			text(card, "Each costs 6% more than the last", { size = 12, color = C.muted, pos = UDim2.new(0.38, 0, 0, 36), sz = UDim2.new(0.22, 0, 0, 18), z = 8, truncate = true })
 			if locked then
 				UI.button(card, "locked", u.lvl > st.lv and ("LEVEL " .. u.lvl) or "ERA LOCKED", nil, { pos = UDim2.new(1, -170, 0, 14), sz = UDim2.fromOffset(160, 42), z = 9 })
 			else
@@ -9289,7 +9325,9 @@ local QUEST_GOLD, QUEST_SEALS = 15, 3
 local function frame(host, App, title)
 	local UI = App.UI
 	local panel, body = UI.panel(host, title, { sz = UDim2.new(1, -20, 1, -20), pos = UDim2.fromOffset(10, 10), z = 5, titleSize = 26 })
-	local sub = UI.text(panel, "", { font = "bold", size = 15, color = UI.C.muted, pos = UDim2.new(0, 18, 0, 16), sz = UDim2.new(1, -36, 0, 22), z = 7, align = Enum.TextXAlignment.Right, rich = true })
+	-- the header line starts after the title (about 16 px per typewriter letter) so a long line can never run under it
+	local x0 = host:GetAttribute("TabsRight") or (18 + #title * 16 + 16)
+	local sub = UI.text(panel, "", { font = "bold", size = 15, color = UI.C.muted, pos = UDim2.new(0, x0, 0, 16), sz = UDim2.new(1, -x0 - 18, 0, 22), z = 7, align = Enum.TextXAlignment.Right, rich = true, truncate = true })
 	return panel, body, sub
 end
 
@@ -9538,10 +9576,14 @@ S.alliance = { build = function(host, App)
 		local sw = UI.mk("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(16, 192), Size = UDim2.new(1, -32, 0, 70), ZIndex = 8 }, right)
 		UI.mk("UIGridLayout", { CellSize = UDim2.fromOffset(30, 30), CellPadding = UDim2.fromOffset(6, 6), SortOrder = Enum.SortOrder.LayoutOrder }, sw)
 		local swatches = {}
-		local function mark() for col, s in pairs(swatches) do s.BorderSizePixel = col == obj.form.color and 3 or 0 end end
+		local function mark() for col, s in pairs(swatches) do s.ring.Enabled = col == obj.form.color end end
 		for k, col in ipairs(AC.Colors) do
-			local s = UI.mk("TextButton", { LayoutOrder = k, Text = "", AutoButtonColor = false, BackgroundColor3 = Color3.fromHex(col), BorderColor3 = C.manila, BorderMode = Enum.BorderMode.Inset, ZIndex = 9 }, sw)
-			swatches[col] = s
+			-- colour swatch on an inset plate, with a manila ring on the picked one
+			local cell = UI.img(sw, "inset", { button = true, name = "Swatch", order = k, z = 9 })
+			UI.mk("Frame", { BackgroundColor3 = Color3.fromHex(col), BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(1, -8, 1, -8), ZIndex = 10 }, cell)
+			local ring = UI.mk("UIStroke", { Color = C.manila, Thickness = 2, Enabled = false, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, cell)
+			local s = cell
+			swatches[col] = { ring = ring }
 			s.Activated:Connect(function() obj.form.color = col; mark() end)
 		end
 		mark()
@@ -9911,11 +9953,12 @@ S.rankings = { build = function(host, App)
 			else
 				if e.flag then UI.flag(card, e.flag, 36, { pos = UDim2.fromOffset(70, 10), z = 8 }) end
 				local isMe = e.uid == myUid
-				text(card, (e.tag and ("[" .. e.tag .. "] ") or "") .. (e.name or "?") .. (isMe and "  <font color='#9a9fa6'>(you)</font>" or ""), { font = "heavy", size = 17, rich = true, pos = UDim2.fromOffset(116, 0), sz = UDim2.new(0.6, -116, 1, 0), z = 8, truncate = true })
 				-- Kash 2 Oct: anyone on the board can be spied on or attacked, whatever server they are in (or offline)
 				local canHit = e.uid and not isMe
 				local right = canHit and 196 or 16
-				text(card, obj.kind == "level" and ("Level " .. e.value) or R.Money(e.value), { font = "heavy", size = 17, color = obj.kind == "level" and C.xp or C.good, pos = UDim2.new(0.6, -right + 16, 0, 0), sz = UDim2.new(0.4, -16, 1, 0), z = 8, align = Enum.TextXAlignment.Right })
+				-- columns: [#] [flag] [name ... truncated] [value, 140 px] [SPY] [ATTACK]
+				text(card, (e.tag and ("[" .. e.tag .. "] ") or "") .. (e.name or "?") .. (isMe and "  <font color='#9a9fa6'>(you)</font>" or ""), { font = "heavy", size = 17, rich = true, pos = UDim2.fromOffset(116, 0), sz = UDim2.new(1, -116 - right - 150, 1, 0), z = 8, truncate = true })
+				text(card, obj.kind == "level" and ("Level " .. e.value) or R.Money(e.value), { font = "heavy", size = 17, color = obj.kind == "level" and C.xp or C.good, pos = UDim2.new(1, -right - 140, 0, 0), sz = UDim2.new(0, 140, 1, 0), z = 8, align = Enum.TextXAlignment.Right, truncate = true })
 				if canHit then
 					local id, nm = "u" .. e.uid, e.name or "?"
 					UI.button(card, "slate", "SPY", function(btn)
@@ -10107,9 +10150,9 @@ function O.show(App)
 		local emblems = { false }
 		for _, e in ipairs(R.FlagEmblems or {}) do table.insert(emblems, e) end
 		for ei, e in ipairs(emblems) do
-			local b = UI.mk("TextButton", { LayoutOrder = ei, Text = e and "" or "NONE", FontFace = UI.Font.heavy, TextSize = 10, TextColor3 = C.muted, AutoButtonColor = false, BackgroundColor3 = C.slate, BorderSizePixel = 0, Size = UDim2.fromOffset(34, 34), ZIndex = 64 }, em)
-			UI.mk("UICorner", { CornerRadius = UDim.new(0, 6) }, b)
-			if (form.flag.e or false) == e then UI.mk("UIStroke", { Color = C.manila, Thickness = 2 }, b) end
+			local b = UI.img(em, "inset", { button = true, name = "Emblem", order = ei, sz = UDim2.fromOffset(34, 34), z = 64 })
+			if not e then text(b, "NONE", { font = "heavy", size = 10, color = C.muted, align = Enum.TextXAlignment.Center, sz = UDim2.fromScale(1, 1), z = 65 }) end
+			if (form.flag.e or false) == e then UI.mk("UIStroke", { Color = C.manila, Thickness = 2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, b) end
 			if e then UI.icon(b, e, 22, C.ink, UDim2.fromScale(0.5, 0.5), { z = 65, anchor = Vector2.new(0.5, 0.5) }) end
 			local locked = e and not owned
 			if locked then lockMark(b, 66) end
@@ -10371,14 +10414,10 @@ end
 -- an "i" button that explains a system in a small popup
 local function infoButton(App, parent, title, body, pos, z)
 	local UI = App.UI
-	local b = UI.img(parent, "chip", { button = true, name = "Info", sz = UDim2.fromOffset(26, 26), pos = pos, z = z or 8 })
-	UI.text(b, "i", { font = "heavy", size = 16, color = UI.C.manila, align = Enum.TextXAlignment.Center, sz = UDim2.fromScale(1, 1), z = (z or 8) + 1 })
-	hover(b, 0.1)
-	b.Activated:Connect(function()
+	return UI.infoBtn(parent, pos, function()
 		local _, bd = popup(App, title, 460, 260)
 		UI.text(bd, body, { size = 16, wrap = true, rich = true, sz = UDim2.fromScale(1, 1), valign = Enum.TextYAlignment.Top, z = 74 })
-	end)
-	return b
+	end, { z = z or 8, size = 26 }).Inst
 end
 
 -- HP bar that tweens (UI.bar sets size instantly)
@@ -10433,16 +10472,10 @@ local function closeModal(App)
 	mh.BackgroundTransparency = OVERLAY
 	App.UI.clear(mh)
 end
--- a dark rounded reward pill: icon + text, sizes to its text
+-- a reward chip (the kit's chip plate): icon + big text, sizes to its text
 local function rewardPill(UI, parent, icon, color, s, order, z)
-	local f = UI.mk("Frame", { Name = "Reward", BackgroundColor3 = Color3.fromHex("1a1f28"), BorderSizePixel = 0, Size = UDim2.fromOffset(0, 40), AutomaticSize = Enum.AutomaticSize.X, ZIndex = z, LayoutOrder = order }, parent)
-	UI.mk("UICorner", { CornerRadius = UDim.new(0, 6) }, f)
-	UI.mk("UIStroke", { Color = color, Thickness = 1, Transparency = 0.6 }, f)
-	UI.mk("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 14) }, f)
-	UI.mk("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, f)
-	UI.icon(f, icon, 26, color, nil, { z = z + 1, order = 1 })
-	local l = UI.text(f, s, { font = "heavy", size = 24, color = color, sz = UDim2.new(0, 0, 1, 0), z = z + 1, order = 2, rich = true })
-	l.AutomaticSize = Enum.AutomaticSize.X
+	local f, l = UI.chip(parent, s, { name = "Reward", icon = icon, color = color, h = 40, size = 24, order = order, z = z, rich = true })
+	l.FontFace = UI.Font.heavy
 	return f, l
 end
 
@@ -10466,9 +10499,7 @@ local function fighterCard(App, parent, f, side, cx, top, maxHp, range, z)
 	local mk, text = UI.mk, UI.text
 	f = f or {}
 	local o = { side = side, f = f, maxHp = math.max(1, maxHp or 1), range = range or { 0, 0 } }
-	local card = mk("Frame", { Name = side == "a" and "Attacker" or "Defender", BackgroundColor3 = Color3.fromHex("1c2230"), BorderSizePixel = 0,
-		AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(cx, top), Size = UDim2.fromOffset(CARD_W, CARD_H), ZIndex = z }, parent)
-	mk("UICorner", { CornerRadius = UDim.new(0, 8) }, card)
+	local card = UI.card(parent, { name = side == "a" and "Attacker" or "Defender", anchor = Vector2.new(0.5, 0), pos = UDim2.fromOffset(cx, top), sz = UDim2.fromOffset(CARD_W, CARD_H), z = z })
 	o.stroke = mk("UIStroke", { Color = C.rule, Thickness = 1.5, Transparency = 0.2 }, card)
 	o.card, o.home = card, card.Position
 
@@ -10499,10 +10530,8 @@ local function fighterCard(App, parent, f, side, cx, top, maxHp, range, z)
 	-- hit flash overlay
 	o.flash = mk("Frame", { Name = "Flash", BackgroundColor3 = Color3.fromRGB(255, 50, 40), BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ZIndex = z + 5 }, portrait)
 	-- gold level badge (outside the clipped portrait, on the card)
-	local badge = mk("Frame", { Name = "Level", BackgroundColor3 = C.gold, BorderSizePixel = 0, AnchorPoint = Vector2.new(1, 1),
-		Position = UDim2.fromOffset(pcx + PORT / 2 + 10, 14 + PORT + 6), Size = UDim2.fromOffset(44, 28), ZIndex = z + 6 }, card)
-	mk("UICorner", { CornerRadius = UDim.new(0, 4) }, badge)
-	text(badge, tostring(f.lv or 1), { font = "heavy", size = 18, color = C.manilaInk, align = Enum.TextXAlignment.Center, sz = UDim2.fromScale(1, 1), z = z + 7 })
+	UI.tag(card, tostring(f.lv or 1), C.gold, { name = "Level", anchor = Vector2.new(1, 1), pos = UDim2.fromOffset(pcx + PORT / 2 + 10, 14 + PORT + 6), sz = UDim2.fromOffset(44, 28),
+		z = z + 6, size = 18, textColor = C.manilaInk })
 	-- weapon (fists when nothing is equipped), on a soft rarity glow
 	local w = f.weapon or { icon = "gear_fists", name = "Fists", rarity = "common" }
 	local wkey = (w.icon and UI.asset(w.icon) ~= "") and w.icon or "gear_fists"
@@ -10526,15 +10555,14 @@ local function fighterCard(App, parent, f, side, cx, top, maxHp, range, z)
 	local tagLine = f.tag and ("[" .. tostring(f.tag) .. "]") or (side == "a" and "ATTACKER" or "DEFENDER")
 	text(card, tagLine, { font = "bold", size = 14, color = C.gold, align = Enum.TextXAlignment.Center, pos = UDim2.fromOffset(10, 14 + PORT + 32), sz = UDim2.new(1, -20, 0, 16), z = z + 1, truncate = true })
 	-- power box: attack for the attacker, defense for the defender
-	local box = mk("Frame", { Name = "Power", BackgroundColor3 = Color3.fromHex("10141a"), BorderSizePixel = 0, Position = UDim2.fromOffset(20, 182), Size = UDim2.fromOffset(CARD_W - 40, 38), ZIndex = z + 1 }, card)
-	mk("UICorner", { CornerRadius = UDim.new(0, 5) }, box)
+	local box = UI.img(card, "inset", { name = "Power", pos = UDim2.fromOffset(20, 182), sz = UDim2.fromOffset(CARD_W - 40, 38), z = z + 1 })
 	UI.icon(box, side == "a" and "icon_attack" or "icon_defense", 24, side == "a" and C.bad or C.blue, UDim2.new(0, 12, 0.5, 0), { z = z + 2, anchor = Vector2.new(0, 0.5) })
 	text(box, bigNum(f.pow), { font = "heavy", size = 24, color = side == "a" and C.gold or C.ink, pos = UDim2.fromOffset(48, 0), sz = UDim2.new(1, -56, 1, 0), z = z + 2, scaled = true })
 	-- HP bar (tweens)
 	o.hp = hpBar(UI, card, { pos = UDim2.fromOffset(20, 228), sz = UDim2.fromOffset(CARD_W - 40, 22), z = z + 1, color = C.good, textSize = 13 })
 	o.hpNow = o.maxHp
 	o.hp:Set(1, bigNum(o.maxHp) .. " / " .. bigNum(o.maxHp), false)
-	-- damage range: "min ——|—— max" with a marker on each roll
+	-- damage range: "min --|-- max" with a marker on each roll
 	text(card, bigNum(o.range[1]), { size = 17, color = C.muted, align = Enum.TextXAlignment.Right, pos = UDim2.fromOffset(8, 256), sz = UDim2.fromOffset(62, 24), z = z + 1, scaled = true })
 	text(card, bigNum(o.range[2]), { size = 17, color = C.muted, pos = UDim2.fromOffset(CARD_W - 70, 256), sz = UDim2.fromOffset(62, 24), z = z + 1, scaled = true })
 	local track = mk("Frame", { Name = "Range", BackgroundColor3 = C.rule, BorderSizePixel = 0, Position = UDim2.fromOffset(80, 267), Size = UDim2.fromOffset(CARD_W - 160, 2), ZIndex = z + 1 }, card)
@@ -10828,9 +10856,8 @@ local function resultPopup(App, res, targetName)
 	local mk, text = UI.mk, UI.text
 	local _, bd = popup(App, "RAID REPORT", 460, 420)
 	local win = res.win
-	local band = mk("Frame", { Name = "Banner", BackgroundColor3 = win and Color3.fromHex("2f4a26") or Color3.fromHex("4a1f1f"), BorderSizePixel = 0, Size = UDim2.new(1, -40, 0, 74), ZIndex = 74 }, bd)
-	mk("UIStroke", { Color = win and C.good or C.bad, Thickness = 2 }, band)
-	mk("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(170, 170, 170)) }, band)
+	local band = UI.card(bd, { name = "Banner", hot = win, sz = UDim2.new(1, -40, 0, 74), z = 74 })
+	mk("UIStroke", { Color = win and C.good or C.bad, Thickness = 2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, band)
 	local big = text(band, win and "VICTORY" or "DEFEAT", { font = "display", size = 38, color = win and C.gold or C.bad, align = Enum.TextXAlignment.Center, pos = UDim2.fromOffset(0, 4), sz = UDim2.new(1, 0, 0, 42), z = 75, stroke = 1.5 })
 	FX.centre(big)
 	local bs = mk("UIScale", { Scale = 1.6 }, big)
@@ -10928,8 +10955,10 @@ local function raidedPopup(App, n)
 		line.Text = "<font color='#8fd07a'><b>Defended!</b> Cash safe</font>  ·  " .. soldiersTxt
 	end
 	-- auto-hide timer bar along the bottom edge
-	local track = mk("Frame", { Name = "Timer", BackgroundColor3 = C.black, BackgroundTransparency = 0.4, BorderSizePixel = 0, Position = UDim2.new(0, 14, 1, -6), Size = UDim2.new(1, -24, 0, 3), ZIndex = 84 }, card)
-	local fill = mk("Frame", { BackgroundColor3 = accent, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ZIndex = 85 }, track)
+	-- (a slim kit bar under the hint line, left of RAID BACK)
+	local timer = UI.bar(card, accent, { name = "Timer", pos = UDim2.new(0, 14, 1, -16), sz = UDim2.new(1, -160, 0, 12), z = 84, textSize = 10 })
+	timer:Set(1)
+	local fill = timer.Fill
 
 	local gone = false
 	local entry = {}
@@ -10953,10 +10982,10 @@ local function raidedPopup(App, n)
 		App.open("battle")
 		raidTarget(App, n.byId, name, nil)
 	end, { sz = UDim2.fromOffset(120, 30), pos = UDim2.new(1, -10, 1, -12), anchor = Vector2.new(1, 1), z = 86, icon = "icon_attack", textSize = 14 })
-	text(card, lost and "Hit them back!" or "Teach them a lesson?", { size = 13, color = C.muted, pos = UDim2.fromOffset(18, 62), sz = UDim2.new(1, -150, 0, 18), z = 84, truncate = true })
+	text(card, lost and "Hit them back!" or "Teach them a lesson?", { size = 13, color = C.muted, pos = UDim2.fromOffset(18, 56), sz = UDim2.new(1, -150, 0, 18), z = 84, truncate = true })
 
 	tw(card, 0.35, { Position = UDim2.fromOffset(0, 0) }, Enum.EasingStyle.Back)
-	tw(fill, RAIDED_SECONDS, { Size = UDim2.fromScale(0, 1) }, Enum.EasingStyle.Linear)
+	tw(fill, RAIDED_SECONDS, { Size = UDim2.new(0, 0, 1, -6) }, Enum.EasingStyle.Linear)
 	task.delay(RAIDED_SECONDS, function() dismiss() end)
 end
 
@@ -11423,17 +11452,13 @@ end
 
 -- the small "i" button: tap to open a short explanation (Kash Q3: details behind an i icon)
 local function infoBtn(App, parent, title, body, pos, z)
-	local b = mk("TextButton", { Name = "Info", Text = "i", FontFace = UI.Font.heavy, TextSize = 14, TextColor3 = C.manila, BackgroundColor3 = C.slate,
-		AutoButtonColor = false, Size = UDim2.fromOffset(20, 20), Position = pos, ZIndex = z or 8 }, parent)
-	corner(b, UDim.new(1, 0))
-	stroke(b, C.manila, 1.4)
-	hoverScale(b, 0.15)
-	b.Activated:Connect(function()
+	local b = UI.infoBtn(parent, pos, function()
 		local _, bd, close = popup(App, title, 440, 250)
 		text(bd, body, { size = 16, wrap = true, rich = true, sz = UDim2.new(1, 0, 1, -54), valign = Enum.TextYAlignment.Top, z = 74 })
 		UI.button(bd, "slate", "GOT IT", close, { sz = UDim2.fromOffset(150, 42), pos = UDim2.new(0.5, 0, 1, -4), anchor = Vector2.new(0.5, 1), z = 74 })
-	end)
-	return b
+	end, { z = z or 8, size = 22 })
+	hoverBtn(b)
+	return b.Inst
 end
 
 ---------------------------------------------------------------- DROP RATES (every RNG box, Kash 2 Oct 21:15)
@@ -11676,11 +11701,10 @@ end
 local function resultCard(parent, r, w, h, z)
 	local item = r.item or {}
 	local rc = rcol(item.rarity)
-	local card = mk("Frame", { Name = "Result", BackgroundColor3 = TILE, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ZIndex = z }, parent)
-	corner(card, 10)
+	local card = UI.card(parent, { name = "Result", sz = UDim2.fromScale(1, 1), z = z })
 	stroke(card, rc, 3)
-	local band = mk("Frame", { BackgroundColor3 = rc, BackgroundTransparency = 0.5, BorderSizePixel = 0, Size = UDim2.fromScale(1, 0.55), ZIndex = z }, card)
-	corner(band, 10)
+	local band = mk("Frame", { BackgroundColor3 = rc, BackgroundTransparency = 0.5, BorderSizePixel = 0, Position = UDim2.fromOffset(4, 4), Size = UDim2.new(1, -8, 0.55, -4), ZIndex = z }, card)
+	corner(band, 8)
 	mk("UIGradient", { Rotation = 90, Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.1), NumberSequenceKeypoint.new(1, 1) }) }, band)
 	local fs = math.max(11, math.floor(h * 0.06))
 	text(card, rar(item.rarity).name, { font = "heavy", size = fs + 2, color = rc, align = Enum.TextXAlignment.Center, pos = UDim2.fromOffset(6, 6), sz = UDim2.new(1, -12, 0, fs + 6), z = z + 2, stroke = 1.2, scaled = true })
@@ -11724,10 +11748,8 @@ local function resultCard(parent, r, w, h, z)
 	elseif r.type == "officer" then note = r.where == "limited" and "LIMITED SLOT" or "JOINED YOUR CABINET"
 	elseif unit then note = "JOINED YOUR ARMY"
 	else note = "ADDED TO INVENTORY" end
-	local foot = mk("Frame", { BackgroundColor3 = rc, BorderSizePixel = 0, Position = UDim2.new(0, 6, 1, -(footH + 6)), Size = UDim2.new(1, -12, 0, footH), ZIndex = z + 1 }, card)
-	corner(foot, 4)
-	text(foot, note, { font = "heavy", size = fs - 1, color = r.lost and C.white or C.black, align = Enum.TextXAlignment.Center, sz = UDim2.fromScale(1, 1), z = z + 2, scaled = true })
-	if r.lost then foot.BackgroundColor3 = C.bad end
+	UI.tag(card, note, r.lost and C.bad or rc, { pos = UDim2.new(0, 6, 1, -(footH + 6)), sz = UDim2.new(1, -12, 0, footH), z = z + 1, size = fs - 1,
+		textColor = r.lost and C.white or C.black })
 	return card
 end
 
@@ -11899,12 +11921,19 @@ S.officers = { build = function(host, App)
 	local panel, body = header(host, App, "OFFICERS")
 	local obj = { sig = nil, costBtns = {}, last = { atk = 0, def = 0, tot = 0 }, busy = false }
 
+	-- header: [title or sub tabs] [i] [subtitle ......] [UNEQUIP ALL] [AUTO EQUIP BEST]
+	local hx = host:GetAttribute("TabsRight") or 158
 	infoBtn(App, panel, "OFFICERS", "Officers give your country % boosts. Every officer sits in a <b>slot</b>: you can only hire when a slot is open. "
 		.. "<font color='#ff9a2e'><b>LIMITED</b></font> officers (Mega VIP, Limited Bundle) get their own extra slot.\n\n"
 		.. "Every hire is unique: a rarity plus random traits. Weapons add attack, armor adds defense, on you and on each officer.",
-		UDim2.fromOffset(158, 18), 8)
-	text(panel, "Hire officers with cash. Each one rolls a rarity and traits; their gear adds attack and defense.", { size = 13, color = C.muted, wrap = true,
-		pos = UDim2.fromOffset(186, 10), sz = UDim2.new(1, -186 - 372, 0, 36), z = 7 })
+		UDim2.fromOffset(hx, 15), 8)
+	local subX = hx + 32
+	local subL = text(panel, "Hire officers with cash. Each one rolls a rarity and traits; their gear adds attack and defense.", { size = 13, color = C.muted, wrap = true, scaled = true,
+		pos = UDim2.fromOffset(subX, 8), sz = UDim2.new(1, -subX - 376, 0, 38), z = 7 })
+	-- too narrow (phones): the "i" popup already explains it, so hide the line instead of squashing it
+	local function fitSub() subL.Visible = subL.AbsoluteSize.X >= panel.AbsoluteSize.X * 0.2 end
+	subL:GetPropertyChangedSignal("AbsoluteSize"):Connect(fitSub)
+	task.defer(fitSub)
 
 	-- UNEQUIP ALL / AUTO EQUIP BEST (client-side sequences of equip / unequip)
 	local function runSeq(btn, label, calls, doneMsg)
@@ -12068,8 +12097,7 @@ S.officers = { build = function(host, App)
 		local pt = portrait(card, o, 76, UDim2.fromOffset(36, 8), 8)
 		if ridx(o.rarity) >= 5 then glow(pt, rc, 1.2, 8, 0.5) end
 		if limited then
-			local band = mk("Frame", { BackgroundColor3 = LIMITED, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, 0), Size = UDim2.new(1, 0, 0, 16), ZIndex = 10 }, pt)
-			text(band, "LIMITED", { font = "heavy", size = 12, color = C.black, align = Enum.TextXAlignment.Center, sz = UDim2.fromScale(1, 1), z = 11 })
+			UI.tag(pt, "LIMITED", LIMITED, { anchor = Vector2.new(0.5, 1), pos = UDim2.new(0.5, 0, 1, -2), sz = UDim2.new(1, -4, 0, 16), z = 10, size = 12, textColor = C.black })
 		end
 		text(card, o.name, { font = "heavy", size = 15, color = limited and LIMITED or C.ink, pos = UDim2.fromOffset(120, 8), sz = UDim2.new(0.3, -124, 0, 20), z = 8, truncate = true })
 		text(card, rar(o.rarity).name, { font = "heavy", size = 13, color = rc, pos = UDim2.fromOffset(120, 30), sz = UDim2.new(0.3, -124, 0, 16), z = 8 })
@@ -12080,11 +12108,9 @@ S.officers = { build = function(host, App)
 		gearBox(card, st, o.id, o.name, "weapon", 0.47)
 		gearBox(card, st, o.id, o.name, "armor", 0.66)
 		if limited then
-			local chip = mk("Frame", { BackgroundColor3 = DARK, BorderSizePixel = 0, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0.85, 2, 0.5, 0), Size = UDim2.new(0.15, -10, 0, 44), ZIndex = 8 }, card)
-			corner(chip, 6)
-			stroke(chip, LIMITED, 2)
-			text(chip, "LIMITED\n<font color='#9a9fa6'>always active</font>", { font = "heavy", size = 14, color = LIMITED, align = Enum.TextXAlignment.Center, rich = true, wrap = true, scaled = true,
-				pos = UDim2.fromOffset(4, 2), sz = UDim2.new(1, -8, 1, -4), z = 9 })
+			local lp = UI.button(card, "locked", "LIMITED\n<font color='#b9bdc3'>always active</font>", nil,
+				{ pos = UDim2.new(0.85, 2, 0.5, 0), anchor = Vector2.new(0, 0.5), sz = UDim2.new(0.15, -10, 0, 40), z = 8, textSize = 14, rich = true, static = true })
+			lp.Label.TextColor3 = LIMITED
 		else
 			local fb = UI.button(card, "red", "FIRE", function(b) fireOfficer(App, o, b) end,
 				{ pos = UDim2.new(0.85, 2, 0.5, 0), anchor = Vector2.new(0, 0.5), sz = UDim2.new(0.15, -10, 0, 40), z = 8, textSize = 15 })
@@ -12099,7 +12125,7 @@ S.officers = { build = function(host, App)
 		text(card, free > 0 and "A random recruit joins your cabinet. Pricier hires roll rarer officers."
 			or "Every slot is full. <b>Unlock a slot below</b> or fire an officer to hire again.",
 			{ size = 13, color = C.muted, pos = UDim2.fromOffset(16, 34), sz = UDim2.new(0.42, -16, 0, 30), z = 8, wrap = true, rich = true })
-		ratesBtn(App, card, "hire", { pos = UDim2.new(0, 16, 1, -38), sz = UDim2.fromOffset(150, 30) })
+		ratesBtn(App, card, "hire", { pos = UDim2.new(0, 16, 1, -34), sz = UDim2.fromOffset(150, 28) })
 		for k, t in ipairs(Config.Officers.Hire) do
 			local b = UI.button(card, free > 0 and "gold" or "locked", t.name .. "\n" .. (free > 0 and R.Money(t.cost) or "NO FREE SLOT"), function(btn)
 				local s = App.state
@@ -12258,12 +12284,11 @@ S.inventory = { build = function(host, App)
 	local opts = { { nil, "ALL RARITIES", C.ink } }
 	for _, r in ipairs(O.Rarities) do table.insert(opts, { r.key, r.name, Color3.fromHex(r.color) }) end
 	for i, op in ipairs(opts) do
-		local b = mk("TextButton", { Text = op[2], FontFace = UI.Font.heavy, TextSize = 15, TextColor3 = op[3], BackgroundColor3 = C.slate, BackgroundTransparency = 1, AutoButtonColor = false,
-			TextXAlignment = Enum.TextXAlignment.Left, Size = UDim2.new(1, 0, 0, 30), ZIndex = 32, LayoutOrder = i }, dl)
-		mk("UIPadding", { PaddingLeft = UDim.new(0, 10) }, b)
-		corner(b, 4)
-		b.MouseEnter:Connect(function() b.BackgroundTransparency = 0.2 end)
-		b.MouseLeave:Connect(function() b.BackgroundTransparency = 1 end)
+		-- each option is an inset plate that only shows while hovered
+		local b = UI.img(dl, "inset", { button = true, name = "Opt" .. i, sz = UDim2.new(1, 0, 0, 30), z = 32, order = i, alpha = 1 })
+		text(b, op[2], { font = "heavy", size = 15, color = op[3], pos = UDim2.fromOffset(10, 0), sz = UDim2.new(1, -14, 1, 0), z = 33, truncate = true })
+		b.MouseEnter:Connect(function() b.ImageTransparency = 0 end)
+		b.MouseLeave:Connect(function() b.ImageTransparency = 1 end)
 		b.Activated:Connect(function() pickRar(op[1]) end)
 	end
 	rarBtn = UI.button(body, "slate", "ALL RARITIES", function() drop.Visible = not drop.Visible end,
@@ -12279,7 +12304,7 @@ S.inventory = { build = function(host, App)
 	UI.icon(strip, "icon_crown", 18, C.gold, UDim2.new(0, 10, 0.5, 0), { z = 8, anchor = Vector2.new(0, 0.5) })
 	text(strip, "ELITE TROOPS", { font = "heavy", size = 14, color = C.gold, pos = UDim2.fromOffset(34, 0), sz = UDim2.new(0, 104, 1, 0), z = 8 })
 	infoBtn(App, strip, "ELITE TROOPS", "Elite troops come from the <b>Founder's Crate</b> and the <b>Starter Pack</b>. Each era has one elite unit, much stronger than its regular troops.\n\n"
-		.. "<font color='#f0c75a'><b>Elite troops never die in raids</b></font> and do not use army capacity. They always add their ATK and DEF to your power.", UDim2.new(0, 138, 0.5, -10), 9)
+		.. "<font color='#f0c75a'><b>Elite troops never die in raids</b></font> and do not use army capacity. They always add their ATK and DEF to your power.", UDim2.new(0, 138, 0.5, -11), 9)
 	local chips = UI.list(strip, { horizontal = true, pos = UDim2.fromOffset(166, 4), sz = UDim2.new(1, -172, 1, -4), gap = 8, z = 8 })
 	chips.ScrollBarThickness = 3
 	local function eliteOf(st)
@@ -12408,19 +12433,13 @@ S.inventory = { build = function(host, App)
 		return c, well
 	end
 	local function rarityBar(c, label, rc)
-		local b = mk("Frame", { BackgroundColor3 = rc, BorderSizePixel = 0, Position = UDim2.new(0, 8, 1, -26), Size = UDim2.new(1, -16, 0, 18), ZIndex = 9 }, c)
-		corner(b, 3)
-		text(b, label, { font = "heavy", size = 12, color = C.black, align = Enum.TextXAlignment.Center, sz = UDim2.fromScale(1, 1), z = 10 })
+		UI.tag(c, label, rc, { pos = UDim2.new(0, 8, 1, -26), sz = UDim2.new(1, -16, 0, 18), z = 9, size = 12, textColor = C.black })
 	end
 	local function nameLine(c, s, y)
 		text(c, s, { font = "heavy", size = 15, align = Enum.TextXAlignment.Center, pos = UDim2.fromOffset(6, y or 124), sz = UDim2.new(1, -12, 0, 36), z = 9, wrap = true, scaled = true })
 	end
 	local function tagChip(well, s, color)
-		local ch = mk("Frame", { BackgroundColor3 = color, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -4), Size = UDim2.fromOffset(0, 16), AutomaticSize = Enum.AutomaticSize.X, ZIndex = 11 }, well)
-		corner(ch, 3)
-		mk("UIPadding", { PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6) }, ch)
-		local l = text(ch, s, { font = "heavy", size = 11, color = C.black, sz = UDim2.fromScale(0, 1), z = 12 })
-		l.AutomaticSize = Enum.AutomaticSize.X
+		UI.tag(well, s, color, { anchor = Vector2.new(0.5, 1), pos = UDim2.new(0.5, 0, 1, -4), h = 16, size = 11, z = 11, pad = 6, textColor = C.black })
 	end
 
 	local function gearCard(g, order, wm)
@@ -12457,6 +12476,8 @@ S.inventory = { build = function(host, App)
 		local def = isBasic and Config.Crates.Basic or Config.Crates.Limited
 		local rc = isBasic and rcol("common") or rcol("limited")
 		local c, well = card(order, rc, "CRATE")
+		-- crate layout (top to bottom, nothing overlapping): tag + RATES chip, crate well, name, PITY bar, buttons, band
+		well.Size = UDim2.new(1, -16, 0, 80)
 		if not isBasic then glow(well, rc, 1.1, 8, 0.6) end
 		local img = UI.img(well, isBasic and "crate_basic" or "crate_limited", { sz = UDim2.fromScale(0.82, 0.82), pos = UDim2.fromScale(0.5, 0.5), anchor = Vector2.new(0.5, 0.5), z = 10, slice = false, fit = true })
 		if count > 0 then
@@ -12465,23 +12486,16 @@ S.inventory = { build = function(host, App)
 			img.Rotation = -4
 			TweenService:Create(img, TweenInfo.new(0.9, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Rotation = 4 }):Play()
 		end
-		text(c, def.name, { font = "heavy", size = 14, align = Enum.TextXAlignment.Center, pos = UDim2.fromOffset(6, 122), sz = UDim2.new(1, -12, 0, 20), z = 9, scaled = true })
+		text(c, def.name, { font = "heavy", size = 14, align = Enum.TextXAlignment.Center, pos = UDim2.fromOffset(6, 104), sz = UDim2.new(1, -12, 0, 20), z = 9, scaled = true })
 		-- DROP RATES chip on every crate (Kash: every RNG box shows its drops and % rates)
-		local ratesChip = mk("TextButton", { Name = "Rates", Text = "% RATES", FontFace = UI.Font.heavy, TextSize = 11, TextColor3 = C.manila, BackgroundColor3 = C.slate, AutoButtonColor = false,
-			AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -8, 0, 3), Size = UDim2.fromOffset(60, 18), ZIndex = 12 }, c)
-		corner(ratesChip, 9)
-		stroke(ratesChip, C.manila, 1.2)
-		hoverScale(ratesChip, 0.1)
-		ratesChip.Activated:Connect(function() dropRates(App, kind) end)
+		UI.chipBtn(c, "RATES", function() dropRates(App, kind) end, { name = "Rates", icon = "icon_gauge", iconColor = C.manila, color = C.manila, h = 18, size = 11,
+			pos = UDim2.new(1, -6, 0, 2), anchor = Vector2.new(1, 0), z = 12 })
 		-- visible PITY meter (Kash 2 Oct): fills with every crate that is not Legendary+
 		do
 			local need = O.Pity[kind] or 50
 			local have = math.min(need, (st and st.pity and st.pity[kind]) or 0)
-			local track = mk("Frame", { Name = "Pity", BackgroundColor3 = C.black, BackgroundTransparency = 0.25, BorderSizePixel = 0, Position = UDim2.new(0, 8, 0, 100), Size = UDim2.new(1, -16, 0, 16), ZIndex = 12 }, c)
-			corner(track, 8)
-			local fill = mk("Frame", { BackgroundColor3 = Color3.fromHex("e9b949"), BorderSizePixel = 0, Size = UDim2.new(have / need, 0, 1, 0), ZIndex = 12 }, track)
-			corner(fill, 8)
-			text(track, "PITY " .. have .. "/" .. need, { font = "heavy", size = 11, color = C.white, align = Enum.TextXAlignment.Center, sz = UDim2.fromScale(1, 1), z = 13, stroke = 1.2 })
+			local pity = UI.bar(c, C.gold, { name = "Pity", pos = UDim2.fromOffset(8, 126), sz = UDim2.new(1, -16, 0, 18), z = 9, textSize = 11 })
+			pity:Set(have / need, "PITY", have .. "/" .. need)
 		end
 		if count > 0 then
 			local n = math.min(count, 10)
@@ -12732,9 +12746,7 @@ local function liftCell(UI, parent, order, z)
 end
 -- small "i" info button: tap or hover shows a short explanation (Kash Q3 UI rule)
 local function infoButton(UI, App, parent, pos, title, body, z)
-	local b = UI.mk("TextButton", { Name = "Info", Text = "i", FontFace = UI.Font.heavy, TextSize = 14, TextColor3 = UI.C.manilaInk, BackgroundColor3 = UI.C.manila,
-		AutoButtonColor = false, Position = pos, Size = UDim2.fromOffset(20, 20), AnchorPoint = Vector2.new(0, 0.5), ZIndex = z or 9 }, parent)
-	UI.mk("UICorner", { CornerRadius = UDim.new(1, 0) }, b)
+	local b = UI.infoBtn(parent, pos, nil, { kind = "manila", z = z or 9, size = 22, anchor = Vector2.new(0, 0.5) }).Inst
 	local tip
 	local function hide() if tip then tip:Destroy(); tip = nil end end
 	local function show()
@@ -12990,8 +13002,7 @@ local function showFlagEditor(App)
 	end
 	-- a pickable cell with a selection ring and an optional lock badge
 	local function pickCell(parent, ord, selected, locked, onPick)
-		local b = UI.mk("TextButton", { Text = "", AutoButtonColor = false, BackgroundColor3 = C.black, BackgroundTransparency = 0.35, BorderSizePixel = 0, LayoutOrder = ord, ZIndex = 74 }, parent)
-		UI.mk("UICorner", { CornerRadius = UDim.new(0, 6) }, b)
+		local b = UI.img(parent, "inset", { button = true, name = "Pick", order = ord, z = 74 })
 		local ring = UI.mk("UIStroke", { Color = selected and C.gold or C.rule, Thickness = selected and 3 or 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, b)
 		local s = UI.mk("UIScale", {}, b)
 		b.MouseEnter:Connect(function() tween(s, 0.12, { Scale = 1.06 }, Enum.EasingStyle.Back); if not selected then tween(ring, 0.12, { Color = C.manila }) end end)
@@ -13212,7 +13223,7 @@ S.country = { build = function(host, App)
 	App.showUpgrades = function() showUpgrades(App) end
 
 	local panel, body = UI.panel(host, "COUNTRY", { sz = UDim2.new(1, -20, 1, -20), pos = UDim2.fromOffset(10, 10), z = 5, titleSize = 26 })
-	local sub = text(panel, "", { font = "bold", size = 15, color = C.muted, pos = UDim2.new(0, 18, 0, 16), sz = UDim2.new(1, -36, 0, 22), z = 7, align = Enum.TextXAlignment.Right, rich = true })
+	local sub = text(panel, "", { font = "bold", size = 15, color = C.muted, pos = UDim2.new(0, 150, 0, 16), sz = UDim2.new(1, -168, 0, 22), z = 7, align = Enum.TextXAlignment.Right, rich = true, truncate = true })
 	local list = UI.list(body, { gap = 12, z = 6 })
 	local obj = { era = nil, flagKey = nil }
 
@@ -13604,6 +13615,18 @@ S.tasks = { build = function(host, App)
 			local c = UI.chip(holder, p[1], { order = k, h = 24, size = 13, icon = p[2], iconColor = p[3], color = p[4], z = z + 1 })
 			if p[2] == "icon_seal" then local ic = c:FindFirstChild("Icon"); if ic then ic.ImageColor3 = C.white end end
 		end
+		-- three chips do not fit the middle column on narrow screens: shrink the row instead of running under the button
+		local layout = holder:FindFirstChildOfClass("UIListLayout")
+		local sc = UI.mk("UIScale", {}, holder)
+		local function fit()
+			local need, have = layout.AbsoluteContentSize.X, holder.AbsoluteSize.X
+			if need <= 0 or have <= 0 then return end
+			local k = math.clamp(have / need, 0.6, 1) -- both sizes include this UIScale, so the ratio is scale-free
+			if math.abs(k - sc.Scale) > 0.01 then sc.Scale = k end
+		end
+		layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(fit)
+		holder:GetPropertyChangedSignal("AbsoluteSize"):Connect(fit)
+		task.defer(fit)
 	end
 
 	local function rowFrame(order, gold)
@@ -14033,18 +14056,12 @@ M._settings = { init = function(App)
 
 	---------------------------------------------------------------- small widgets
 	local ON, OFF = C.good, Color3.fromHex("3a4049")
-	-- pretty switch: returns obj { Inst, Set(v, animate) }
+	-- switch built from the kit's bar plates (track + tinted fill) with a manila chip knob: returns obj { Inst, Set(v, animate) }
 	local function switch(parent, on, z, onToggle)
-		local track = mk("TextButton", { Name = "Switch", Text = "", AutoButtonColor = false, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -16, 0.5, 0),
-			Size = UDim2.fromOffset(64, 32), BackgroundColor3 = on and ON or OFF, BorderSizePixel = 0, ZIndex = z }, parent)
-		mk("UICorner", { CornerRadius = UDim.new(1, 0) }, track)
-		mk("UIStroke", { Color = C.black, Thickness = 2, Transparency = 0.35, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, track)
-		mk("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(190, 190, 190)) }, track)
+		local track = UI.img(parent, "bar_track", { button = true, name = "Switch", anchor = Vector2.new(1, 0.5), pos = UDim2.new(1, -16, 0.5, 0), sz = UDim2.fromOffset(64, 32), z = z })
+		local fill = UI.img(track, "bar_fill", { name = "Fill", pos = UDim2.fromOffset(3, 3), sz = UDim2.new(1, -6, 1, -6), z = z, color = on and ON or OFF })
 		local lbl = text(track, on and "ON" or "OFF", { font = "heavy", size = 12, color = C.white, sz = UDim2.new(1, -36, 1, 0), pos = UDim2.fromOffset(on and 8 or 30, 0), z = z + 1, align = Enum.TextXAlignment.Center, stroke = 1 })
-		local knob = mk("Frame", { Name = "Knob", AnchorPoint = Vector2.new(0, 0.5), Position = on and UDim2.new(1, -29, 0.5, 0) or UDim2.new(0, 3, 0.5, 0), Size = UDim2.fromOffset(26, 26),
-			BackgroundColor3 = C.white, BorderSizePixel = 0, ZIndex = z + 2 }, track)
-		mk("UICorner", { CornerRadius = UDim.new(1, 0) }, knob)
-		mk("UIStroke", { Color = C.black, Thickness = 1, Transparency = 0.5 }, knob)
+		local knob = UI.img(track, "chip_manila", { name = "Knob", anchor = Vector2.new(0, 0.5), pos = on and UDim2.new(1, -29, 0.5, 0) or UDim2.new(0, 3, 0.5, 0), sz = UDim2.fromOffset(26, 26), z = z + 2 })
 		local ks = mk("UIScale", {}, knob)
 		local obj = { Inst = track, on = on }
 		function obj:Set(v, animate)
@@ -14054,13 +14071,13 @@ M._settings = { init = function(App)
 			local pos = v and UDim2.new(1, -29, 0.5, 0) or UDim2.new(0, 3, 0.5, 0)
 			if animate then
 				tween(knob, 0.18, { Position = pos }, Enum.EasingStyle.Back)
-				tween(track, 0.18, { BackgroundColor3 = v and ON or OFF })
+				tween(fill, 0.18, { ImageColor3 = v and ON or OFF })
 				if not calm() then
 					ks.Scale = 1.15
 					tween(ks, 0.2, { Scale = 1 }, Enum.EasingStyle.Back)
 				end
 			else
-				knob.Position = pos; track.BackgroundColor3 = v and ON or OFF
+				knob.Position = pos; fill.ImageColor3 = v and ON or OFF
 			end
 		end
 		track.Activated:Connect(function() onToggle() end)
@@ -14073,29 +14090,18 @@ M._settings = { init = function(App)
 		local box = mk("TextButton", { Name = "Slider", Text = "", AutoButtonColor = false, BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0.5),
 			Position = UDim2.new(1, -84, 0.5, 0), Size = UDim2.new(0.5, -60, 0, 36), ZIndex = z }, parent)
 		box:SetAttribute("IC_NoClick", true)
-		local track = mk("Frame", { Name = "Track", BackgroundColor3 = Color3.fromHex("14171b"), BorderSizePixel = 0, AnchorPoint = Vector2.new(0, 0.5),
-			Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.new(1, 0, 0, 12), ZIndex = z }, box)
-		mk("UICorner", { CornerRadius = UDim.new(1, 0) }, track)
-		mk("UIStroke", { Color = Color3.fromHex("4a4f57"), Thickness = 1, Transparency = 0.2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, track)
-		mk("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.fromRGB(150, 150, 150), Color3.new(1, 1, 1)) }, track)
-		local fill = mk("Frame", { Name = "Fill", BackgroundColor3 = C.white, BorderSizePixel = 0, Size = UDim2.fromScale(v, 1), ZIndex = z + 1 }, track)
-		mk("UICorner", { CornerRadius = UDim.new(1, 0) }, fill)
-		mk("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.fromHex("f6dc8a"), Color3.fromHex("c99a32")) }, fill)
-		local knob = mk("Frame", { Name = "Knob", BackgroundColor3 = C.manila, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromScale(v, 0.5), Size = UDim2.fromOffset(24, 24), ZIndex = z + 3 }, track)
-		mk("UICorner", { CornerRadius = UDim.new(1, 0) }, knob)
-		mk("UIStroke", { Color = C.black, Thickness = 2, Transparency = 0.3 }, knob)
-		mk("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(200, 200, 200)) }, knob)
-		local dot = mk("Frame", { BackgroundColor3 = C.manilaInk, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(8, 8), ZIndex = z + 4 }, knob)
-		mk("UICorner", { CornerRadius = UDim.new(1, 0) }, dot)
+		-- the kit bar plates (same as every progress bar) with a manila chip knob
+		local track = UI.img(box, "bar_track", { name = "Track", anchor = Vector2.new(0, 0.5), pos = UDim2.new(0, 0, 0.5, 0), sz = UDim2.new(1, 0, 0, 16), z = z })
+		local fill = UI.img(track, "bar_fill", { name = "Fill", pos = UDim2.fromOffset(3, 3), sz = UDim2.new(v, -6 * v, 1, -6), z = z + 1, color = C.gold })
+		local knob = UI.img(track, "chip_manila", { name = "Knob", anchor = Vector2.new(0.5, 0.5), pos = UDim2.fromScale(v, 0.5), sz = UDim2.fromOffset(22, 26), z = z + 3 })
 		local ks = mk("UIScale", {}, knob)
 		local pct = text(parent, "", { font = "heavy", size = 18, color = C.manila, align = Enum.TextXAlignment.Right, anchor = Vector2.new(1, 0.5),
 			pos = UDim2.new(1, -16, 0.5, 0), sz = UDim2.fromOffset(60, 26), z = z })
 
 		local obj = { Inst = box, v = v }
 		local function show(x)
-			fill.Size = UDim2.fromScale(x, 1)
-			fill.Visible = x > 0.001
+			fill.Size = UDim2.new(x, -6 * x, 1, -6)
+			fill.Visible = x > 0.02
 			knob.Position = UDim2.fromScale(x, 0.5)
 			pct.Text = math.floor(x * 100 + 0.5) .. "%"
 			pct.TextColor3 = x > 0 and C.manila or C.dim
@@ -14145,15 +14151,15 @@ M._settings = { init = function(App)
 		return obj
 	end
 
+	-- labels on the kit plates: dark text on a light colour = a tinted tag plate, coloured text = the dark chip plate
 	local function chip(parent, s, bg, fg, p)
 		p = p or {}
-		local f = mk("Frame", { Name = "Chip", BackgroundColor3 = bg, BorderSizePixel = 0, Size = UDim2.fromOffset(0, p.h or 26), AutomaticSize = Enum.AutomaticSize.X,
-			Position = p.pos or UDim2.new(), AnchorPoint = p.anchor or Vector2.zero, ZIndex = p.z or 75, LayoutOrder = p.order or 0 }, parent)
-		mk("UICorner", { CornerRadius = UDim.new(0, 6) }, f)
-		mk("UIStroke", { Color = C.black, Thickness = 1.5, Transparency = 0.4 }, f)
-		mk("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10) }, f)
-		local l = text(f, s, { font = "heavy", size = p.size or 14, color = fg or C.white, sz = UDim2.new(0, 0, 1, 0), z = (p.z or 75) + 1 })
-		l.AutomaticSize = Enum.AutomaticSize.X
+		local f
+		if fg == C.black then
+			f = UI.tag(parent, s, bg, { h = p.h or 26, size = p.size or 14, pos = p.pos, anchor = p.anchor, z = p.z or 75, order = p.order, pad = 10, textColor = C.black })
+		else
+			f = UI.chip(parent, s, { h = p.h or 26, size = p.size or 14, pos = p.pos, anchor = p.anchor, z = p.z or 75, order = p.order, color = fg or C.ink })
+		end
 		return f
 	end
 
@@ -14201,8 +14207,7 @@ M._settings = { init = function(App)
 			if d.slider then
 				-- volume row: name and description on the left, slider and percentage on the right
 				local card = UI.card(list, { sz = UDim2.new(1, 0, 0, 62), z = 73, order = 1 + i })
-				local ib = mk("Frame", { BackgroundColor3 = Color3.fromHex("20252c"), BorderSizePixel = 0, Position = UDim2.fromOffset(12, 11), Size = UDim2.fromOffset(40, 40), ZIndex = 74 }, card)
-				mk("UICorner", { CornerRadius = UDim.new(0, 8) }, ib)
+				local ib = UI.img(card, "inset", { pos = UDim2.fromOffset(12, 11), sz = UDim2.fromOffset(40, 40), z = 74 })
 				local v0 = value(d.key)
 				local ic = UI.icon(ib, d.icon, 24, v0 > 0 and C.manila or C.dim, UDim2.fromScale(0.5, 0.5), { z = 75, anchor = Vector2.new(0.5, 0.5) })
 				text(card, d.name, { font = "heavy", size = 18, pos = UDim2.fromOffset(64, 8), sz = UDim2.new(0.5, -90, 0, 24), z = 74, truncate = true })
@@ -14221,8 +14226,7 @@ M._settings = { init = function(App)
 			local card = UI.card(list, { button = true, sz = UDim2.new(1, 0, 0, 62), z = 73, order = 1 + i })
 			local glow = mk("Frame", { BackgroundColor3 = C.manila, BackgroundTransparency = 1, BorderSizePixel = 0, Position = UDim2.fromOffset(4, 4), Size = UDim2.new(1, -8, 1, -8), ZIndex = 73 }, card)
 			mk("UICorner", { CornerRadius = UDim.new(0, 6) }, glow)
-			local ib = mk("Frame", { BackgroundColor3 = Color3.fromHex("20252c"), BorderSizePixel = 0, Position = UDim2.fromOffset(12, 11), Size = UDim2.fromOffset(40, 40), ZIndex = 74 }, card)
-			mk("UICorner", { CornerRadius = UDim.new(0, 8) }, ib)
+			local ib = UI.img(card, "inset", { pos = UDim2.fromOffset(12, 11), sz = UDim2.fromOffset(40, 40), z = 74 })
 			local on = value(d.key) == true
 			local ic = UI.icon(ib, d.icon, 24, on and C.manila or C.dim, UDim2.fromScale(0.5, 0.5), { z = 75, anchor = Vector2.new(0.5, 0.5) })
 			text(card, d.name, { font = "heavy", size = 18, pos = UDim2.fromOffset(64, 8), sz = UDim2.new(1, -170, 0, 24), z = 74, truncate = true })
@@ -14646,17 +14650,11 @@ local function timeLeft(sec)
 	return string.format("%02d:%02d:%02d", h, m, s)
 end
 
--- a coloured pill tag that sizes to its text
+-- a tag that sizes to its text, on the kit's plates: a tinted bar-fill plate, or the dark chip plate when bg is DARK
 local function tag(parent, label, bg, fg, p)
 	p = p or {}
-	local f = mk("Frame", { Name = "Tag", BackgroundColor3 = bg, BorderSizePixel = 0, AutomaticSize = Enum.AutomaticSize.X, Size = UDim2.fromOffset(0, p.h or 20),
-		Position = p.pos or UDim2.new(), AnchorPoint = p.anchor or Vector2.zero, ZIndex = p.z or 12, Rotation = p.rot or 0, LayoutOrder = p.order or 0 }, parent)
-	corner(f, p.radius or 5)
-	mk("UIPadding", { PaddingLeft = UDim.new(0, 7), PaddingRight = UDim.new(0, 7) }, f)
-	if p.stroke then stroke(f, p.stroke, 1.5) end
-	local l = text(f, label, { font = "heavy", size = p.size or 12, color = fg, sz = UDim2.new(0, 0, 1, 0), z = f.ZIndex + 1, rich = p.rich })
-	l.AutomaticSize = Enum.AutomaticSize.X
-	return f, l
+	return UI.tag(parent, label, bg ~= DARK and bg or nil, { pos = p.pos, anchor = p.anchor, z = p.z or 12, order = p.order, rot = p.rot, h = p.h or 20,
+		size = p.size or 12, rich = p.rich, textColor = fg })
 end
 
 -- diagonal corner ribbon (top-right of a card). p.size = corner square in px (default 92) for longer labels
@@ -14770,12 +14768,7 @@ local function infoPopup(App, title, body)
 	UI.button(bd, "slate", "GOT IT", function() mh.Visible = false end, { sz = UDim2.fromOffset(150, 42), pos = UDim2.new(0.5, 0, 1, -4), anchor = Vector2.new(0.5, 1), z = 74 })
 end
 local function infoBtn(App, parent, title, body, pos, z)
-	local b = mk("TextButton", { Name = "Info", Text = "i", FontFace = UI.Font.heavy, TextSize = 14, TextColor3 = C.manila, BackgroundColor3 = C.slate,
-		AutoButtonColor = false, Size = UDim2.fromOffset(20, 20), Position = pos, ZIndex = z or 30 }, parent)
-	corner(b, UDim.new(1, 0))
-	stroke(b, C.manila, 1.4)
-	b.Activated:Connect(function() infoPopup(App, title, body) end)
-	return b
+	return UI.infoBtn(parent, pos, function() infoPopup(App, title, body) end, { z = z or 30, size = 22 }).Inst
 end
 
 -- ART ROTATOR for passes that unlock several things: crossfades between slides every 2.5 s.
@@ -14807,12 +14800,8 @@ local function rotator(parent, slides, px, pos, anchor, z, accent)
 			end
 		end
 		if sl.label then
-			local cap = mk("Frame", { BackgroundColor3 = DARK, BackgroundTransparency = 0.1, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromScale(0.5, 1),
-				Size = UDim2.new(1, -4, 0, capH), ZIndex = z + 2 }, g)
-			corner(cap, 5)
-			stroke(cap, sl.tile or accent or C.manila, 1.2, 0.3)
-			text(cap, sl.label, { font = "heavy", size = math.max(11, capH - 6), color = sl.tile or accent or C.manila, align = Enum.TextXAlignment.Center, rich = true,
-				pos = UDim2.fromOffset(4, 0), sz = UDim2.new(1, -8, 1, 0), z = z + 3, scaled = true })
+			UI.tag(g, sl.label, nil, { anchor = Vector2.new(0.5, 1), pos = UDim2.fromScale(0.5, 1), sz = UDim2.new(1, -4, 0, capH), z = z + 2,
+				size = math.max(11, capH - 6), rich = true, textColor = sl.tile or accent or C.manila })
 		end
 		groups[i] = g
 	end
@@ -14863,10 +14852,10 @@ local function dropRates(App, kind)
 	end
 	infoPopup(App, "DROP RATES", table.concat(lines, "\n"))
 end
+-- the same compact chip as the RATES chip on Inventory crate cards
 local function ratesButton(App, parent, kind, p)
-	local b = UI.button(parent, "slate", "DROP RATES", function() dropRates(App, kind) end,
-		{ sz = p.sz or UDim2.fromOffset(130, 28), pos = p.pos, anchor = p.anchor, z = p.z or 14, icon = "icon_gauge", textSize = p.textSize or 13 })
-	return b
+	return UI.chipBtn(parent, "DROP RATES", function() dropRates(App, kind) end,
+		{ name = "Rates", icon = "icon_gauge", iconColor = C.manila, color = C.manila, h = p.h or 24, size = p.textSize or 12, w = p.w, pos = p.pos, anchor = p.anchor, z = p.z or 14 })
 end
 
 -- crate results: the big reveal when Cabinet installed it, else a toast that points to the Inventory
@@ -14895,7 +14884,8 @@ end
 ---------------------------------------------------------------- SHOP
 S.shop = { build = function(host, App)
 	local panel, body = UI.panel(host, "SHOP", { sz = UDim2.new(1, -20, 1, -20), pos = UDim2.fromOffset(10, 10), z = 5, titleSize = 26 })
-	local sub = text(panel, "", { font = "bold", size = 15, color = C.muted, pos = UDim2.new(0, 120, 0, 16), sz = UDim2.new(1, -138, 0, 22), z = 7,
+	local subX = host:GetAttribute("TabsRight") or 120 -- right of the STORE / GEAR SHOP sub tabs when inside the composite
+	local sub = text(panel, "", { font = "bold", size = 15, color = C.muted, pos = UDim2.new(0, subX, 0, 16), sz = UDim2.new(1, -subX - 18, 0, 22), z = 7,
 		align = Enum.TextXAlignment.Right, rich = true, truncate = true })
 	local list = UI.list(body, { gap = 10, z = 6 })
 	local obj = { ups = {}, ticks = {}, anchors = {}, builtW = nil, shownGold = nil }
@@ -15058,12 +15048,7 @@ S.shop = { build = function(host, App)
 		shine(bc, 3.4, 0.3)
 		tag(bc, "LIMITED BUNDLE", C.gold, C.manilaInk, { pos = UDim2.fromOffset(16, 16), z = 26, h = 24, size = 14 })
 		local _, onceL = tag(bc, "ONE PER PLAYER", DARK, C.gold, { pos = UDim2.fromOffset(16, 46), z = 26, h = 20, size = 11, stroke = C.gold })
-		local clockChip = mk("Frame", { BackgroundColor3 = DARK, BackgroundTransparency = 0.15, BorderSizePixel = 0, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -16, 0, 16),
-			Size = UDim2.fromOffset(170, 26), ZIndex = 26 }, bc)
-		corner(clockChip, 6)
-		stroke(clockChip, LIMITED, 1.5)
-		UI.icon(clockChip, "icon_clock", 16, LIMITED, UDim2.fromOffset(8, 5), { z = 27 })
-		local bTimer = text(clockChip, "", { font = "heavy", size = 14, color = LIMITED, pos = UDim2.fromOffset(28, 0), sz = UDim2.new(1, -34, 1, 0), z = 27, scaled = true })
+		local _, bTimer = UI.chip(bc, "", { icon = "icon_clock", color = LIMITED, h = 26, size = 14, anchor = Vector2.new(1, 0), pos = UDim2.new(1, -16, 0, 16), z = 26 })
 		local by = H - 132
 		local bTitle = text(bc, "", { font = "display", size = stack and 26 or (bw < 520 and 24 or 30), pos = UDim2.fromOffset(18, by),
 			sz = UDim2.new(1, -36, 0, 36), z = 26, stroke = 1.6, rich = true, scaled = true })
@@ -15101,38 +15086,22 @@ S.shop = { build = function(host, App)
 			.. "Gear or <b>ELITE TROOPS</b> that never die in raids. The <b>10-pack</b> guarantees at least one <b>Epic or better</b>. Tap <b>DROP RATES</b> for every % chance.",
 			UDim2.new(1, -34, 0, 14), 30)
 		local cTimer = text(cc, "", { font = "heavy", size = 13, color = LIMITED, pos = UDim2.fromOffset(16, 38), sz = UDim2.new(1, -32, 0, 18), z = 10 })
+		-- left column (DROP RATES, PITY, owned crates), the crate centred in the space to its right so they never overlap
+		local COLW = 118
 		local crateSize = 116
-		aura(cc, LIMITED, 220, UDim2.new(0.5, 0, 0, 62 + crateSize / 2), 9, 0.9, true, true)
-		local crate = UI.img(cc, "crate_limited", { sz = UDim2.fromOffset(crateSize, crateSize), pos = UDim2.new(0.5, 0, 0, 62 + crateSize / 2), anchor = Vector2.new(0.5, 0.5), slice = false, fit = true, z = 11 })
-		tw(crate, 1.6, { Position = UDim2.new(0.5, 0, 0, 56 + crateSize / 2) }, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
+		local cx = math.floor((12 + COLW + 8 + cw - 12) / 2)
+		aura(cc, LIMITED, 220, UDim2.new(0, cx, 0, 62 + crateSize / 2), 9, 0.9, true, true)
+		local crate = UI.img(cc, "crate_limited", { sz = UDim2.fromOffset(crateSize, crateSize), pos = UDim2.new(0, cx, 0, 62 + crateSize / 2), anchor = Vector2.new(0.5, 0.5), slice = false, fit = true, z = 11 })
+		tw(crate, 1.6, { Position = UDim2.new(0, cx, 0, 56 + crateSize / 2) }, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
 		tw(crate, 2.4, { Rotation = 3 }, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
+		ratesButton(App, cc, "limited", { pos = UDim2.fromOffset(12, 64), w = COLW, z = 14 })
+		-- visible PITY meter (Kash 2 Oct), the same kit bar as everywhere else
+		local pityNeed = O.Pity and O.Pity.limited or 30
+		local pity = UI.bar(cc, C.gold, { name = "Pity", pos = UDim2.fromOffset(12, 94), sz = UDim2.fromOffset(COLW, 18), z = 14, textSize = 11 })
 		-- owned crates shortcut
-		local haveBtn = mk("TextButton", { Name = "Have", Text = "", AutoButtonColor = false, BackgroundColor3 = DARK, BackgroundTransparency = 0.1, AnchorPoint = Vector2.new(1, 0),
-			Position = UDim2.new(1, -12, 0, 64), Size = UDim2.fromOffset(92, 24), ZIndex = 14, Visible = false }, cc)
-		corner(haveBtn, 6)
-		stroke(haveBtn, C.gold, 1.4)
-		local haveL = text(haveBtn, "", { font = "heavy", size = 12, color = C.gold, align = Enum.TextXAlignment.Center, sz = UDim2.fromScale(1, 1), z = 15 })
-		haveBtn.Activated:Connect(function()
-			if App.openCrates then App.openCrates("limited", 1, haveBtn) else App.open("inventory") end
-		end)
-		ratesButton(App, cc, "limited", { pos = UDim2.fromOffset(12, 64), sz = UDim2.fromOffset(112, 26), z = 14, textSize = 12 })
-		-- visible PITY meter (Kash 2 Oct)
-		do
-			local okO, O = pcall(require, game:GetService("ReplicatedStorage").Shared.Officers)
-			local need = okO and O.Pity and O.Pity.limited or 30
-			local track = mk("Frame", { Name = "Pity", BackgroundColor3 = DARK, BorderSizePixel = 0, Position = UDim2.fromOffset(12, 96), Size = UDim2.fromOffset(112, 18), ZIndex = 14 }, cc)
-			corner(track, 9)
-			local fill = mk("Frame", { BackgroundColor3 = Color3.fromHex("e9b949"), BorderSizePixel = 0, Size = UDim2.fromScale(0, 1), ZIndex = 14 }, track)
-			corner(fill, 9)
-			local lbl = text(track, "", { font = "heavy", size = 11, color = C.white, align = Enum.TextXAlignment.Center, sz = UDim2.fromScale(1, 1), z = 15, stroke = 1.2 })
-			local function upd(st)
-				local have = math.min(need, (st and st.pity and st.pity.limited) or 0)
-				fill.Size = UDim2.fromScale(have / need, 1)
-				lbl.Text = "PITY " .. have .. "/" .. need
-			end
-			upd(App.state)
-			App.on("full", function(st) if track.Parent then upd(st) end end)
-		end
+		local haveBtn, haveL = UI.chipBtn(cc, "", function(btn)
+			if App.openCrates then App.openCrates("limited", 1, btn) else App.open("inventory") end
+		end, { name = "Have", icon = "icon_boxes", color = C.gold, h = 24, size = 12, w = COLW, pos = UDim2.fromOffset(12, 120), z = 14, visible = false })
 		text(cc, "Gear or <font color='#f0c75a'><b>ELITE TROOPS</b></font> that never die in raids", { size = 14, color = C.ink, align = Enum.TextXAlignment.Center, rich = true,
 			pos = UDim2.fromOffset(12, 184), sz = UDim2.new(1, -24, 0, 20), z = 10, scaled = true })
 		local goldBtn = UI.button(cc, "gold", "OPEN NOW · " .. L.gold .. " GOLD", function(btn)
@@ -15182,6 +15151,8 @@ S.shop = { build = function(host, App)
 			local n = st.crates and st.crates.limited or 0
 			haveBtn.Visible = n > 0
 			haveL.Text = "x" .. n .. " · OPEN"
+			local have = math.min(pityNeed, (st.pity and st.pity.limited) or 0)
+			pity:Set(have / pityNeed, "PITY", have .. "/" .. pityNeed)
 		end)
 		onTick(function(now)
 			local leftS = L.ends - now
@@ -15205,7 +15176,7 @@ S.shop = { build = function(host, App)
 		local rightW = W < 820 and 200 or 240
 		text(card, B.name, { font = "display", size = 22, color = C.manila, pos = UDim2.fromOffset(130, 12), sz = UDim2.new(1, -150 - rightW, 0, 28), z = 10, truncate = true })
 		tag(card, "FREE TO PLAY", C.good, C.manilaInk, { pos = UDim2.fromOffset(132, 44), z = 11, h = 20, size = 11 })
-		ratesButton(App, card, "basic", { pos = UDim2.fromOffset(242, 41), sz = UDim2.fromOffset(124, 26), z = 11, textSize = 12 })
+		ratesButton(App, card, "basic", { pos = UDim2.fromOffset(242, 42), z = 11 })
 		text(card, "Gear and officers, bought with cash.", { size = 14, color = C.muted, pos = UDim2.fromOffset(130, 70), sz = UDim2.new(1, -150 - rightW, 0, 36), z = 10, wrap = true, valign = Enum.TextYAlignment.Top })
 		local buy = UI.button(card, "manila", "BUY & OPEN", function(btn)
 			local st = App.state
@@ -15730,14 +15701,13 @@ S._tester = { init = function(App)
 		end
 
 		local right = mk("Frame", { BackgroundTransparency = 1, Position = UDim2.new(0.62, 6, 0, 0), Size = UDim2.new(0.38, -6, 1, 0), ZIndex = 91 }, body)
-		local logBg = mk("Frame", { BackgroundColor3 = C.black, BackgroundTransparency = 0.2, BorderSizePixel = 0, Size = UDim2.new(1, 0, 1, -48), ZIndex = 91 }, right)
-		mk("UICorner", { CornerRadius = UDim.new(0, 6) }, logBg)
+		local logBg = UI.img(right, "inset", { name = "Log", sz = UDim2.new(1, 0, 1, -48), z = 91 })
 		log = UI.list(logBg, { pos = UDim2.fromOffset(6, 6), sz = UDim2.new(1, -12, 1, -12), z = 92, gap = 3 })
-		box = mk("TextBox", { BackgroundColor3 = C.slate, BorderSizePixel = 0, Position = UDim2.new(0, 0, 1, -40), Size = UDim2.new(1, -70, 0, 40), ZIndex = 93,
+		-- command line on the kit's input plate
+		local boxBg = UI.img(right, "input", { name = "Command", pos = UDim2.new(0, 0, 1, -40), sz = UDim2.new(1, -70, 0, 40), z = 92 })
+		box = mk("TextBox", { BackgroundTransparency = 1, BorderSizePixel = 0, Position = UDim2.fromOffset(8, 0), Size = UDim2.new(1, -16, 1, 0), ZIndex = 93,
 			FontFace = Font.fromEnum(Enum.Font.Code), TextSize = 16, TextColor3 = C.ink, PlaceholderText = "/reset, /cash 1m, /help", PlaceholderColor3 = C.dim,
-			Text = "", ClearTextOnFocus = false, TextXAlignment = Enum.TextXAlignment.Left }, right)
-		mk("UICorner", { CornerRadius = UDim.new(0, 6) }, box)
-		mk("UIPadding", { PaddingLeft = UDim.new(0, 8) }, box)
+			Text = "", ClearTextOnFocus = false, TextXAlignment = Enum.TextXAlignment.Left }, boxBg)
 		local function submit() local t = box.Text; box.Text = ""; run(t) end
 		box.FocusLost:Connect(function(enter) if enter then submit(); task.defer(function() box:CaptureFocus() end) end end)
 		UI.button(right, "green", "RUN", submit, { pos = UDim2.new(1, -64, 1, -40), sz = UDim2.fromOffset(64, 40), z = 93, textSize = 15 })
@@ -16137,11 +16107,11 @@ do
 	local mid = mk("Frame", { Name = "Money", BackgroundTransparency = 1, Size = UDim2.fromOffset(300, TOP), ZIndex = 21 }, topBar)
 	top.mid = mid
 	UI.icon(mid, "icon_cash", 26, C.good, UDim2.fromOffset(0, 10), { z = 22 })
-	top.cash = text(mid, "$0", { font = "display", size = 28, color = C.good, pos = UDim2.fromOffset(32, 4), sz = UDim2.fromOffset(240, 34), z = 22, scaled = true })
-	top.income = text(mid, "", { font = "bold", size = 13, color = C.muted, pos = UDim2.fromOffset(32, 38), sz = UDim2.fromOffset(110, 18), z = 22 })
+	top.cash = text(mid, "$0", { font = "display", size = 28, color = C.good, pos = UDim2.fromOffset(32, 3), sz = UDim2.fromOffset(240, 30), z = 22, scaled = true })
+	top.income = text(mid, "", { font = "bold", size = 13, color = C.muted, pos = UDim2.fromOffset(32, 38), sz = UDim2.fromOffset(106, 18), z = 22, truncate = true })
 	-- gold bars and merits, big and readable (Kash 19:24)
 	local function currency(x, w, imgKey, fallback, color, name)
-		local b = UI.img(mid, "chip", { button = true, name = name, pos = UDim2.fromOffset(x, 33), sz = UDim2.fromOffset(w, 28), z = 22 })
+		local b = UI.img(mid, "chip", { button = true, name = name, pos = UDim2.fromOffset(x, 34), sz = UDim2.fromOffset(w, 28), z = 22 })
 		local key = (Assets[imgKey] and imgKey) or fallback
 		UI.img(b, key, { sz = UDim2.fromOffset(30, 30), pos = UDim2.new(0, -4, 0.5, 0), anchor = Vector2.new(0, 0.5), z = 24, slice = false, fit = true, color = key == fallback and imgKey ~= fallback and color or nil })
 		local l = text(b, "0", { font = "heavy", size = 17, color = color, pos = UDim2.fromOffset(30, 0), sz = UDim2.new(1, -34, 1, 0), z = 23, scaled = true })
@@ -16297,24 +16267,29 @@ local COMPOSITE = {
 	shop = { { key = "shop", label = "STORE", title = "SHOP" }, { key = "gearshop", label = "GEAR SHOP", title = "GEAR SHOP" } },
 }
 local ROUTE = { officers = { "military", 2 }, gearshop = { "shop", 2 } }
+-- Sub tabs use the kit's tab plates and sit exactly where the panel title was (panel x 16, y 6). Every child host gets
+-- the attribute TabsRight (panel x where the tabs end) so the child lays its header text and buttons out after them.
+local SUBTAB_W, SUBTAB_GAP, SUBTAB_X, SUBTAB_Y = 150, 6, 26, 16
 for parentKey, kids in pairs(COMPOSITE) do
 	local childDefs = {}
 	for i, k in ipairs(kids) do childDefs[i] = defs[k.key] end
 	defs[parentKey] = { build = function(host, App)
 		local obj = { kids = {}, cur = 1 }
-		local bar = mk("Frame", { Name = "SubTabs", BackgroundTransparency = 1, Position = UDim2.fromOffset(26, 16), Size = UDim2.fromOffset(460, 38), ZIndex = 40 }, host)
-		mk("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder, VerticalAlignment = Enum.VerticalAlignment.Center }, bar)
-		local btns = {}
+		local labels = {}
+		for i, k in ipairs(kids) do labels[i] = k.label end
+		local tabsW = #kids * SUBTAB_W + (#kids - 1) * SUBTAB_GAP
+		local tabsRight = (SUBTAB_X - 10) + tabsW + 14 -- in the child panel's coordinates (panels sit 10 px inside the host)
 		local function hideTitle(root, title)
 			if not title then return end
 			for _, d in ipairs(root:GetDescendants()) do
-				if d:IsA("TextLabel") and d.Text == title then d.Visible = false end
+				if d:IsA("TextLabel") and d.Name == "Title" and d.Text == title then d.Visible = false end
 			end
 		end
+		local tabs
 		function obj.select(i)
 			obj.cur = i
 			for j, kid in ipairs(obj.kids) do kid.host.Visible = j == i end
-			for j, b in ipairs(btns) do b:Set(j == i and "manila" or "slate") end
+			if tabs then tabs:Set(i) end
 			local kid = obj.kids[i]
 			if kid and kid.obj then
 				if App.state and kid.obj.Refresh then pcall(kid.obj.Refresh, kid.obj, App.state) end
@@ -16322,19 +16297,22 @@ for parentKey, kids in pairs(COMPOSITE) do
 			end
 		end
 		for i, k in ipairs(kids) do
-			local h = mk("Frame", { Name = "Sub_" .. k.key, BackgroundTransparency = 1, Position = UDim2.fromOffset(0, k.below and 52 or 0), Size = UDim2.new(1, 0, 1, k.below and -52 or 0), ZIndex = 3, Visible = i == 1 }, host)
+			local h = mk("Frame", { Name = "Sub_" .. k.key, BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 3, Visible = i == 1 }, host)
+			h:SetAttribute("TabsRight", tabsRight)
 			local okB, o = false, nil
 			if childDefs[i] then okB, o = pcall(childDefs[i].build, h, App) end
 			if not okB then warn("[Idle Country] sub screen " .. k.key .. ": " .. tostring(o)) end
 			obj.kids[i] = { host = h, obj = okB and o or nil }
 			hideTitle(h, k.title)
-			btns[i] = UI.button(bar, i == 1 and "manila" or "slate", k.label, function() if App.play then App.play("tab_open") end; obj.select(i) end,
-				{ sz = UDim2.fromOffset(k.label:len() > 10 and 210 or 140, 38), z = 41, order = i, textSize = 16 })
 		end
+		tabs = UI.tabs(host, labels, function(i)
+			if App.play then App.play("tab_open") end
+			obj.select(i)
+		end, { pos = UDim2.fromOffset(SUBTAB_X, SUBTAB_Y), sz = UDim2.fromOffset(tabsW, 36), w = SUBTAB_W, textSize = 16, z = 40 })
+		tabs:Set(1)
 		function obj:Refresh(st)
 			local kid = obj.kids[obj.cur]
 			if kid and kid.obj and kid.obj.Refresh then kid.obj.Refresh(kid.obj, st) end
-			hideTitle(kid.host, kids[obj.cur].title)
 		end
 		function obj:Tick(st)
 			local kid = obj.kids[obj.cur]
@@ -16657,6 +16635,22 @@ pcall(function() ReplicatedFirst:RemoveDefaultLoadingScreen() end)
 local BG = "rbxassetid://78862615309260"
 local LOGO = "rbxassetid://92029969593916"
 local VERSION = "ALPHA 0.3"
+-- the UI kit's plates (Shared.Assets bar_track / bar_fill, same 9-slice centres as client/UI.lua). Inlined because this
+-- runs from ReplicatedFirst before ReplicatedStorage has replicated.
+local KIT = {
+	bar_track = { "rbxassetid://134110984464626", Rect.new(8, 8, 56, 20), 0.75 },
+	bar_fill = { "rbxassetid://125319890576593", Rect.new(6, 6, 34, 18), 0.75 },
+}
+local function plate(key, color)
+	local k = KIT[key]
+	local o = Instance.new("ImageLabel")
+	o.BackgroundTransparency = 1; o.BorderSizePixel = 0; o.Image = k[1]
+	o.ScaleType = Enum.ScaleType.Slice; o.SliceCenter = k[2]; o.SliceScale = k[3]
+	if color then o.ImageColor3 = color end
+	return o
+end
+local HEAVY = Font.new("rbxasset://fonts/families/RobotoCondensed.json", Enum.FontWeight.ExtraBold)
+local BOLD = Font.new("rbxasset://fonts/families/RobotoCondensed.json", Enum.FontWeight.Bold)
 
 local gui = Instance.new("ScreenGui")
 gui.Name = "IC_Loading"; gui.IgnoreGuiInset = true; gui.DisplayOrder = 100; gui.ResetOnSpawn = false
@@ -16679,27 +16673,30 @@ logo.ImageTransparency = 1; logo.Parent = root
 local logoScale = Instance.new("UIScale"); logoScale.Scale = 0.85; logoScale.Parent = logo
 local ar = Instance.new("UISizeConstraint"); ar.MaxSize = Vector2.new(760, 480); ar.Parent = logo
 
-local chip = Instance.new("TextLabel")
-chip.Text = "ALPHA"; chip.Font = Enum.Font.GothamBold; chip.TextSize = 18; chip.TextColor3 = Color3.new(1, 1, 1)
-chip.BackgroundColor3 = Color3.fromHex("8f2a24"); chip.BorderSizePixel = 0; chip.Size = UDim2.fromOffset(96, 34)
-chip.AnchorPoint = Vector2.new(0, 0.5); chip.Position = UDim2.new(0.5, 150, 0.2, 0); chip.TextTransparency = 1; chip.BackgroundTransparency = 1; chip.Parent = root
-local cs = Instance.new("UIStroke"); cs.Color = Color3.fromHex("c9473e"); cs.Thickness = 1.5; cs.Transparency = 1; cs.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; cs.Parent = chip
+-- ALPHA tag: the kit's tag plate (bar fill art tinted red)
+local chip = plate("bar_fill", Color3.fromHex("c9473e"))
+chip.Size = UDim2.fromOffset(96, 34); chip.AnchorPoint = Vector2.new(0, 0.5); chip.Position = UDim2.new(0.5, 150, 0.2, 0); chip.ImageTransparency = 1; chip.Parent = root
+local chipL = Instance.new("TextLabel")
+chipL.Text = "ALPHA"; chipL.FontFace = HEAVY; chipL.TextSize = 18; chipL.TextColor3 = Color3.new(1, 1, 1); chipL.BackgroundTransparency = 1
+chipL.Size = UDim2.fromScale(1, 1); chipL.TextTransparency = 1; chipL.ZIndex = 2; chipL.Parent = chip
 
 local status = Instance.new("TextLabel")
-status.Text = "LOADING YOUR NATION"; status.Font = Enum.Font.GothamMedium; status.TextSize = 20; status.TextColor3 = Color3.fromHex("ece8dc")
+status.Text = "LOADING YOUR NATION"; status.FontFace = BOLD; status.TextSize = 20; status.TextColor3 = Color3.fromHex("ece8dc")
 status.TextXAlignment = Enum.TextXAlignment.Left; status.BackgroundTransparency = 1; status.AnchorPoint = Vector2.new(0.5, 0)
 status.Position = UDim2.fromScale(0.5, 0.66); status.Size = UDim2.new(0.42, 0, 0, 26); status.TextTransparency = 1; status.Parent = root
-local track = Instance.new("Frame")
-track.AnchorPoint = Vector2.new(0.5, 0); track.Position = UDim2.new(0.5, 0, 0.66, 34); track.Size = UDim2.new(0.42, 0, 0, 14)
-track.BackgroundColor3 = Color3.fromHex("1c1a16"); track.BorderSizePixel = 0; track.BackgroundTransparency = 1; track.ClipsDescendants = true; track.Parent = root
-local ts = Instance.new("UIStroke"); ts.Color = Color3.fromHex("6e5a2c"); ts.Transparency = 1; ts.Parent = track
-local shine = Instance.new("Frame")
-shine.Size = UDim2.fromScale(0.3, 1); shine.BackgroundColor3 = Color3.fromHex("f0c75a"); shine.BorderSizePixel = 0; shine.Parent = track
+-- the progress bar: the kit's bar track with a gold bar-fill shimmer sweeping through it
+local track = plate("bar_track")
+track.AnchorPoint = Vector2.new(0.5, 0); track.Position = UDim2.new(0.5, 0, 0.66, 34); track.Size = UDim2.new(0.42, 0, 0, 18)
+track.ImageTransparency = 1; track.Parent = root
+local inner = Instance.new("Frame")
+inner.BackgroundTransparency = 1; inner.Position = UDim2.fromOffset(3, 3); inner.Size = UDim2.new(1, -6, 1, -6); inner.ClipsDescendants = true; inner.ZIndex = 2; inner.Parent = track
+local shine = plate("bar_fill", Color3.fromHex("f0c75a"))
+shine.Size = UDim2.fromScale(0.3, 1); shine.ZIndex = 2; shine.Parent = inner
 local sg = Instance.new("UIGradient")
 sg.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.5, 0), NumberSequenceKeypoint.new(1, 1) }); sg.Parent = shine
 
 local foot = Instance.new("TextLabel")
-foot.Text = "This game is a work of fiction. Nations, leaders and events are invented."; foot.Font = Enum.Font.Gotham; foot.TextSize = 14
+foot.Text = "This game is a work of fiction. Nations, leaders and events are invented."; foot.FontFace = BOLD; foot.TextSize = 14
 foot.TextColor3 = Color3.fromHex("b8b2a6"); foot.TextXAlignment = Enum.TextXAlignment.Left; foot.BackgroundTransparency = 1
 foot.Position = UDim2.new(0, 40, 1, -46); foot.Size = UDim2.new(0.6, 0, 0, 20); foot.TextTransparency = 1; foot.Parent = root
 local ver = foot:Clone(); ver.Text = "VERSION " .. VERSION; ver.TextXAlignment = Enum.TextXAlignment.Right
@@ -16712,8 +16709,8 @@ local function tw(o, t, p, style) TweenService:Create(o, TweenInfo.new(t, style 
 tw(bg, 0.8, { ImageTransparency = 0 })
 tw(logo, 0.7, { ImageTransparency = 0 }); tw(logoScale, 0.9, { Scale = 1 }, Enum.EasingStyle.Back)
 task.delay(0.35, function()
-	tw(chip, 0.4, { TextTransparency = 0, BackgroundTransparency = 0 }); tw(cs, 0.4, { Transparency = 0 })
-	tw(status, 0.4, { TextTransparency = 0 }); tw(track, 0.4, { BackgroundTransparency = 0 }); tw(ts, 0.4, { Transparency = 0 })
+	tw(chip, 0.4, { ImageTransparency = 0 }); tw(chipL, 0.4, { TextTransparency = 0 })
+	tw(status, 0.4, { TextTransparency = 0 }); tw(track, 0.4, { ImageTransparency = 0 })
 	tw(foot, 0.4, { TextTransparency = 0.2 }); tw(ver, 0.4, { TextTransparency = 0.2 })
 end)
 -- slow camera drift on the art + the shimmering bar
