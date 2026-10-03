@@ -485,6 +485,7 @@ M._settings = { init = function(App)
 				"Join or found an alliance to " .. kw("capture cities", Rd) .. " on the world map together.",
 				"Donate to level it up. Every level pays members " .. kw("gold", M2) .. ", and weekly quests pay " .. kw("gold and Merits", M2) .. ".",
 				"Cities your alliance holds pay " .. kw("tax and rent", G) .. ".",
+				"Leaders can set an " .. kw("alliance target", Rd) .. " so everyone attacks the same city, and buy " .. kw("HEADQUARTERS", B) .. " for up to 100 members.",
 			} },
 			{ title = "AFK CHAMBER", img = "icon_clock", icon = true, color = T, lines = {
 				"Idle for 15 minutes and you enter the " .. kw("AFK Chamber", T) .. ": you stay in the game and keep earning.",

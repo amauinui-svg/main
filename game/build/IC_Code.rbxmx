@@ -2246,8 +2246,16 @@ WS.Upgrades = {
 	{ key = "trade", name = "TRADE NETWORK", icon = "icon_globe", max = 5, desc = "+3% convoy pay for every member" },
 	{ key = "war", name = "WAR COLLEGE", icon = "icon_attack", max = 5, desc = "+5% siege damage per level" },
 	{ key = "fort", name = "FORTIFICATIONS", icon = "icon_castle", max = 5, desc = "+10% garrison per level on captured cities" },
+	-- HEADQUARTERS (Kash 3 Oct): +6 member slots per level, so a level 10 alliance with HQ 10 holds 100.
+	-- Gentler cost curve than the others (x2.6 a level) because it only pays off once the alliance can fill the slots.
+	{ key = "hq", name = "HEADQUARTERS", icon = "icon_users", max = 10, desc = "+6 member slots per level", base = 4e6, mult = 2.6 },
 }
-function WS.UpgradeCost(level) return math.floor(2.5e6 * 4 ^ level + 0.5) end
+WS.HqSlots = 6
+WS.MaxMembersHard = 100
+function WS.UpgradeCost(level, up)
+	if up and up.base then return math.floor(up.base * up.mult ^ level + 0.5) end
+	return math.floor(2.5e6 * 4 ^ level + 0.5)
+end
 
 function WS.CityGarrison(i) return Military.NeutralGarrison[World.Cities[i].tier] end
 
@@ -2565,7 +2573,11 @@ WS.QuestPool = {
 WS.QuestXp = 600
 WS.MaxLevel = 30
 function WS.LevelXp(level) return math.floor(400 * level ^ 1.6 + 0.5) end
-function WS.MemberCap(a) return math.min(40, AC.MaxMembers - 10 + 2 * ((a and a.level) or 1)) end -- 22 at level 1, 40 at 10
+function WS.MemberCap(a)
+	local base = math.min(40, AC.MaxMembers - 10 + 2 * ((a and a.level) or 1)) -- 22 at level 1, 40 at 10
+	local hq = (a and type(a.up) == "table" and a.up.hq) or 0
+	return math.min(WS.MaxMembersHard, base + WS.HqSlots * hq)
+end
 function WS.LevelBonus(level) return math.min(0.10, 0.01 * ((level or 1) - 1)) end -- +1% cash per level after 1, max +10%
 function WS.LevelReward(level) return { gold = 5 + 3 * level, basic = (level % 5 == 0) and 1 or 0 } end
 function WS.Week(t) return math.floor(((t or now()) + 3 * 86400) / 604800) end -- weeks start Monday 00:00 UTC
@@ -3191,7 +3203,7 @@ function PS.AllyInfo(p, a)
 	if not a then return nil end
 	local lv = a.level or 1
 	return { level = lv, xp = a.xp or 0, xpReq = WS.LevelXp(lv), maxLevel = WS.MaxLevel, cap = WS.MemberCap(a), bonus = WS.LevelBonus(lv),
-		nextBonus = WS.LevelBonus(lv + 1), nextCap = WS.MemberCap({ level = lv + 1 }), nextReward = WS.LevelReward(lv + 1),
+		nextBonus = WS.LevelBonus(lv + 1), nextCap = WS.MemberCap({ level = lv + 1, up = a.up }), nextReward = WS.LevelReward(lv + 1),
 		claim = PS.AllyClaimable(p), questXp = WS.QuestXp, week = WS.Week(), weekEnds = (WS.Week() + 1) * 604800 - 3 * 86400,
 		xpPer = WS.AllyXp }
 end
@@ -6295,7 +6307,7 @@ function act.allyUpgrade(plr, p, a)
 		if r == "officer" and x.perms and x.perms.upgrade == false then return nil, "Your leader has not allowed officers to buy upgrades" end
 		local lvl = x.up[up.key] or 0
 		if lvl >= up.max then return nil, "Already at max level" end
-		local cost = WS.UpgradeCost(lvl)
+		local cost = WS.UpgradeCost(lvl, up)
 		if (x.treasury or 0) < cost then return nil, "The treasury needs " .. R.Money(cost) end
 		x.treasury -= cost
 		x.up[up.key] = lvl + 1
@@ -9655,8 +9667,13 @@ local UPGRADES = {
 	{ key = "trade", name = "TRADE NETWORK", icon = "icon_globe", max = 5, desc = function(l) return "+" .. (3 * l) .. "% convoy pay for every member" end },
 	{ key = "war", name = "WAR COLLEGE", icon = "icon_attack", max = 5, desc = function(l) return "+" .. (5 * l) .. "% siege damage" end },
 	{ key = "fort", name = "FORTIFICATIONS", icon = "icon_castle", max = 5, desc = function(l) return "+" .. (10 * l) .. "% garrison on cities you capture" end },
+	{ key = "hq", name = "HEADQUARTERS", icon = "icon_users", max = 10, base = 4e6, mult = 2.6, desc = function(l) return "+" .. (6 * l) .. " member slots (up to 100 members)" end },
 }
-local function upCost(level) return math.floor(2.5e6 * 4 ^ level + 0.5) end
+-- same numbers as WS.UpgradeCost
+local function upCost(level, u)
+	if u and u.base then return math.floor(u.base * u.mult ^ level + 0.5) end
+	return math.floor(2.5e6 * 4 ^ level + 0.5)
+end
 -- same numbers as WorldService (city perk size by tier, strongest 2 of each type count)
 local PERK_SIZE = { 3, 5, 8, 12 }
 local PERK_NAMES = { law = "law cash", props = "property income", convoy = "convoy pay", regen = "Influence regen", attack = "attack", defense = "defense" }
@@ -10157,7 +10174,7 @@ S.alliance = { build = function(host, App)
 			if lvl >= u.max then
 				UI.button(card, "locked", "MAXED", nil, { sz = UDim2.fromOffset(196, 44), pos = UDim2.new(1, -208, 0, 14), z = 9 })
 			else
-				local cost = upCost(lvl)
+				local cost = upCost(lvl, u)
 				if manager and not officerBlocked then
 					local can = (a.treasury or 0) >= cost
 					UI.button(card, can and "gold" or "locked", "UPGRADE · " .. R.Money(cost), function(btn) App.req("allyUpgrade", { key = u.key }, btn) end, { sz = UDim2.fromOffset(196, 44), pos = UDim2.new(1, -208, 0, 14), z = 9, textSize = 15 })
@@ -14970,6 +14987,7 @@ M._settings = { init = function(App)
 				"Join or found an alliance to " .. kw("capture cities", Rd) .. " on the world map together.",
 				"Donate to level it up. Every level pays members " .. kw("gold", M2) .. ", and weekly quests pay " .. kw("gold and Merits", M2) .. ".",
 				"Cities your alliance holds pay " .. kw("tax and rent", G) .. ".",
+				"Leaders can set an " .. kw("alliance target", Rd) .. " so everyone attacks the same city, and buy " .. kw("HEADQUARTERS", B) .. " for up to 100 members.",
 			} },
 			{ title = "AFK CHAMBER", img = "icon_clock", icon = true, color = T, lines = {
 				"Idle for 15 minutes and you enter the " .. kw("AFK Chamber", T) .. ": you stay in the game and keep earning.",

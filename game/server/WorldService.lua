@@ -41,8 +41,16 @@ WS.Upgrades = {
 	{ key = "trade", name = "TRADE NETWORK", icon = "icon_globe", max = 5, desc = "+3% convoy pay for every member" },
 	{ key = "war", name = "WAR COLLEGE", icon = "icon_attack", max = 5, desc = "+5% siege damage per level" },
 	{ key = "fort", name = "FORTIFICATIONS", icon = "icon_castle", max = 5, desc = "+10% garrison per level on captured cities" },
+	-- HEADQUARTERS (Kash 3 Oct): +6 member slots per level, so a level 10 alliance with HQ 10 holds 100.
+	-- Gentler cost curve than the others (x2.6 a level) because it only pays off once the alliance can fill the slots.
+	{ key = "hq", name = "HEADQUARTERS", icon = "icon_users", max = 10, desc = "+6 member slots per level", base = 4e6, mult = 2.6 },
 }
-function WS.UpgradeCost(level) return math.floor(2.5e6 * 4 ^ level + 0.5) end
+WS.HqSlots = 6
+WS.MaxMembersHard = 100
+function WS.UpgradeCost(level, up)
+	if up and up.base then return math.floor(up.base * up.mult ^ level + 0.5) end
+	return math.floor(2.5e6 * 4 ^ level + 0.5)
+end
 
 function WS.CityGarrison(i) return Military.NeutralGarrison[World.Cities[i].tier] end
 
@@ -360,7 +368,11 @@ WS.QuestPool = {
 WS.QuestXp = 600
 WS.MaxLevel = 30
 function WS.LevelXp(level) return math.floor(400 * level ^ 1.6 + 0.5) end
-function WS.MemberCap(a) return math.min(40, AC.MaxMembers - 10 + 2 * ((a and a.level) or 1)) end -- 22 at level 1, 40 at 10
+function WS.MemberCap(a)
+	local base = math.min(40, AC.MaxMembers - 10 + 2 * ((a and a.level) or 1)) -- 22 at level 1, 40 at 10
+	local hq = (a and type(a.up) == "table" and a.up.hq) or 0
+	return math.min(WS.MaxMembersHard, base + WS.HqSlots * hq)
+end
 function WS.LevelBonus(level) return math.min(0.10, 0.01 * ((level or 1) - 1)) end -- +1% cash per level after 1, max +10%
 function WS.LevelReward(level) return { gold = 5 + 3 * level, basic = (level % 5 == 0) and 1 or 0 } end
 function WS.Week(t) return math.floor(((t or now()) + 3 * 86400) / 604800) end -- weeks start Monday 00:00 UTC

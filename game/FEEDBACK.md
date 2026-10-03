@@ -452,3 +452,6 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 
 ## 3 Oct 10:25 (Kash)
 - Tapping your flag at the top left opens your profile.
+
+## 3 Oct 10:28 (Kash)
+- New alliance perk HEADQUARTERS: +6 member slots per level, 10 levels, so up to 100 members (level 10 alliance + HQ 10). Cost 4M, x2.6 a level (about 35B for all 10). Asked for more perk ideas: suggested in chat.

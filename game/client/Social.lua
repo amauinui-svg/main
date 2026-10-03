@@ -15,8 +15,13 @@ local UPGRADES = {
 	{ key = "trade", name = "TRADE NETWORK", icon = "icon_globe", max = 5, desc = function(l) return "+" .. (3 * l) .. "% convoy pay for every member" end },
 	{ key = "war", name = "WAR COLLEGE", icon = "icon_attack", max = 5, desc = function(l) return "+" .. (5 * l) .. "% siege damage" end },
 	{ key = "fort", name = "FORTIFICATIONS", icon = "icon_castle", max = 5, desc = function(l) return "+" .. (10 * l) .. "% garrison on cities you capture" end },
+	{ key = "hq", name = "HEADQUARTERS", icon = "icon_users", max = 10, base = 4e6, mult = 2.6, desc = function(l) return "+" .. (6 * l) .. " member slots (up to 100 members)" end },
 }
-local function upCost(level) return math.floor(2.5e6 * 4 ^ level + 0.5) end
+-- same numbers as WS.UpgradeCost
+local function upCost(level, u)
+	if u and u.base then return math.floor(u.base * u.mult ^ level + 0.5) end
+	return math.floor(2.5e6 * 4 ^ level + 0.5)
+end
 -- same numbers as WorldService (city perk size by tier, strongest 2 of each type count)
 local PERK_SIZE = { 3, 5, 8, 12 }
 local PERK_NAMES = { law = "law cash", props = "property income", convoy = "convoy pay", regen = "Influence regen", attack = "attack", defense = "defense" }
@@ -517,7 +522,7 @@ S.alliance = { build = function(host, App)
 			if lvl >= u.max then
 				UI.button(card, "locked", "MAXED", nil, { sz = UDim2.fromOffset(196, 44), pos = UDim2.new(1, -208, 0, 14), z = 9 })
 			else
-				local cost = upCost(lvl)
+				local cost = upCost(lvl, u)
 				if manager and not officerBlocked then
 					local can = (a.treasury or 0) >= cost
 					UI.button(card, can and "gold" or "locked", "UPGRADE · " .. R.Money(cost), function(btn) App.req("allyUpgrade", { key = u.key }, btn) end, { sz = UDim2.fromOffset(196, 44), pos = UDim2.new(1, -208, 0, 14), z = 9, textSize = 15 })

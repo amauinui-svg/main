@@ -229,7 +229,7 @@ function PS.AllyInfo(p, a)
 	if not a then return nil end
 	local lv = a.level or 1
 	return { level = lv, xp = a.xp or 0, xpReq = WS.LevelXp(lv), maxLevel = WS.MaxLevel, cap = WS.MemberCap(a), bonus = WS.LevelBonus(lv),
-		nextBonus = WS.LevelBonus(lv + 1), nextCap = WS.MemberCap({ level = lv + 1 }), nextReward = WS.LevelReward(lv + 1),
+		nextBonus = WS.LevelBonus(lv + 1), nextCap = WS.MemberCap({ level = lv + 1, up = a.up }), nextReward = WS.LevelReward(lv + 1),
 		claim = PS.AllyClaimable(p), questXp = WS.QuestXp, week = WS.Week(), weekEnds = (WS.Week() + 1) * 604800 - 3 * 86400,
 		xpPer = WS.AllyXp }
 end

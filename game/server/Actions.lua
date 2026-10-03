@@ -927,7 +927,7 @@ function act.allyUpgrade(plr, p, a)
 		if r == "officer" and x.perms and x.perms.upgrade == false then return nil, "Your leader has not allowed officers to buy upgrades" end
 		local lvl = x.up[up.key] or 0
 		if lvl >= up.max then return nil, "Already at max level" end
-		local cost = WS.UpgradeCost(lvl)
+		local cost = WS.UpgradeCost(lvl, up)
 		if (x.treasury or 0) < cost then return nil, "The treasury needs " .. R.Money(cost) end
 		x.treasury -= cost
 		x.up[up.key] = lvl + 1
