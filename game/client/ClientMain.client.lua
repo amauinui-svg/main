@@ -183,7 +183,7 @@ do
 
 	local mid = mk("Frame", { Name = "Money", BackgroundTransparency = 1, Size = UDim2.fromOffset(300, TOP), ZIndex = 21 }, topBar)
 	top.mid = mid
-	UI.icon(mid, "icon_cash", 26, C.good, UDim2.fromOffset(0, 10), { z = 22 })
+	top.cashIcon = UI.icon(mid, "icon_cash", 26, C.good, UDim2.fromOffset(0, 10), { z = 22 })
 	top.cash = text(mid, "$0", { font = "display", size = 28, color = C.good, pos = UDim2.fromOffset(32, 7), sz = UDim2.fromOffset(240, 30), z = 22, scaled = true })
 	top.income = text(mid, "", { font = "bold", size = 13, color = C.muted, pos = UDim2.fromOffset(32, 38), sz = UDim2.fromOffset(106, 18), z = 22, truncate = true })
 	-- gold bars and merits, big and readable (Kash 19:24)
@@ -191,7 +191,10 @@ do
 		local b = UI.img(mid, "chip", { button = true, name = name, pos = UDim2.fromOffset(x, 34), sz = UDim2.fromOffset(w, 28), z = 22 })
 		local key = (Assets[imgKey] and imgKey) or fallback
 		UI.img(b, key, { sz = UDim2.fromOffset(30, 30), pos = UDim2.new(0, -4, 0.5, 0), anchor = Vector2.new(0, 0.5), z = 24, slice = false, fit = true, color = key == fallback and imgKey ~= fallback and color or nil })
+		local ic = b:FindFirstChildWhichIsA("ImageLabel")
 		local l = text(b, "0", { font = "heavy", size = 17, color = color, pos = UDim2.fromOffset(30, 0), sz = UDim2.new(1, -34, 1, 0), z = 23, scaled = true })
+		top.chips = top.chips or {}
+		table.insert(top.chips, { b = b, ic = ic, l = l })
 		return b, l
 	end
 	local goldBtn
@@ -203,15 +206,16 @@ do
 
 	local right = mk("Frame", { Name = "Energy", BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -62, 0, 0), Size = UDim2.fromOffset(470, TOP), ZIndex = 21 }, topBar)
 	top.right = right
-	UI.icon(right, "icon_influence", 22, C.inf, UDim2.fromOffset(0, 8), { z = 22 })
+	top.infIcon = UI.icon(right, "icon_influence", 22, C.inf, UDim2.fromOffset(0, 8), { z = 22 })
 	top.inf = UI.bar(right, C.inf, { pos = UDim2.fromOffset(26, 6), sz = UDim2.fromOffset(200, 24), z = 22, textSize = 14 })
 	top.infT = text(right, "", { font = "bold", size = 12, color = C.muted, pos = UDim2.fromOffset(28, 32), sz = UDim2.fromOffset(196, 16), z = 22 })
-	UI.icon(right, "icon_supply", 22, C.sup, UDim2.fromOffset(238, 8), { z = 22 })
+	top.supIcon = UI.icon(right, "icon_supply", 22, C.sup, UDim2.fromOffset(238, 8), { z = 22 })
 	top.sup = UI.bar(right, C.sup, { pos = UDim2.fromOffset(264, 6), sz = UDim2.fromOffset(160, 24), z = 22, textSize = 14 })
 	top.supT = text(right, "", { font = "bold", size = 12, color = C.muted, pos = UDim2.fromOffset(266, 32), sz = UDim2.fromOffset(156, 16), z = 22 })
 	local plus = UI.img(right, "btn_gold", { button = true, name = "Refill", pos = UDim2.fromOffset(432, 8), sz = UDim2.fromOffset(36, 34), z = 22 })
 	UI.icon(plus, "icon_plus", 18, C.manilaInk, UDim2.new(0.5, 0, 0.5, -1), { z = 23, anchor = Vector2.new(0.5, 0.5) })
 	plus.Activated:Connect(function() App.open("shop") end)
+	top.plus = plus
 
 	-- UPGRADES (skill points) from any screen: sits between the energy bars and the settings gear,
 	-- appears with the Country tab (Config.NavUnlock.country)
@@ -229,27 +233,29 @@ local function layoutTop()
 	if not top.compact then top.id.Position = UDim2.fromOffset(x0, 0) end
 	-- phones (compact): the identity block lives at the top of the nav, so the top bar only holds money and energy
 	local idW = top.compact and 0 or 340
+	-- group widths: desktop 300 (money) / 470 (energy); phones use the stacked compact groups
+	local MIDW, RIGHTW = top.compact and 330 or 300, top.compact and 310 or 470
 	-- shrink the three groups together until cash fits between identity and the bars (phones)
 	-- the UPGRADES button (when shown) takes 122 px (scaled) between the energy group and the gear
 	local upgW = top.upg.Visible and 122 or 0
 	local k = 1
 	for _, try in ipairs({ 1, 0.9, 0.8, 0.72, 0.65, 0.58 }) do
 		k = try
-		local room = w - 62 - (470 + upgW) * k - (x0 + idW * k)
-		if room >= 300 * k then break end
+		local room = w - 62 - (RIGHTW + upgW) * k - (x0 + idW * k)
+		if room >= MIDW * k then break end
 	end
 	if not top.compact then scaleOf(top.id).Scale = k; top.id.Size = UDim2.fromOffset(330, TOP / k) end
 	scaleOf(top.right).Scale = k; scaleOf(top.mid).Scale = k; scaleOf(top.upg).Scale = k
-	top.right.Size = UDim2.fromOffset(470, TOP / k)
-	top.mid.Size = UDim2.fromOffset(300, TOP / k)
+	top.right.Size = UDim2.fromOffset(RIGHTW, TOP / k)
+	top.mid.Size = UDim2.fromOffset(MIDW, TOP / k)
 	top.upg.Size = UDim2.fromOffset(122, TOP / k)
 	top.upg.Position = UDim2.new(1, -62, 0, 0)
 	top.upgBtn.Label.TextWrapped = false
 	top.right.Position = UDim2.new(1, -62 - math.floor(upgW * k), 0, 0)
 	local midX = x0 + idW * k
-	local room = w - 62 - (470 + upgW) * k - midX
-	top.mid.Visible = room >= 290 * k
-	top.mid.Position = UDim2.fromOffset(midX + math.max(0, math.floor((room - 300 * k) / 2)), 0)
+	local room = w - 62 - (RIGHTW + upgW) * k - midX
+	top.mid.Visible = room >= (MIDW - 10) * k
+	top.mid.Position = UDim2.fromOffset(midX + math.max(0, math.floor((room - MIDW * k) / 2)), 0)
 end
 App.on("resize", layoutTop)
 pcall(function() GuiService:GetPropertyChangedSignal("TopbarInset"):Connect(layoutTop) end)
@@ -290,11 +296,51 @@ local function setCompact(on)
 	idSlot.Visible = on
 	local fs = top.flagHost:FindFirstChildOfClass("UIScale") or mk("UIScale", {}, top.flagHost)
 	-- phones: bigger numbers in the energy bars and timers so they stay readable after the HUD scale
-	local function barText(bar, size)
-		for _, t in ipairs(bar.Inst:GetChildren()) do if t:IsA("TextLabel") then t.TextSize = size end end
+	local function barText(bar, add)
+		for _, t in ipairs(bar.Inst:GetChildren()) do
+			if t:IsA("TextLabel") then
+				local base = t:GetAttribute("BaseSize") or t.TextSize
+				t:SetAttribute("BaseSize", base)
+				t.TextSize = base + (on and add or 0) -- desktop keeps its original sizes exactly
+			end
+		end
 	end
-	barText(top.inf, on and 18 or 14); barText(top.sup, on and 18 or 14); barText(top.xp, on and 15 or 13)
+	barText(top.inf, 2); barText(top.sup, 2); barText(top.xp, 2)
 	top.infT.TextSize = on and 14 or 12; top.supT.TextSize = on and 14 or 12
+	-- phones: energy bars stacked and aligned with their timers inside the bar, money block with the gold and merit
+	-- chips stacked beside the cash, icons fully inside their chips. Desktop geometry is restored exactly when off.
+	local function geo(o, pos, sz) o.Position = pos; if sz then o.Size = sz end end
+	local function px(x, y) return UDim2.fromOffset(x, y) end
+	if on then
+		geo(top.infIcon, px(0, 7), px(22, 22)); geo(top.inf.Inst, px(28, 4), px(230, 26))
+		geo(top.supIcon, px(0, 36), px(22, 22)); geo(top.sup.Inst, px(28, 34), px(230, 26))
+		geo(top.infT, px(32, 4), px(222, 26)); geo(top.supT, px(32, 34), px(222, 26))
+		top.infT.TextXAlignment = Enum.TextXAlignment.Right; top.supT.TextXAlignment = Enum.TextXAlignment.Right
+		top.infT.ZIndex = 26; top.supT.ZIndex = 26; top.infT.TextColor3 = C.white; top.supT.TextColor3 = C.white
+		geo(top.plus, px(266, 13), px(40, 38))
+		geo(top.cashIcon, px(0, 8), px(26, 26)); geo(top.cash, px(32, 2), px(150, 34)); geo(top.income, px(34, 38), px(146, 20))
+		top.income.TextSize = 15
+		for i, c in ipairs(top.chips or {}) do
+			geo(c.b, px(196, i == 1 and 4 or 34), px(128, 26))
+			if c.ic then c.ic.Position = UDim2.new(0, 3, 0.5, 0); c.ic.Size = px(22, 22) end
+			geo(c.l, px(30, 0), UDim2.new(1, -36, 1, 0))
+		end
+	else
+		geo(top.infIcon, px(0, 8), px(22, 22)); geo(top.inf.Inst, px(26, 6), px(200, 24))
+		geo(top.supIcon, px(238, 8), px(22, 22)); geo(top.sup.Inst, px(264, 6), px(160, 24))
+		geo(top.infT, px(28, 32), px(196, 16)); geo(top.supT, px(266, 32), px(156, 16))
+		top.infT.TextXAlignment = Enum.TextXAlignment.Left; top.supT.TextXAlignment = Enum.TextXAlignment.Left
+		top.infT.ZIndex = 22; top.supT.ZIndex = 22; top.infT.TextColor3 = C.muted; top.supT.TextColor3 = C.muted
+		geo(top.plus, px(432, 8), px(36, 34))
+		geo(top.cashIcon, px(0, 10), px(26, 26)); geo(top.cash, px(32, 7), px(240, 30)); geo(top.income, px(32, 38), px(106, 18))
+		top.income.TextSize = 13
+		local xs, ws = { 144, 226 }, { 76, 70 }
+		for i, c in ipairs(top.chips or {}) do
+			geo(c.b, px(xs[i], 34), px(ws[i], 28))
+			if c.ic then c.ic.Position = UDim2.new(0, -4, 0.5, 0); c.ic.Size = px(30, 30) end
+			geo(c.l, px(30, 0), UDim2.new(1, -34, 1, 0))
+		end
+	end
 	if on then
 		top.id.Parent = idSlot
 		scaleOf(top.id).Scale = 1
@@ -552,8 +598,8 @@ local function drawTop()
 	top.income.Text = "+" .. R.Money(st.incHr) .. "/hr"
 	top.gold.Text = R.Commas(st.gold)
 	if top.merits then top.merits.Text = R.Commas(st.seals or 0) end
-	top.inf:Set(st.inf / st.infMax, "INFLUENCE  " .. st.inf .. " / " .. st.infMax, "")
-	top.sup:Set(st.sup / st.supMax, "SUPPLY  " .. st.sup .. " / " .. st.supMax, "")
+	top.inf:Set(st.inf / st.infMax, (top.compact and "" or "INFLUENCE  ") .. st.inf .. " / " .. st.infMax, "")
+	top.sup:Set(st.sup / st.supMax, (top.compact and "" or "SUPPLY  ") .. st.sup .. " / " .. st.supMax, "")
 	local fk = st.flag and (st.flag.l .. table.concat(st.flag.c, ""))
 	if fk ~= lastFlag then
 		lastFlag = fk
@@ -566,7 +612,7 @@ local function drawTimers()
 	if not st then return end
 	local since = os.clock() - (App.tickClock or os.clock())
 	if st.inf < st.infMax then
-		top.infT.Text = "+1 in " .. R.Clock(math.max(0, st.regenSec - st.infT - since)) .. " · full in " .. R.Duration((st.infMax - st.inf) * st.regenSec - st.infT - since)
+		top.infT.Text = "+1 in " .. R.Clock(math.max(0, st.regenSec - st.infT - since)) .. (top.compact and "" or (" · full in " .. R.Duration((st.infMax - st.inf) * st.regenSec - st.infT - since)))
 	else top.infT.Text = "FULL" end
 	if st.sup < st.supMax then
 		top.supT.Text = "+1 in " .. R.Clock(math.max(0, (st.supSec or 60) - st.supT - since))

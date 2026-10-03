@@ -377,3 +377,8 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 
 ## 3 Oct 00:47 (Kash, smaller phone 666x374)
 - Ran the overlap audit on every tab and screenshots of Country, Raids, Inventory, Alliance. Fixed: UPGRADES label wrapping to "UPGRADE S", nation names in the nav and the Raids list now shrink to fit instead of cutting to "Empire of...".
+
+## 3 Oct 00:52 (Kash, iPhone 7 emulator)
+- Fix all the small things too, and the phone top bar (bars not aligned, buttons not using the space, gold/merit icons outside their chips). Desktop must not change.
+- Phone-only top bar: Influence and Supply stacked as two equal, aligned bars with their icon on the left and the timer inside the bar; cash and income on the left with the gold and merit chips stacked beside them, icons fully inside the chips; bigger + button. Desktop geometry and text sizes are restored exactly when not on a phone.
+- Officer cards show one bonus per line (second bonus no longer cut). Raid names keep a gap before DEFENSE. Alliance tab opens at level 8 (same level founding one needs). Phone tutorial card is smaller and the final "You are ready" card closes itself after 8 seconds on phones.

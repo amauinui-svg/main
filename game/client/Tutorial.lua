@@ -188,6 +188,10 @@ S._tutorial = { init = function(App)
 		if not S1 then finish(false); return end
 		if not card then build() end
 		card.Visible = true
+		-- phones: a smaller card so it covers less of the screen (desktop size unchanged)
+		local phone = App.H and App.H() < 600
+		card.Size = phone and UDim2.fromOffset(440, 100) or UDim2.fromOffset(520, 118)
+		bodyL.TextSize = phone and 14 or 16
 		titleL.Text = S1.title
 		bodyL.Text = (S1.alt and S1.alt(st)) or S1.text
 		stepL.Text = "TUTORIAL " .. math.min(step, #STEPS) .. "/" .. #STEPS
@@ -203,6 +207,10 @@ S._tutorial = { init = function(App)
 			sc.Scale = 0.85
 			TweenService:Create(sc, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
 			if App.play and step > 1 then pcall(App.play, "tab_open") end
+			-- phones: the last card closes itself after a few seconds so it never sits on top of the game
+			if S1.final and phone then
+				task.delay(8, function() if shown == step and card.Visible then finish(false) end end)
+			end
 		end
 	end
 	App.tutorialUpdate = update

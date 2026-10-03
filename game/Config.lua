@@ -29,7 +29,7 @@ C.PopularMinPlayers = 30
 -- 2 Oct 23:38: lowered so every tab is open by level 9
 -- 3 Oct 00:37 (Kash): army training and attacking other players arrive together with the shop, at level 3
 C.NavUnlock = { map = 1, laws = 1, properties = 2, shop = 3, country = 3, military = 3, battle = 3, tasks = 4, inventory = 5, bank = 5,
-	bosses = 7, rankings = 8, alliance = 9 }
+	bosses = 7, rankings = 8, alliance = 8 } -- alliance opens at the level founding one needs (Alliance.MinLevel)
 
 -- BADGES (Kash 2 Oct): one easy welcome badge, the rest are very hard goals. id 0 = not created yet (skipped).
 C.Badges = {
