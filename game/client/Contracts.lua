@@ -277,6 +277,42 @@ S.tasks = { build = function(host, App)
 		local wk = st.weekly
 		local order = 0
 		local function nextOrder() order += 1; return order end
+		-- INVITE A FRIEND (Kash 3 Oct): a friend joins through your invite and reaches level 3 -> claim gold per tier
+		do
+			local tiers = Config.Invite.Tiers
+			local claimed = st.inviteClaimed or 0
+			local have = st.invites or 0
+			local nextT = tiers[claimed + 1]
+			if nextT then
+				local can = have >= nextT.n
+				local card = UI.card(list, { sz = UDim2.new(1, 0, 0, 92), z = 7, order = nextOrder(), hot = can })
+				UI.icon(card, "icon_users", 36, C.gold, UDim2.fromOffset(18, 28), { z = 8 })
+				text(card, "INVITE " .. (nextT.n == 1 and "A FRIEND" or (nextT.n .. " FRIENDS")), { font = "display", size = 22, color = C.manila, pos = UDim2.fromOffset(70, 8), sz = UDim2.new(1, -330, 0, 28), z = 8, truncate = true })
+				text(card, "Your friend joins through your invite and reaches level " .. Config.Invite.MinLv .. ". Reward: <font color='#f0c75a'><b>" .. nextT.gold .. " gold</b></font>", { size = 14, color = C.muted, rich = true, pos = UDim2.fromOffset(70, 36), sz = UDim2.new(1, -330, 0, 20), z = 8, truncate = true })
+				local bar = UI.bar(card, C.gold, { pos = UDim2.fromOffset(70, 60), sz = UDim2.new(1, -330, 0, 20), z = 8, textSize = 13 })
+				bar:Set(math.min(1, have / nextT.n), math.min(have, nextT.n) .. " / " .. nextT.n .. " friends", "")
+				if can then
+					UI.button(card, "gold", "CLAIM " .. nextT.gold .. " GOLD", function(btn)
+						local res = App.req("inviteClaim", {}, btn)
+						if res.ok then App.toast("+" .. res.gold .. " GOLD", "Thanks for inviting your friends!", "gold"); if App.confetti then App.confetti(80) end end
+					end, { sz = UDim2.fromOffset(230, 52), pos = UDim2.new(1, -244, 0.5, 0), anchor = Vector2.new(0, 0.5), z = 8, icon = "icon_gold", textSize = 15 })
+				else
+					UI.button(card, "green", "INVITE FRIENDS", function(btn)
+						task.spawn(function()
+							local SS = game:GetService("SocialService")
+							local plr = game:GetService("Players").LocalPlayer
+							local okC, canInvite = pcall(SS.CanSendGameInviteAsync, SS, plr)
+							if not okC or not canInvite then App.toast("Invites aren't available on this account", nil, "bad"); return end
+							local opts = Instance.new("ExperienceInviteOptions")
+							opts.PromptMessage = "Come build an empire with me!"
+							opts.LaunchData = game:GetService("HttpService"):JSONEncode({ ref = plr.UserId })
+							pcall(SS.PromptGameInvite, SS, plr, opts)
+						end)
+					end, { sz = UDim2.fromOffset(230, 52), pos = UDim2.new(1, -244, 0.5, 0), anchor = Vector2.new(0, 0.5), z = 8, icon = "icon_users", textSize = 15 })
+				end
+			end
+		end
+
 		sectionHead("DAILY ORDERS", nextOrder(), "daily")
 		local dl = (t and t.list) or {}
 		local dn = 0

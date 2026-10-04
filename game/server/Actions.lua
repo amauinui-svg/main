@@ -1214,6 +1214,21 @@ function act.groupGift(plr, p)
 	return ok({ gold = Config.GroupGift.gold, crates = Config.GroupGift.limitedCrates })
 end
 
+-- INVITE A FRIEND tiers (Config.Invite): claim every tier you have reached
+function act.inviteClaim(plr, p)
+	local d = p.data
+	local gold, n = 0, 0
+	local tiers = Config.Invite.Tiers
+	local k = d.inviteClaimed or 0
+	while tiers[k + 1] and (d.invites or 0) >= tiers[k + 1].n do
+		k += 1; gold += tiers[k].gold; n += 1
+	end
+	if n == 0 then return no("Invite a friend first") end
+	d.inviteClaimed = k
+	d.gold += gold
+	return ok({ gold = gold })
+end
+
 -- watch an ad to refill Influence. The reward arrives through ProcessReceipt (rewarded video ads).
 function act.adRefill(plr, p)
 	local d = p.data

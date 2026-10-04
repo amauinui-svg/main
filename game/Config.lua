@@ -110,6 +110,9 @@ C.Group = { Id = 3735672, Bonus = 0.10 }
 -- FREE GIFT button (Kash 2 Oct): stays on the Laws screen until the player is in the group. One time gift on claim.
 C.HiddenFromRankings = { [250229074] = true } -- Kash 3 Oct: the owner never appears on the leaderboards
 C.GroupGift = { gold = 100, limitedCrates = 1 }
+-- INVITE A FRIEND (Kash 3 Oct): a friend joins through your invite (launch data), is new to the game and reaches
+-- level MinLv (so alts that never play don't count). Each tier is claimed once on the ORDERS screen.
+C.Invite = { MinLv = 3, Tiers = { { n = 1, gold = 50 }, { n = 3, gold = 100 }, { n = 5, gold = 150 } } }
 -- Watch an ad to refill Influence (rewarded video ads; the reward is the 9 R$ refill product, within Roblox's 3-10 R$ rule)
 C.AdRefill = { product = "InfluenceRefillFirst", cooldown = 300 }
 -- purchase shout-outs in chat (Kash 2 Oct)

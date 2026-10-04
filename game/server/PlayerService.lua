@@ -595,7 +595,7 @@ function PS.Snapshot(p)
 		bank = d.bank, bankRate = Config.Bank.InterestPerHour * (1 + (mods.interest or 0)), bankCap = R.MinuteValue(d.lv) * R.BankCapMinutes, shield = d.shield, revenge = d.revenge,
 		inv = d.inv, cab = d.cab, officerSlots = PS.OfficerSlots(p), nextSlotCost = PS.NextSlotCost(p),
 		crates = d.crates, basicCratePrice = PS.BasicCratePrice(p), login = d.login, loginReady = PS.LoginReady(p),
-		weekly = d.weekly, refresh = d.refresh, bundle = d.bundle, starter = d.starter, wev = d.wev, wonder = d.wonder or 0, admin = PS.Admin and PS.Admin.IsAdmin(p.player) or nil, title = d.title, created = d.created, elite = d.elite, govCredit = d.govCredit, pity = d.pity or {}, tut = d.tut, convoyBought = d.convoyBought or 0, convoyNext = R.ConvoyCost((d.convoyBought or 0) + 1), groupGift = d.groupGift or false, duesRate = PS.DuesRate(p),
+		weekly = d.weekly, refresh = d.refresh, bundle = d.bundle, starter = d.starter, wev = d.wev, wonder = d.wonder or 0, admin = PS.Admin and PS.Admin.IsAdmin(p.player) or nil, title = d.title, created = d.created, elite = d.elite, govCredit = d.govCredit, pity = d.pity or {}, tut = d.tut, convoyBought = d.convoyBought or 0, convoyNext = R.ConvoyCost((d.convoyBought or 0) + 1), groupGift = d.groupGift or false, invites = d.invites or 0, inviteClaimed = d.inviteClaimed or 0, duesRate = PS.DuesRate(p),
 		targets = PS.Raids and PS.Raids.Targets(p) or {},
 		raidLog = d.raidLog,
 		targetsLow = PS.Raids and PS.Raids.ProtectedCount and PS.Raids.ProtectedCount(p) or 0,
@@ -701,6 +701,7 @@ function PS._load(plr)
 		end
 	end
 	if not plr.Parent then return end
+	local brandNew = false
 	if not data or data.fresh then
 		local old
 		if store and not key(plr):find("^test_") then
@@ -708,6 +709,7 @@ function PS._load(plr)
 			if ok then old = o else canSave = false end
 		end
 		data = old and migrate(old) or PS.Fresh()
+		brandNew = not old
 	end
 	if not plr.Parent then
 		-- left while loading: release the lock we just took
@@ -727,6 +729,8 @@ function PS._load(plr)
 		end
 	end
 	PS.MigrateOfficers(p)
+	PS.ReferralJoin(plr, p, brandNew)
+	task.spawn(PS.ReferralPull, p)
 	if PS.AN then pcall(PS.AN.Step, p, "Joined") end
 	PS.Market.CheckPasses(plr, p)
 	p.xpMult = PS.Mods(p).xp
@@ -790,10 +794,67 @@ function PS.StipendRate(p)
 	return R.MinuteValue(d.lv) * 0.03 * lvl / 60 -- per second
 end
 
+---------------------------------------------------------------- invite a friend (Kash 3 Oct, Config.Invite)
+-- the invite carries { ref = inviterUserId } as launch data. A brand new player who arrives with it remembers the
+-- inviter (d.refBy); once they reach Config.Invite.MinLv the referral is queued for the inviter in IC_Referrals,
+-- which the inviter pulls on join and every 2 minutes while online.
+local REF_DS = "IC_Referrals"
+function PS.ReferralJoin(plr, p, brandNew)
+	if not brandNew then return end
+	local okJ, jd = pcall(function() return plr:GetJoinData() end)
+	local raw = okJ and type(jd) == "table" and jd.LaunchData
+	if type(raw) ~= "string" or raw == "" then return end
+	local okD, t = pcall(function() return game:GetService("HttpService"):JSONDecode(raw) end)
+	local ref = okD and type(t) == "table" and tonumber(t.ref)
+	if not ref or ref == plr.UserId or ref < 1 then return end
+	p.data.refBy = math.floor(ref)
+end
+function PS.ReferralCheck(p)
+	local d = p.data
+	if not d.refBy or d.refSent or d.lv < Config.Invite.MinLv then return end
+	d.refSent = true
+	local uid, ref = tostring(p.userId), tostring(d.refBy)
+	task.spawn(function()
+		local store = Store.DS(REF_DS)
+		if not store then return end
+		local okU = Store.Update(store, "u" .. ref, function(old)
+			old = type(old) == "table" and old or { list = {} }
+			old.list = old.list or {}
+			for _, x in ipairs(old.list) do if x == uid then return old end end
+			if #old.list < 50 then table.insert(old.list, uid) end
+			return old
+		end)
+		if not okU then d.refSent = nil end -- retry later
+	end)
+end
+function PS.ReferralPull(p)
+	local store = Store.DS(REF_DS)
+	if not store or not p.player or not p.player.Parent then return end
+	local got
+	local okU = Store.Update(store, "u" .. p.userId, function(old)
+		got = type(old) == "table" and old.list or nil
+		if not got or #got == 0 then return nil end
+		return { list = {} }
+	end)
+	if not okU or not got or #got == 0 then return end
+	local d = p.data
+	d.invitees = type(d.invitees) == "table" and d.invitees or {}
+	local added = 0
+	for _, uid in ipairs(got) do
+		if not d.invitees[uid] then d.invitees[uid] = true; added += 1 end
+	end
+	if added > 0 then
+		d.invites = (d.invites or 0) + added
+		PS.Note(p, { kind = "toast", text = added == 1 and "A friend you invited joined! Claim your reward on ORDERS." or (added .. " friends you invited joined! Claim your rewards on ORDERS."), tone = "gold" })
+	end
+end
+
 ---------------------------------------------------------------- one-second heartbeat
 function PS.Step(plr, p)
 	local d = p.data
 	if d.alliance then PS.MemberLevel(p) end -- throttled to once every 5 minutes inside
+	PS.ReferralCheck(p)
+	if os.clock() > (p.refNext or 0) then p.refNext = os.clock() + 120; if (p.refPulls or 0) > 0 then task.spawn(PS.ReferralPull, p) end; p.refPulls = (p.refPulls or 0) + 1 end
 	local mods = PS.Mods(p)
 	p.xpMult = mods.xp
 	PS.TaskProgress(p, "online", 1 / 60) -- playtime orders (minutes)

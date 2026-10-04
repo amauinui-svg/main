@@ -500,3 +500,6 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 
 ## 3 Oct 11:58 (Kash)
 - Likes the art style of the current set (v5 + live thumbnails); wants better concepts, layouts and variations. Made 16 new concepts x2 in art/ads/v6 (Nano Banana 2, refs: Rule the World, Steal Their Cash, Raise Your Army, Raid VS): plan your attack, biggest empire, capture capitals, defeat the boss, earn while AFK, evolve your nation, pass laws get rich, hut to empire, legendary officers, choose your government, protect your cash, send convoys, spy on rivals, be number 1, win the war, world events. Don't use: top_the_leaderboard_a (typo NUMRER), monarchy_democracy_a (seal on the podium looks like a real one), get_rich_laws_a ("ROBUX" printed on the cash).
+
+## 3 Oct 14:09 (Kash)
+- INVITE A FRIEND quest on top of ORDERS for every player: INVITE FRIENDS opens the Roblox invite prompt with launch data { ref = inviter }. A brand new player who joins through it and reaches level 3 counts as a referral (queued in DataStore IC_Referrals, pulled by the inviter on join and every 2 min). Tiers, each claimed once: 1 friend 50 gold, 3 friends 100 gold, 5 friends 150 gold (Config.Invite). Level 3 requirement stops alts that never play.
