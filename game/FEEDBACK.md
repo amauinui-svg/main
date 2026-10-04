@@ -506,3 +506,6 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 
 ## 3 Oct 15:52 (Kash)
 - Alliance tabs ran off the screen (9 tabs at a fixed width, measured before UI scale). Tabs now share the row width evenly (UI.tabs fill, max 160 px each), so any number fits on desktop and phones.
+
+## 3 Oct 16:45 (Kash)
+- Thumbnails like competitor Fleet Empire: real in-game screenshots with a big title on top. Made 6 in art/ads/v7 (generator make.py, Anton font): build your empire (properties), send trade convoys worldwide (map), defeat bosses for gold, hire legendary officers, join an alliance & conquer (alliance target), raise your army.
