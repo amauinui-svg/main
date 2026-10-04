@@ -986,9 +986,7 @@ S.alliance = { build = function(host, App)
 		if elder then table.insert(names, "TREASURY") end -- elders and up (Kash 3 Oct)
 		table.insert(names, "BROWSE")
 		if manager then table.insert(names, "MANAGE") end
-		local aw = area.AbsoluteSize.X
-		local tw = aw > 0 and math.clamp(math.floor((aw - 6 * (#names - 1)) / #names), 64, 124) or 110
-		obj.tabs = UI.tabs(area, names, function(i) obj.tab = i; obj.fee = nil; obj:Refresh(App.state) end, { w = tw, z = 8 })
+		obj.tabs = UI.tabs(area, names, function(i) obj.tab = i; obj.fee = nil; obj:Refresh(App.state) end, { fill = true, maxW = 160, z = 8 })
 		if obj.tab > #names then obj.tab = 1 end
 		obj.tabs:Set(obj.tab)
 		local n = claimCount(info)

@@ -503,3 +503,6 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 
 ## 3 Oct 14:09 (Kash)
 - INVITE A FRIEND quest on top of ORDERS for every player: INVITE FRIENDS opens the Roblox invite prompt with launch data { ref = inviter }. A brand new player who joins through it and reaches level 3 counts as a referral (queued in DataStore IC_Referrals, pulled by the inviter on join and every 2 min). Tiers, each claimed once: 1 friend 50 gold, 3 friends 100 gold, 5 friends 150 gold (Config.Invite). Level 3 requirement stops alts that never play.
+
+## 3 Oct 15:52 (Kash)
+- Alliance tabs ran off the screen (9 tabs at a fixed width, measured before UI scale). Tabs now share the row width evenly (UI.tabs fill, max 160 px each), so any number fits on desktop and phones.

@@ -292,7 +292,11 @@ function UI.tabs(parent, labels, onPick, p)
 	mk("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }, row)
 	local obj = { buttons = {}, current = nil, Inst = row }
 	for i, label in ipairs(labels) do
-		local t = UI.img(row, "tab_off", { button = true, name = "Tab" .. i, sz = UDim2.fromOffset(p.w or 120, (p.sz and p.sz.Y.Offset) or 34), z = row.ZIndex, order = i })
+		-- p.fill: share the row width evenly so any number of tabs always fits (alliance tabs, Kash 3 Oct)
+		local h = (p.sz and p.sz.Y.Offset) or 34
+		local tsz = p.fill and UDim2.new(1 / #labels, -math.ceil(6 * (#labels - 1) / #labels), 0, h) or UDim2.fromOffset(p.w or 120, h)
+		local t = UI.img(row, "tab_off", { button = true, name = "Tab" .. i, sz = tsz, z = row.ZIndex, order = i })
+		if p.fill and p.maxW then UI.mk("UISizeConstraint", { MaxSize = Vector2.new(p.maxW, h) }, t) end
 		local l = UI.text(t, label, { font = "heavy", size = p.textSize or 15, align = Enum.TextXAlignment.Center, sz = UDim2.new(1, -8, 1, 0), pos = UDim2.fromOffset(4, 0), z = t.ZIndex + 1, color = UI.C.muted, scaled = true })
 		obj.buttons[i] = { Inst = t, Label = l }
 		t.Activated:Connect(function() obj:Set(i); if onPick then onPick(i) end end)
