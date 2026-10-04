@@ -512,3 +512,6 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 
 ## 3 Oct 20:25 (Kash)
 - Concepts like Idle Mafia's territory thumbnail (their FIGHT FOR TERRITORY map: raised faction-coloured districts, flags, clashing arrows, gold burst). Pulled their live thumbnails (art/ads/v8/idlemafia) and made 6 concepts x2 on our world map in art/ads/v8: expand your territory, capture capitals, fight for territory, conquer the world, join an alliance, tax the cities. Skip join_an_alliance_a (copies their city map, eagle flag) and fight_for_territory_b (USA shape garbled).
+
+## 3 Oct 20:34 (Kash)
+- Liked fight_for_territory_b; wants it in our thumbnail style, looking like our in-game map, with an accurate North America. Remade with refs: that thumbnail (layout), a crop of our pixel world map (coastline + map look) and our current thumbnail style. 3 layouts x2 in art/ads/v9: title left, title top on a war table, title left with the bacon hair pointing at the clash.
