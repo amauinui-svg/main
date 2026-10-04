@@ -35,10 +35,22 @@ def gold_gradient_text(im, text, y, sz):
     # title word with a vertical gold gradient fill
     f=font(sz); w=text_w(text,f)
     return w
-def panel(im, shot, box, crop=None, label=None):
-    src=Image.open(shot).convert('RGB')
-    if crop: src=src.crop(crop)
+def panel(im, shot, box, crop=None, label=None, anchor='top'):
+    full=Image.open(shot).convert('RGB')
     bx,by,bw,bh=box
+    # fit the crop to the panel shape so the screenshot fills it (Kash: too much empty space)
+    x0,y0,x1,y1=crop or (0,0,full.width,full.height)
+    target=bw/bh
+    if (x1-x0)/(y1-y0) > target:
+        need=(x1-x0)/target; grow=need-(y1-y0)
+        y0=max(0,y0-grow*0.15); y1=min(full.height,y0+need)
+        if (x1-x0)/(y1-y0) > target:
+            cw=(y1-y0)*target; cx=(x0+x1)/2; x0,x1=cx-cw/2,cx+cw/2
+    else:
+        h=(x1-x0)/target
+        if anchor=='bottom': y0=y1-h
+        else: y1=y0+h
+    src=full.crop((int(x0),int(y0),int(x1),int(y1)))
     s=min(bw/src.width, bh/src.height)
     src=src.resize((int(src.width*s),int(src.height*s)),Image.LANCZOS)
     px=bx+(bw-src.width)//2; py=by+(bh-src.height)//2+10
@@ -59,17 +71,17 @@ def panel(im, shot, box, crop=None, label=None):
         d.rounded_rectangle((lx,ly,lx+tw+60,ly+62),14,fill=GOLD,outline=(120,80,20),width=3)
         d.text((lx+30,ly+4),label,font=f,fill=(40,26,6))
     return py+src.height
-def make(name, line1, line2, shot, crop=None, label=None, panel_top=360):
+def make(name, line1, line2, shot, crop=None, label=None, panel_top=300, anchor='top'):
     im=bg()
-    draw_line(im, line1, 18, 170)
-    draw_line(im, line2, 205, 92)
-    panel(im, shot, (70, panel_top, W-140, H-panel_top-40), crop, label)
+    draw_line(im, line1, 4, 138)
+    draw_line(im, line2, 160, 78)
+    panel(im, shot, (34, panel_top, W-68, H-panel_top-22), crop, label, anchor)
     out=f'/home/claude/main/art/ads/v7/{name}.png'
     im.convert('RGB').save(out); print(out)
 TITLE=[('IDLE',WHITE),('COUNTRY',GOLD)]
 make('ic_properties', TITLE, [('BUILD YOUR',WHITE),('EMPIRE!',GOLD)], TR+'1790915250626-ww5jcb.jpg', (215,85,1850,818), 'YOUR PROPERTIES')
-make('ic_convoys', TITLE, [('SEND',WHITE),('TRADE CONVOYS',GOLD),('WORLDWIDE!',WHITE)], TR+'1791061166093-ankg68.jpg', (205,75,1762,808), 'WORLD MAP')
-make('ic_boss', TITLE, [('DEFEAT',WHITE),('BOSSES',GOLD),('FOR GOLD!',WHITE)], TR+'1791061183507-86bshr.jpg', (225,140,1840,580), 'BOSS FIGHT')
+make('ic_convoys', TITLE, [('SEND',WHITE),('TRADE CONVOYS',GOLD),('WORLDWIDE!',WHITE)], TR+'1791061166093-ankg68.jpg', (205,75,1762,808), 'WORLD MAP', anchor='bottom')
+make('ic_boss', TITLE, [('DEFEAT',WHITE),('BOSSES',GOLD),('FOR GOLD!',WHITE)], TR+'1791061183507-86bshr.jpg', (225,95,1840,808), 'BOSS FIGHT')
 make('ic_officers', TITLE, [('HIRE',WHITE),('LEGENDARY',GOLD),('OFFICERS!',WHITE)], TR+'1790915290773-1agb4x.jpg', (215,85,1850,818), 'YOUR CABINET')
-make('ic_alliance', TITLE, [('JOIN AN',WHITE),('ALLIANCE',GOLD),('& CONQUER!',WHITE)], TR+'1791059261851-ucn9rb.jpg', (225,305,1840,690), 'ALLIANCE TARGET')
+make('ic_alliance', TITLE, [('JOIN AN',WHITE),('ALLIANCE',GOLD),('& CONQUER!',WHITE)], UP+'cdfefca8-image.png', (300,405,1875,1003), 'ALLIANCE')
 make('ic_army', TITLE, [('RAISE YOUR',WHITE),('ARMY!',GOLD)], TR+'1790921636915-g9i72i.jpg', (215,85,1850,818), 'MILITARY')
