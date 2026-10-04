@@ -51,5 +51,6 @@ P = [
   "crimson army with white star banners approaches across the plain at dusk. A Roblox bacon hair general on the wall raises his sword, shouting orders. "
   "Torches and amber light, tense dramatic mood."),
 ]
-json.dump([dict(key=k,refs=r,title=t,scene=s,prompt=s+" "+STYLE) for k,r,t,s in P],open('/home/claude/main/art/ads/v12/prompts.json','w'),indent=1)
+fix=lambda t,s: s if s.startswith("Title") or "Title text" in s else f"Big title text \"{t}\" across the top in the reference title lettering. "+s
+json.dump([dict(key=k,refs=r,title=t,scene=fix(t,s),prompt=fix(t,s)+" "+STYLE) for k,r,t,s in P],open('/home/claude/main/art/ads/v12/prompts.json','w'),indent=1)
 print(len(P))
