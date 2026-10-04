@@ -509,3 +509,6 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 
 ## 3 Oct 16:45 (Kash)
 - Thumbnails like competitor Fleet Empire: real in-game screenshots with a big title on top. Made 6 in art/ads/v7 (generator make.py, Anton font): build your empire (properties), send trade convoys worldwide (map), defeat bosses for gold, hire legendary officers, join an alliance & conquer (alliance target), raise your army.
+
+## 3 Oct 20:25 (Kash)
+- Concepts like Idle Mafia's territory thumbnail (their FIGHT FOR TERRITORY map: raised faction-coloured districts, flags, clashing arrows, gold burst). Pulled their live thumbnails (art/ads/v8/idlemafia) and made 6 concepts x2 on our world map in art/ads/v8: expand your territory, capture capitals, fight for territory, conquer the world, join an alliance, tax the cities. Skip join_an_alliance_a (copies their city map, eagle flag) and fight_for_territory_b (USA shape garbled).
