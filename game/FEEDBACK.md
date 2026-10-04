@@ -521,3 +521,6 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 
 ## 4 Oct (scheduled follow-up)
 - Free badge quota reset: created the last 5 badges (Richest Nation on Earth, Supreme Lawgiver, Tyrant Slayer, Legendary Alliance, Forbidden Power) for free; all 10 badges now have ids in Config.Badges.
+
+## 4 Oct 07:41 (Kash)
+- ~10 variants like Idle Mafia's BUILD YOUR EMPIRE ad (title across the top with the centrepiece poking through EMPIRE, two suited hands placing a gold building on a miniature board). Made 10 x2 in art/ads/v11 for a country: capital palace, world globe, country map, era tower, properties grid, fortress city, trade port, wonder, blueprint, night capital. Skip night_capital_b (a third arm appears) and wonder_a (modern yacht).
