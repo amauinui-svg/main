@@ -524,3 +524,6 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 
 ## 4 Oct 07:41 (Kash)
 - ~10 variants like Idle Mafia's BUILD YOUR EMPIRE ad (title across the top with the centrepiece poking through EMPIRE, two suited hands placing a gold building on a miniature board). Made 10 x2 in art/ads/v11 for a country: capital palace, world globe, country map, era tower, properties grid, fortress city, trade port, wonder, blueprint, night capital. Skip night_capital_b (a third arm appears) and wonder_a (modern yacht).
+
+## 4 Oct 08:46 (Kash)
+- v11 and earlier copied Idle Mafia's art style 1:1. Wants their concepts, not their style. Collect countless concepts from many Roblox simulator, strategy, history and country games (their game thumbnails and the ads they run on the homepage) into a reference chart document for making our ads and thumbnails. Art style comes from his desktop thumbnails (copied to art/ads/style_refs); those don't sell the game well enough, so analyse the audience through Idle Mafia and country games and think as that player: "control my country, take over land and rule the world with the army". Feed refs to Google Flow with very specific prompts.
