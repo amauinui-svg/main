@@ -515,3 +515,6 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 
 ## 3 Oct 20:34 (Kash)
 - Liked fight_for_territory_b; wants it in our thumbnail style, looking like our in-game map, with an accurate North America. Remade with refs: that thumbnail (layout), a crop of our pixel world map (coastline + map look) and our current thumbnail style. 3 layouts x2 in art/ads/v9: title left, title top on a war table, title left with the bacon hair pointing at the clash.
+
+## 3 Oct 20:41 (Kash)
+- More thumbnails like PASS LAWS (moody desk still life, only a suited hand, no Roblox avatar, big white title on black on the left). 12 concepts x2 in art/ads/v10: bank your cash, send convoys, hire officers, raise your army, capture capitals, open crates, build wonders, defeat bosses, collect taxes, spy on rivals, join an alliance, earn while AFK. Skip collect_taxes_b (lorem ipsum text under the title) and hire_officers_a (realistic faces on cards).
