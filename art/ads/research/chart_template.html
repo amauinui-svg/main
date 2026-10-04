@@ -1,0 +1,126 @@
+<title>Idle Country Ad Bible</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alegreya+SC:wght@700;800&family=Source+Sans+3:wght@400;600;700&family=JetBrains+Mono:wght@400&display=swap">
+<style>
+/* Layout: a war-room dossier. One long column of sections, image strips that scroll sideways, galleries in auto grids. */
+:root{
+  --bg:#17120e; --panel:#221a14; --line:#3a2d22; --fg:#efe4d2; --muted:#b29f86;
+  --gold:#e0b24f; --blue:#5b84d6; --red:#c84a3a;
+  --display:"Alegreya SC",Georgia,serif; --body:"Source Sans 3",system-ui,sans-serif; --mono:"JetBrains Mono",ui-monospace,monospace;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme: light){:root:not([data-theme="dark"]){--bg:#f5efe5;--panel:#fffaf2;--line:#e2d5c1;--fg:#2a1f16;--muted:#7a6650;--gold:#9a6c10;--blue:#2c56a8;--red:#a8321f;color-scheme:light}}
+:root[data-theme="light"]{--bg:#f5efe5;--panel:#fffaf2;--line:#e2d5c1;--fg:#2a1f16;--muted:#7a6650;--gold:#9a6c10;--blue:#2c56a8;--red:#a8321f;color-scheme:light}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font:16px/1.55 var(--body);margin:0}
+.wrap{max-width:1180px;margin:0 auto;padding-inline:20px;padding-block:28px 80px}
+h1,h2,h3{font-family:var(--display);text-wrap:balance;line-height:1.1;margin:0}
+h1{font-size:clamp(2rem,5vw,3.4rem);color:var(--gold)}
+h2{font-size:clamp(1.5rem,3vw,2.1rem);margin-top:56px;padding-bottom:8px;border-bottom:2px solid var(--line)}
+h3{font-size:1.3rem}
+p{max-width:70ch;margin:.5em 0}
+.lede{font-size:1.1rem;color:var(--muted)}
+.meta{display:flex;flex-wrap:wrap;gap:8px 18px;font:13px var(--mono);color:var(--muted);margin-top:10px}
+nav{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+nav a{color:var(--fg);text-decoration:none;border:1px solid var(--line);padding:4px 10px;border-radius:4px;font-size:14px}
+nav a:hover,nav a:focus-visible{border-color:var(--gold);outline:none}
+.wants{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:16px}
+.want{background:var(--panel);border-left:3px solid var(--blue);padding:12px 14px;display:flex;flex-direction:column;gap:4px}
+.want b{font-family:var(--display);font-size:1.1rem}
+.want span{color:var(--muted);font-size:15px}
+.quote{font-family:var(--display);font-size:1.25rem;color:var(--gold);margin:18px 0 0;max-width:60ch}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:24px;margin-top:14px}
+.two h3{margin-bottom:6px}
+ul{margin:0;padding-left:1.2em} li{margin:.25em 0}
+.keep h3{color:var(--blue)} .fix h3{color:var(--red)}
+.desk{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:6px;margin-top:16px}
+.desk img{width:100%;aspect-ratio:16/9;object-fit:cover;display:block}
+.pattern{margin-top:30px}
+.strip{display:flex;gap:10px;overflow-x:auto;padding-bottom:8px;margin-top:10px}
+.strip .ref{flex:0 0 260px}
+.ref{margin:0;min-width:0}
+.ref img{width:100%;aspect-ratio:16/9;object-fit:cover;display:block;background:var(--panel)}
+.ref figcaption{font-size:13px;display:flex;flex-direction:column;padding-top:4px}
+.ref figcaption b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pl{color:var(--muted);font-variant-numeric:tabular-nums}
+.ref i{color:var(--gold);font-style:normal}
+.ours{background:var(--panel);padding:10px 14px;border-left:3px solid var(--gold)}
+.rules{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;margin-top:14px;padding:0;list-style:none}
+.rules li{background:var(--panel);padding:10px 14px;margin:0}
+.stylebox{background:var(--panel);border:1px solid var(--line);padding:14px;font:13px/1.6 var(--mono);white-space:pre-wrap;overflow-wrap:anywhere;margin-top:10px}
+button.copy{margin-top:8px;background:var(--gold);color:#1b140d;border:0;padding:6px 14px;font:600 14px var(--body);cursor:pointer;border-radius:3px}
+button.copy:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
+.concept{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:18px;margin-top:28px;padding-top:22px;border-top:1px solid var(--line)}
+@media (max-width:760px){.concept{grid-template-columns:1fr}}
+.cimgs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.cimgs img{width:100%;aspect-ratio:16/9;object-fit:cover;display:block}
+.role{color:var(--gold);font-weight:600;margin-top:4px}
+dl{margin:10px 0;display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:14px}
+dt{color:var(--muted)} dd{margin:0}
+.muted{color:var(--muted)}
+details summary{cursor:pointer;color:var(--blue);font-weight:600}
+.prompt{font-size:14px;color:var(--muted)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-top:10px}
+.gh{margin-top:28px}
+.steps{counter-reset:s;list-style:none;padding:0;margin-top:12px;display:grid;gap:8px}
+.steps li{counter-increment:s;background:var(--panel);padding:10px 14px 10px 46px;position:relative}
+.steps li::before{content:counter(s);position:absolute;left:14px;top:9px;font-family:var(--display);color:var(--gold);font-size:1.2rem}
+</style>
+<div class="wrap">
+<header>
+  <h1>Idle Country Ad Bible</h1>
+  <p class="lede">Reference chart for every Idle Country Game thumbnail and homepage ad: what the country-game player wants, what the top games show, Kash's house art style, and the exact Google Flow setup that produces it.</p>
+  <div class="meta"><span>{{NG}} competitor games</span><span>{{NT}} thumbnails pulled</span><span>{{NA}} live homepage sponsored ads</span><span>4 Oct 2026</span></div>
+  <nav><a href="#player">The player</a><a href="#desk">House style</a><a href="#patterns">What sells</a><a href="#ads">Homepage ads</a><a href="#flow">Flow recipe</a><a href="#concepts">New ads</a><a href="#gallery">Full gallery</a></nav>
+</header>
+
+<h2 id="player">The player we are selling to</h2>
+<p>Thinking as the player scrolling the Roblox homepage looking for a country game. Each thumbnail gets under a second. It has to answer one question: can I control a country, take land and rule the world with an army?</p>
+<p class="quote">"When looking for a country game I'm looking for something where I can control my country, take over land and rule the world with the army."</p>
+<div class="wants">{{PERSONA}}</div>
+<p style="margin-top:16px">What the numbers say: the biggest games in this space right now are an army game (34k playing), a map conquest game (27k), a flag game (18k), war tycoons (16k, 13k) and Pixel Conquest (11k). Every one of them puts either a huge army or a map being taken in the first image. None of them leads with a desk, an office or a menu.</p>
+
+<h2 id="desk">House style: Kash's desktop thumbnails</h2>
+<p>These 16 are the art style target. Every Flow generation gets two of them attached as image references, so the look comes from the images, not from words.</p>
+<div class="desk">{{DESK}}</div>
+<div class="two">
+  <div class="keep"><h3>Keep</h3><ul>{{KEEP}}</ul></div>
+  <div class="fix"><h3>Why they undersell</h3><ul>{{FIX}}</ul></div>
+</div>
+
+<h2 id="patterns">What sells: seven proven concepts</h2>
+<p>Concepts are taken from these games. Art style is never taken from them: every ad is drawn in our house style.</p>
+{{PATTERNS}}
+
+<h2 id="ads">What is on the homepage right now</h2>
+<p>Every sponsored tile served to Kash's account across six homepage loads on 4 Oct. Idle Mafia Game is the only strategy or empire game buying ads, and it is the only dark tile in the feed. Everything else is a bright cartoon simulator with one giant face and a chunky title. A dark, warm, inked tile full of armies and maps will stand out the same way Idle Mafia does, while saying "country war" instead of "mafia".</p>
+<div class="grid">{{ADS}}</div>
+
+<h2 id="flow">Flow recipe</h2>
+<ol class="steps">
+  <li>Project: Google Flow, Nano Banana 2, 16:9, x2 outputs.</li>
+  <li>Attach two house style refs (sref_01 to sref_16, uploaded from art/ads/style_refs). Pick the two closest in composition: map scenes use sref_16, armies use sref_14, rulers use sref_01, sref_03 or sref_06, alliances use sref_02.</li>
+  <li>Never attach a competitor thumbnail. Their concept goes into the scene text, their art style stays out.</li>
+  <li>Prompt = scene text (title first, then the scene) + the style block below, word for word.</li>
+  <li>Always write the exact title in quotes. Without it Flow invents its own title.</li>
+  <li>Review every output: real game features only, at most two named avatars (bacon hair, classic noob), no real flags, no tobacco, alcohol or real insignia, no garbled text, no extra limbs.</li>
+</ol>
+<h3 style="margin-top:20px">Style block</h3>
+<div class="stylebox" id="styleblock">{{STYLE}}</div>
+<button class="copy" id="copybtn" type="button">Copy style block</button>
+
+<h2 id="concepts">New ads (v12)</h2>
+<p>Ten concepts aimed at the player above, generated in Flow with the recipe. Files are in art/ads/v12. Where two rounds exist, the second round has the exact title.</p>
+{{CONCEPTS}}
+
+<h2 id="gallery">Full competitor gallery</h2>
+<p>Up to three live thumbnails per game, sorted by players online when collected.</p>
+{{GALLERY}}
+</div>
+<script>
+document.getElementById('copybtn').addEventListener('click',function(){
+  var t=document.getElementById('styleblock').textContent,b=this;
+  function sel(){var r=document.createRange();r.selectNodeContents(document.getElementById('styleblock'));var s=getSelection();s.removeAllRanges();s.addRange(r);b.textContent='Selected, press copy';}
+  if(navigator.clipboard){navigator.clipboard.writeText(t).then(function(){b.textContent='Copied';},sel);}else sel();
+});
+</script>
