@@ -38,11 +38,11 @@ C.Badges = {
 	{ key = "stars", id = 4268395977849754, name = "To the Stars", desc = "Advance your nation to the Space Age." },
 	{ key = "warlord", id = 166011714527263, name = "Warlord", desc = "Win 1,000 raids." },
 	{ key = "trade", id = 1516037670244518, name = "Trade Empire", desc = "Deliver 10,000 convoys." },
-	{ key = "quadrillion", id = 0, name = "Richest Nation on Earth", desc = "Earn $1 Quadrillion in total." },
-	{ key = "lawgiver", id = 0, name = "Supreme Lawgiver", desc = "Reach Gold mastery on 100 laws." },
-	{ key = "slayer", id = 0, name = "Tyrant Slayer", desc = "Defeat 500 bosses." },
-	{ key = "alliance", id = 0, name = "Legendary Alliance", desc = "Be in an alliance that reaches level 30." },
-	{ key = "forbidden", id = 0, name = "Forbidden Power", desc = "Own a FORBIDDEN officer." },
+	{ key = "quadrillion", id = 2575123215980998, name = "Richest Nation on Earth", desc = "Earn $1 Quadrillion in total." },
+	{ key = "lawgiver", id = 3722720611680911, name = "Supreme Lawgiver", desc = "Reach Gold mastery on 100 laws." },
+	{ key = "slayer", id = 751550931909286, name = "Tyrant Slayer", desc = "Defeat 500 bosses." },
+	{ key = "alliance", id = 336537205741752, name = "Legendary Alliance", desc = "Be in an alliance that reaches level 30." },
+	{ key = "forbidden", id = 294104289592182, name = "Forbidden Power", desc = "Own a FORBIDDEN officer." },
 }
 
 -- GEAR SHOP (Kash 2 Oct 23:26): restocks every 5 minutes with 3 random items of every rarity; 1 of each per player.

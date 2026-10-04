@@ -518,3 +518,6 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 
 ## 3 Oct 20:41 (Kash)
 - More thumbnails like PASS LAWS (moody desk still life, only a suited hand, no Roblox avatar, big white title on black on the left). 12 concepts x2 in art/ads/v10: bank your cash, send convoys, hire officers, raise your army, capture capitals, open crates, build wonders, defeat bosses, collect taxes, spy on rivals, join an alliance, earn while AFK. Skip collect_taxes_b (lorem ipsum text under the title) and hire_officers_a (realistic faces on cards).
+
+## 4 Oct (scheduled follow-up)
+- Free badge quota reset: created the last 5 badges (Richest Nation on Earth, Supreme Lawgiver, Tyrant Slayer, Legendary Alliance, Forbidden Power) for free; all 10 badges now have ids in Config.Badges.
