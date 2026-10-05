@@ -531,3 +531,7 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 
 ## 4 Oct 16:02 (Kash)
 - Wants 5 winning ad thumbnails. Reviewed all sets (v6 to v12) against what working competitor thumbnails do. Picks in art/ads/v12/top5_review.jpg: 1 conquer_the_world_b (r1), 2 day1_vs_day100_a (r1), 3 take_their_capital_a (r2), 4 your_army_vs_theirs_a (r2, ATTACK!), 5 rule_the_world_globe_a (r2). Backups: v9 na_fight_left_a, v12 r2 expand_your_borders_a, v6 win_the_war_a. Waiting on Kash's review; swap or regenerate any he rejects.
+
+## 4 Oct 16:05 (Kash)
+- Review of top 5: DAY 1 vs DAY 100 looks AI and isn't good. CONQUER THE WORLD decent but dislikes the avatar; map should be a bird's-eye view. ATTACK! feels AI generated and the title is weird. RULE THE WORLD is really good, but drop the WORLD CONTROLLED 99% bar. TAKE THEIR CAPITAL is decent.
+- Done: removed the 99% bar by hand (v13/rule_the_world_clean.jpg; Flow would not edit it, it redrew a new image). New in v13: CONQUER THE WORLD as a top-down world map with no avatar (one arrow), DECLARE WAR (bacon ruler vs noob ruler over a war table, replaces ATTACK!), RAID THEIR TREASURY (replaces DAY 1 vs DAY 100). Prompts now ask for few large shapes and flat cel shading so it reads less AI. New top 5 in v13/top5_v2.jpg, alternates in v13/alternates.jpg.
