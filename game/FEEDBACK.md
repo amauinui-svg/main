@@ -542,3 +542,4 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 
 ## 6 Oct 09:17 (Kash)
 - Create a Roblox community just for this game and transfer the game's ownership to it. Name: Country Studios (10:03). Form filled (emblem = game icon, open join); waiting on Kash to click Purchase (100 Robux), then transfer the game.
+- 6 Oct 10:08: community is "CCountry Studios" (449066918; "Country Studios" was taken). Icon attached (pending Roblox review). Roles: Owner (254, renamed from Admin), Tester (10), Member, Guest; Kash stays listed as Member because Roblox blocks changing your own role, but he is the owner. Transfer initiated, Kash entered 2FA and it was accepted (in progress). Config.Group.Id switched from Tabby Studioss (3735672) to 449066918 so the free gift and +10% group bonus use the new community.

@@ -1069,7 +1069,7 @@ C.StudioGrantsPasses = true
 
 -- Roblox Premium members: +5% cash. Group members: +10% cash (GroupId 0 = no group yet; Kash to provide).
 C.PremiumBonus = 0.05
-C.Group = { Id = 3735672, Bonus = 0.10 }
+C.Group = { Id = 449066918, Bonus = 0.10 } -- CCountry Studios (game owner since 6 Oct)
 -- FREE GIFT button (Kash 2 Oct): stays on the Laws screen until the player is in the group. One time gift on claim.
 C.HiddenFromRankings = { [250229074] = true } -- Kash 3 Oct: the owner never appears on the leaderboards
 C.GroupGift = { gold = 100, limitedCrates = 1 }
