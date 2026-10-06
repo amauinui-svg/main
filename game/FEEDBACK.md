@@ -543,3 +543,7 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 ## 6 Oct 09:17 (Kash)
 - Create a Roblox community just for this game and transfer the game's ownership to it. Name: Country Studios (10:03). Form filled (emblem = game icon, open join); waiting on Kash to click Purchase (100 Robux), then transfer the game.
 - 6 Oct 10:08: community is "CCountry Studios" (449066918; "Country Studios" was taken). Icon attached (pending Roblox review). Roles: Owner (254, renamed from Admin), Tester (10), Member, Guest; Kash stays listed as Member because Roblox blocks changing your own role, but he is the owner. Transfer initiated, Kash entered 2FA and it was accepted (in progress). Config.Group.Id switched from Tabby Studioss (3735672) to 449066918 so the free gift and +10% group bonus use the new community.
+- 6 Oct 10:40: transfer completed, CCountry Studios owns the game. Set access back to Public. Config group change pushed (8a10270) but not yet installed/published in Studio.
+
+## 6 Oct 10:08 (Kash)
+- Deep research (YouTube transcripts, forums, docs) into an ad plan for running ads effectively. Done: reports/Idle Country Game ad plan.md (24 YouTube videos transcribed, DevForum, Roblox docs). Key finding: current metrics (1.4 min playtime, 0.19% D1) mean ads lose money now; plan is pause, fix first session, clear the 16+ limit, then a 12 credit/day launch.
