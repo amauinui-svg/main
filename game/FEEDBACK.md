@@ -547,3 +547,6 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 
 ## 6 Oct 10:08 (Kash)
 - Deep research (YouTube transcripts, forums, docs) into an ad plan for running ads effectively. Done: reports/Idle Country Game ad plan.md (24 YouTube videos transcribed, DevForum, Roblox docs). Key finding: current metrics (1.4 min playtime, 0.19% D1) mean ads lose money now; plan is pause, fix first session, clear the 16+ limit, then a 12 credit/day launch.
+
+## 6 Oct 10:50 (Kash)
+- Wants an artifact showing many potential ad images with a predicted success percentage from the research. Done: "Ad Image Shortlist" artifact, 23 candidates scored (fantasy fit 30, phone readability 25, proven pattern 20, hand-made look 15, real feature 10) plus a suggested 8-image first campaign with expected click share. Scores saved in art/ads/v13/shortlist_scores.py.
