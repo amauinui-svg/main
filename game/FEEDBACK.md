@@ -539,3 +539,6 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 ## 4 Oct 16:43 (Kash)
 - CONQUER THE WORLD (v13 bird's-eye) doesn't look good: zoom in more or make the art more interesting; dislikes the glossy arrow style. RAID THEIR TREASURY: try it without the title text. DECLARE WAR is bad, drop it.
 - Done: conquer remade as zoomed-in hand-inked parchment campaign maps (Europe with one brush-stroke battle-plan arrow and a burning captured capital; North America with no arrow, blue spreading and flames on the border). Raid redrawn with no text (cropping the title off cut the noob, so it was regenerated). DECLARE WAR replaced by DEFEAT THE WARLORD (bacon slashing our barbarian warlord boss, boss health bar). Top 5 in v13/top5_v3.jpg, alternates in v13/alternates_v3.jpg.
+
+## 6 Oct 09:17 (Kash)
+- Create a Roblox community just for this game and transfer the game's ownership to it. Waiting on Kash: confirm the Robux purchase for creating the community, and the community name.
