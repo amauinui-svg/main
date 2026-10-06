@@ -541,4 +541,4 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 - Done: conquer remade as zoomed-in hand-inked parchment campaign maps (Europe with one brush-stroke battle-plan arrow and a burning captured capital; North America with no arrow, blue spreading and flames on the border). Raid redrawn with no text (cropping the title off cut the noob, so it was regenerated). DECLARE WAR replaced by DEFEAT THE WARLORD (bacon slashing our barbarian warlord boss, boss health bar). Top 5 in v13/top5_v3.jpg, alternates in v13/alternates_v3.jpg.
 
 ## 6 Oct 09:17 (Kash)
-- Create a Roblox community just for this game and transfer the game's ownership to it. Waiting on Kash: confirm the Robux purchase for creating the community, and the community name.
+- Create a Roblox community just for this game and transfer the game's ownership to it. Name: Country Studios (10:03). Form filled (emblem = game icon, open join); waiting on Kash to click Purchase (100 Robux), then transfer the game.
