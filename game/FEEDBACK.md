@@ -550,3 +550,7 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 
 ## 6 Oct 10:50 (Kash)
 - Wants an artifact showing many potential ad images with a predicted success percentage from the research. Done: "Ad Image Shortlist" artifact, 23 candidates scored (fantasy fit 30, phone readability 25, proven pattern 20, hand-made look 15, real feature 10) plus a suggested 8-image first campaign with expected click share. Scores saved in art/ads/v13/shortlist_scores.py.
+
+## 6 Oct 10:55 (Kash)
+- Review of shortlist: dislikes #5 Defeat the Warlord (too AI) and #6 Europe alt. Likes #7 Fight for Territory, #8 Raid no text, #14 Biggest Empire. Definitely using #1 Rule the World, #2 Take Their Capital, #3 Europe map, #4 North America map, #8 Raid. Likes #23 Rule Your Nation concept but no text and a bigger ruler on the throne. Asked for deeper analysis and new high-quality images in our style.
+- Done: v14 (Nano Banana Pro, x2): textless close-ups (Rule the World closer, Take Their Capital closer, throne ruler x2 concepts, Biggest Empire closer, flag on North America, Fight for Territory zoomed). Updated the Ad Image Shortlist artifact with findings (tiles are ~110px on phones, game name shows under ads so text is optional, mix titled and textless to test), a 10-image first campaign, and scores (art/ads/v14/scores.json). Skip rule_world_big_b (globe mostly red), namerica_flag_b (red flags inside blue), fight_territory_big_a (lion flag).
