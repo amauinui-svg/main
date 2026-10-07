@@ -570,3 +570,7 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 ## 6 Oct 14:06 (Kash)
 - Players can't send convoys in the tutorial ("That load is gone. Pick another."). ASAP fix.
 - Cause: city wants change game wide as convoys deliver (server uses live wants), but the client built loads from the original static wants, so the loads shown didn't match the server's list. Fix: client tradeCtx uses the live wants from the world snapshot, and the city panel's WANTS row shows the live wants too.
+
+## 6 Oct 14:09 (Kash)
+- Swap the group ID to the new group: done (Config.Group.Id = 449066918, CCountry Studios; nothing else referenced Tabby Studioss).
+- Troops need a small description: each of the 24 units now has a short line on its Military card (e.g. Spearmen "Cheap, steady fighters", Archers "Shoot down raiders"), replacing the generic "Grows your army".

@@ -60,7 +60,7 @@ S.military = { build = function(host, App)
 			text(card, u.name .. (owned > 0 and ("  <font color='#9a9fa6'>x" .. owned .. "</font>") or ""), { font = "heavy", size = 18, rich = true, pos = UDim2.fromOffset(58, 8), sz = UDim2.new(0.38, -58, 0, 24), z = 8, truncate = true })
 			text(card, D.Eras[u.era].name .. (locked and (u.lvl > st.lv and (" · unlocks at level " .. u.lvl) or " · advance era in Laws") or ""), { size = 13, color = C.muted, pos = UDim2.fromOffset(58, 36), sz = UDim2.new(0.38, -58, 0, 18), z = 8 })
 			text(card, "<font color='#e2695f'>ATK " .. R.Short(u.atk) .. "</font>   <font color='#7fb0e6'>DEF " .. R.Short(u.def) .. "</font>", { font = "heavy", size = 16, rich = true, pos = UDim2.new(0.38, 0, 0, 10), sz = UDim2.new(0.22, 0, 0, 22), z = 8 })
-			text(card, "Grows your army", { size = 12, color = C.muted, pos = UDim2.new(0.38, 0, 0, 36), sz = UDim2.new(0.22, 0, 0, 18), z = 8, truncate = true })
+			text(card, u.desc or "Grows your army", { size = 12, color = C.muted, pos = UDim2.new(0.38, 0, 0, 36), sz = UDim2.new(0.22, 0, 0, 18), z = 8, truncate = true })
 			if locked then
 				UI.button(card, "locked", u.lvl > st.lv and ("LEVEL " .. u.lvl) or "ERA LOCKED", nil, { pos = UDim2.new(1, -170, 0, 14), sz = UDim2.fromOffset(160, 42), z = 9 })
 			else

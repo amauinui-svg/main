@@ -13,6 +13,17 @@ local ERA_UNITS = {
 	{ "Special Forces", "Strike Drones", "Missile Battery" },
 	{ "Exo Troopers", "Hover Tanks", "Shield Array" },
 }
+-- short card text per unit (Kash 6 Oct: troops need a small description)
+local UNIT_DESC = {
+	{ "Cheap, steady fighters", "Fast chariot raids", "Shoot down raiders" },
+	{ "Shield-wall soldiers", "Charges break lines", "Smash siege towers" },
+	{ "Armored all-rounders", "Heavy armored charge", "Crush attackers" },
+	{ "Volley-fire infantry", "Mounted gunmen", "Guns guard the capital" },
+	{ "Long-range marksmen", "Armored warships", "Shells stop raiders" },
+	{ "Modern frontline troops", "Armor punches through", "Shoots down air raids" },
+	{ "Elite operators", "Precision air strikes", "Long-range deterrent" },
+	{ "Powered-armor soldiers", "Fast heavy assault", "Energy dome defense" },
+}
 -- tier 1 balanced, tier 2 attack, tier 3 defense
 local SHAPE = { { 4, 4, 300, "icon_users" }, { 9, 3, 900, "icon_attack" }, { 3, 9, 900, "icon_defense" } }
 M.Units = {}
@@ -21,7 +32,7 @@ for e, names in ipairs(ERA_UNITS) do
 		local s = SHAPE[t]
 		local g = 2.6 ^ (e - 1)
 		table.insert(M.Units, {
-			name = names[t], era = e, tier = t, icon = s[4],
+			name = names[t], era = e, tier = t, icon = s[4], desc = UNIT_DESC[e][t],
 			atk = math.floor(s[1] * g + 0.5), def = math.floor(s[2] * g + 0.5),
 			cost = math.floor(s[3] * 35 ^ (e - 1) + 0.5),
 			lvl = (e == 1) and ({ 1, 4, 6 })[t] or (D.Eras[e].start + (t - 1) * 3),
@@ -34,7 +45,7 @@ M.Elite = {}
 local ELITE_NAMES = { "Royal Guard", "Praetorians", "Templar Knights", "Grenadier Guard", "Imperial Hussars", "Commandos", "Ghost Operatives", "Star Legion" }
 for e, n in ipairs(ELITE_NAMES) do
 	local g = 2.6 ^ (e - 1)
-	M.Elite[e] = { name = n, era = e, atk = math.floor(14 * g + 0.5), def = math.floor(14 * g + 0.5), icon = "icon_crown" }
+	M.Elite[e] = { name = n, era = e, atk = math.floor(14 * g + 0.5), def = math.floor(14 * g + 0.5), icon = "icon_crown", desc = "Elite crate troops" }
 end
 function M.EliteCount(elite) local n = 0; for _, c in pairs(elite or {}) do n += (tonumber(c) or 0) end; return n end
 M.UnitGrowth = 1.06 -- each copy of a unit costs 6% more
