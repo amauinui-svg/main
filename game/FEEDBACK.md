@@ -574,3 +574,6 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 ## 6 Oct 14:09 (Kash)
 - Swap the group ID to the new group: done (Config.Group.Id = 449066918, CCountry Studios; nothing else referenced Tabby Studioss).
 - Troops need a small description: each of the 24 units now has a short line on its Military card (e.g. Spearmen "Cheap, steady fighters", Archers "Shoot down raiders"), replacing the generic "Grows your army".
+
+## 6 Oct 14:10 (Kash)
+- Asked what the % on the map is (the holding alliance's tax rate), then: don't show it. Map pins now show only the alliance tag, e.g. [ONE]; the tax stays in the city panel.

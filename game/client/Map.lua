@@ -146,7 +146,7 @@ function Map.build(host, App)
 				p.Inst.Image = UI.asset("pin_neutral"); p.Inst.ImageColor3 = C.white
 			end
 			p.Tag.Visible = a ~= nil
-			if a then p.Tag.Text = "[" .. a.tag .. "]" .. ((cs.tax or 0) > 0 and (" " .. cs.tax .. "%") or ""); p.Tag.TextColor3 = Color3.fromHex(a.color):Lerp(C.white, 0.45) end
+			if a then p.Tag.Text = "[" .. a.tag .. "]" --[[ Kash 6 Oct: no tax % on the map tag ]]; p.Tag.TextColor3 = Color3.fromHex(a.color):Lerp(C.white, 0.45) end
 			p.Label.TextColor3 = (st and st.home == i) and C.manila or C.ink
 		end
 		obj.labels()
