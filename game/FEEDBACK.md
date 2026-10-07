@@ -566,3 +566,7 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 
 ## 6 Oct 13:56 (Kash)
 - Shared another Idle Mafia ad: "DO JOBS. GET PAID." (energy cost card -> arrow -> cash, XP, chest). Done: v16 loop ads in our style, 4 concepts x2: PASS LAWS. GET PAID. / BUY PROPERTY. EARN FOREVER. / SEND CONVOYS. GET RICH. / RAID RIVALS. TAKE THEIR CASH. Picks in art/ads/v16/v16_picks.jpg (laws_a, property_b, convoy_b, raid_a). laws_b and raid_b have titles clipped at the top. Cost badge is drawn as a lightning bolt in some; in-game cost is influence.
+
+## 6 Oct 14:06 (Kash)
+- Players can't send convoys in the tutorial ("That load is gone. Pick another."). ASAP fix.
+- Cause: city wants change game wide as convoys deliver (server uses live wants), but the client built loads from the original static wants, so the loads shown didn't match the server's list. Fix: client tradeCtx uses the live wants from the world snapshot, and the city panel's WANTS row shows the live wants too.

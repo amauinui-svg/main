@@ -8405,6 +8405,9 @@ function Map.build(host, App)
 		local cs = App.world and App.world.cities[b]
 		local taxPct = (cs and cs.owner and cs.owner ~= st.alliance) and (cs.tax or 0) or 0
 		local ctx = { lv = st.lv, era = R.PlayerEra(st), incHr = st.incHr, day = R.Day(math.floor(App.now())), convoyMult = st.mods.convoy, taxPct = taxPct }
+		-- Kash 6 Oct: wants change game wide as convoys deliver; use the live list the server uses, or the loads shown
+		-- here won't match the server's and SEND fails with "That load is gone"
+		if cs and type(cs.wants) == "table" then ctx.wants = cs.wants end
 		-- world event: the first convoy sent to the event city pays mult x profit, so the shown prices match the server
 		local ev = Events.Active(App.now())
 		if ev and ev.city == b and st.wev ~= ev.id then ctx.event = ev end
@@ -8510,7 +8513,7 @@ function Map.build(host, App)
 		text(perk, "Holder's perk: +" .. PERK_SIZE[city.tier] .. "% " .. PERK_TEXT[city.perk], { size = 14, color = C.manila, sz = UDim2.fromScale(1, 1), z = 28 })
 
 		goodsRow("EXPORTS", city.exports, nx())
-		goodsRow("WANTS", city.demand, nx(), T.HotGood(b, R.Day(math.floor(App.now()))))
+		goodsRow("WANTS", (App.world and App.world.cities[b] and App.world.cities[b].wants) or city.demand, nx(), T.HotGood(b, R.Day(math.floor(App.now()))))
 
 		-- convoys
 		section("YOUR CONVOYS", nx())
