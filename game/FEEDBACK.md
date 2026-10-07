@@ -580,3 +580,4 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 
 ## 6 Oct 14:11 (Kash)
 - If a player sees the SEND button on a load, it must send. Server now also accepts a load that is valid under the original wants as well as the live ones (covers the moment between a want changing and the screen updating), on top of the client now using live wants.
+- Installed in Studio (e04a195): Config (group id + badges), Military + War (troop descriptions), Actions (lenient send), Map (live wants, no tax % on pins). Tested in Play: normal send works, the fallback path runs without errors, troop descriptions show. HttpEnabled had been turned off (likely by the transfer); turned it back on in Studio. Kash to publish.
