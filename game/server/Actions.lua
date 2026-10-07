@@ -9,6 +9,7 @@ local Config = require(RS.Shared.Config)
 local WS = require(script.Parent.WorldService)
 local O = require(RS.Shared.Officers)
 local TK = require(RS.Shared.Tasks)
+local Events = require(RS.Shared.Events)
 
 local A = {}
 local PS, MK, RA, AD
@@ -303,6 +304,18 @@ function act.send(plr, p, a)
 	local loads = PS.LoadsFor(p, c.at, b, nil, true)
 	local L
 	for _, x in ipairs(loads) do if x.good == a.good then L = x end end
+	if not L then
+		-- Kash 6 Oct: if the SEND button was showing, it must send. The player's screen can be a moment behind when a
+		-- city's wants just changed, so accept a load that is valid under either the live wants or the original ones.
+		local ctx = PS.TradeCtx(p)
+		ctx.taxPct = PS.TaxFor(p, b)
+		local ev = Events.Active(os.time())
+		if ev and ev.city == b and d.wev ~= ev.id then ctx.event = ev end
+		local union = table.clone(WS.WantsOf(b))
+		for _, k in ipairs(World.Cities[b].demand) do if not table.find(union, k) then table.insert(union, k) end end
+		ctx.wants = union
+		for _, x in ipairs((T.Loads(c.at, b, ctx))) do if x.good == a.good then L = x end end
+	end
 	if not L then return no("That load is gone. Pick another.") end
 	-- the map showed a price; if tax or the day's hot good changed since, ask the player to look again
 	local shown = tonumber(a.cost)

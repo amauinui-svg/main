@@ -577,3 +577,6 @@ Every request Kash makes is written here so he never has to repeat it. Status: O
 
 ## 6 Oct 14:10 (Kash)
 - Asked what the % on the map is (the holding alliance's tax rate), then: don't show it. Map pins now show only the alliance tag, e.g. [ONE]; the tax stays in the city panel.
+
+## 6 Oct 14:11 (Kash)
+- If a player sees the SEND button on a load, it must send. Server now also accepts a load that is valid under the original wants as well as the live ones (covers the moment between a want changing and the screen updating), on top of the client now using live wants.
